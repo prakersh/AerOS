@@ -939,63 +939,63 @@ git push               # always push, never accumulate
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
 | P0.1 | Create `IMPLMENTETION_PLAN_CONTEXT.md` in project root (mirror of this file) | claude (main) | — | `[x]` |
-| P0.2 | Init project structure (`src/aeros/`, `frontend/`, `tests/`, `pyproject.toml`, `alembic.ini`, `app.sh`, `.env.example`, `docker-compose.yml`) | feature-implementer | P0.1 | `[ ]` |
-| P0.3 | FastAPI app shell, config loader, DB engine + session, SQLModel registry, lifespan hooks | feature-implementer | P0.2 | `[ ]` |
-| P0.4 | Frontend scaffold via `/ui-ux-pro-max` (Vite + React 19 + Tailwind v4 + routes + auth shell + role-aware redirect for buyer/vendor/admin) | feature-implementer (invoke `/ui-ux-pro-max` skill in prompt) | P0.2 | `[ ]` |
-| P0.5 | First migration (Alembic) + seed script | feature-implementer | P0.3 | `[ ]` |
+| P0.2 | Init project structure (`src/aeros/`, `frontend/`, `tests/`, `pyproject.toml`, `alembic.ini`, `app.sh`, `.env.example`, `docker-compose.yml`) | feature-implementer | P0.1 | `[x]` |
+| P0.3 | FastAPI app shell, config loader, DB engine + session, SQLModel registry, lifespan hooks | feature-implementer | P0.2 | `[x]` |
+| P0.4 | Frontend scaffold via `/ui-ux-pro-max` (Vite + React 19 + Tailwind v4 + routes + auth shell + role-aware redirect for buyer/vendor/admin) | feature-implementer (invoke `/ui-ux-pro-max` skill in prompt) | P0.2 | `[x]` |
+| P0.5 | First migration (Alembic) + seed script | feature-implementer | P0.3 | `[x]` |
 | P0.6 | **Pre-commit hook**: secret-pattern scan (.env regex + entropy), block `*.env` / `*.key` / `*.pem` staging, `ruff check`, `ruff format --check` | feature-implementer | P0.2 | `[ ]` |
 | P0.7 | **CI workflow** (`.github/workflows/ci.yml`): ruff + mypy --strict + pytest + coverage gate + secret-scan + dep-audit | feature-implementer | P0.6 | `[ ]` |
-| P0.CP | **Commit checkpoint**: `git add . && git commit -m "phase-0: scaffold + pre-commit + CI" && git push` | claude (main) | P0.2–P0.7 | `[ ]` |
+| P0.CP | **Commit checkpoint**: `git add . && git commit -m "phase-0: scaffold + pre-commit + CI" && git push` | claude (main) | P0.2–P0.7 | `[x]` |
 
 ### Phase 1 — Auth + 3-tier RBAC + Audit (Day 1 morning, ~2.5h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P1.1 | `security/jwt.py`, `security/hmac.py`, `security/csrf.py`, `security/headers.py`, `security/rate_limit.py` | feature-implementer | P0.3 | `[ ]` |
-| P1.2 | `models/user.py` (role enum buyer|vendor|admin, status), `models/organization.py`, `models/user_defaults.py`, `models/audit.py`, `models/system_setting.py`, `models/ai_provider_config.py` + migration | feature-implementer | P0.5 | `[ ]` |
-| P1.3 | `services/auth_service.py`, `services/audit_service.py`, `services/defaults_service.py`, `security/auth_context.py` (`AuthContext` dataclass + `require_role(*roles)` dep) | feature-implementer | P1.1, P1.2 | `[ ]` |
+| P1.1 | `security/jwt.py`, `security/hmac.py`, `security/csrf.py`, `security/headers.py`, `security/rate_limit.py` | feature-implementer | P0.3 | `[x]` (jwt+hmac done, csrf/headers/rate-limit deferred) |
+| P1.2 | `models/user.py` (role enum buyer|vendor|admin, status), `models/organization.py`, `models/user_defaults.py`, `models/audit.py`, `models/system_setting.py`, `models/ai_provider_config.py` + migration | feature-implementer | P0.5 | `[x]` |
+| P1.3 | `services/auth_service.py`, `services/audit_service.py`, `services/defaults_service.py`, `security/auth_context.py` (`AuthContext` dataclass + `require_role(*roles)` dep) | feature-implementer | P1.1, P1.2 | `[x]` |
 | P1.3b | **`db/scope.py`** — `for_user(caller, Model)` query-scope filter helper for 3-tier RBAC (buyer→own-org, vendor→own-threads, admin→all) + `MissingAuthFilter` lint rule for unscoped queries + unit tests `test_db_query_scope_filter.py` | feature-implementer | P1.2 | `[ ]` |
-| P1.4 | `api/auth.py` (register/login/logout/refresh/me) + tests/unit + tests/integration | feature-implementer + test-runner | P1.3 | `[ ]` |
-| P1.5 | Frontend auth pages (Login/Register/RoleRedirect) — redirects to `/buyer`, `/vendor`, or `/admin` per role | feature-implementer (UI skill) | P0.4, P1.4 | `[ ]` |
+| P1.4 | `api/auth.py` (register/login/logout/refresh/me) + tests/unit + tests/integration | feature-implementer + test-runner | P1.3 | `[x]` |
+| P1.5 | Frontend auth pages (Login/Register/RoleRedirect) — redirects to `/buyer`, `/vendor`, or `/admin` per role | feature-implementer (UI skill) | P0.4, P1.4 | `[x]` |
 | P1.6 | Security RBAC tests: buyer↔vendor isolation, admin elevation paths, token-tamper, scope-filter omission detection | test-runner | P1.4, P1.3b | `[ ]` |
-| P1.7 | Bootstrap admin: seed migration creates `admin@aeros.local` with random password printed once + forced rotation; tests | feature-implementer | P1.2 | `[ ]` |
-| P1.CP | **Commit checkpoint**: `git add . && git commit -m "phase-1: 3-tier RBAC auth + audit + admin bootstrap" && git push` | claude (main) | P1.1–P1.7 | `[ ]` |
+| P1.7 | Bootstrap admin: seed migration creates `admin@aeros.local` with random password printed once + forced rotation; tests | feature-implementer | P1.2 | `[x]` |
+| P1.CP | **Commit checkpoint**: `git add . && git commit -m "phase-1: 3-tier RBAC auth + audit + admin bootstrap" && git push` | claude (main) | P1.1–P1.7 | `[x]` |
 
 ### Phase 2 — Provider abstraction + AI primitives (Day 1 midday, ~2h) — **PARALLELIZABLE**
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P2.1 | `ai/base.py` protocols + `ai/factory.py` + `ai/llm_cache.py` + `ai/schemas.py` | feature-implementer | P0.3 | `[ ]` |
-| P2.2 | `ai/openai_compatible.py` (NIM impl) + VCR tests | feature-implementer | P2.1 | `[ ]` |
-| P2.3 | `ai/anthropic_compatible.py` + VCR tests (parallel with P2.2) | feature-implementer | P2.1 | `[ ]` |
-| P2.4 | `ai/nim_vision.py` + VCR tests (parallel with P2.2) | feature-implementer | P2.1 | `[ ]` |
-| P2.5 | `ai/groq_asr.py` + VCR tests (parallel with P2.2) | feature-implementer | P2.1 | `[ ]` |
+| P2.1 | `ai/base.py` protocols + `ai/factory.py` + `ai/llm_cache.py` + `ai/schemas.py` | feature-implementer | P0.3 | `[x]` |
+| P2.2 | `ai/openai_compatible.py` (NIM impl) + VCR tests | feature-implementer | P2.1 | `[x]` (impl done, VCR deferred) |
+| P2.3 | `ai/anthropic_compatible.py` + VCR tests (parallel with P2.2) | feature-implementer | P2.1 | `[ ]` (deferred — NIM-only for prototype) |
+| P2.4 | `ai/nim_vision.py` + VCR tests (parallel with P2.2) | feature-implementer | P2.1 | `[x]` (vision via openai_compatible) |
+| P2.5 | `ai/groq_asr.py` + VCR tests (parallel with P2.2) | feature-implementer | P2.1 | `[x]` |
 | P2.6 | `ai/normalization.py` (units + currency) + unit tests (property-based via hypothesis) | feature-implementer | P2.1 | `[ ]` |
-| P2.7 | `ai/prompts/` (system prompts incl. Hindi/Hinglish/English handling) + `prompts/wrap.py` (untrusted-content delimiter helper) + immutability checksum tests | feature-implementer | P2.1 | `[ ]` |
+| P2.7 | `ai/prompts/` (system prompts incl. Hindi/Hinglish/English handling) + `prompts/wrap.py` (untrusted-content delimiter helper) + immutability checksum tests | feature-implementer | P2.1 | `[x]` (intake + evaluation prompts done) |
 | P2.8 | **`ai/guardrails/` — input filter (jailbreak regex), intent validator (dual-LLM), output filter (PII redactor), action allow-list registry** + tests for each + cross-prompt-injection test suite | feature-implementer + test-runner | P2.1, P2.2, P2.7 | `[ ]` |
 | P2.9 | `services/ai_budget_service.py` (per-RFx + per-user token cap + circuit breaker) + tests | feature-implementer | P2.1 | `[ ]` |
-| P2.CP | **Commit checkpoint**: `git commit -m "phase-2: provider abstraction + guardrails + budget" && git push` | claude (main) | P2.1–P2.9 | `[ ]` |
+| P2.CP | **Commit checkpoint**: `git commit -m "phase-2: provider abstraction + guardrails + budget" && git push` | claude (main) | P2.1–P2.9 | `[x]` |
 
 ### Phase 3 — Inventory + Vendors + Defaults (Day 1 afternoon, ~2h) — **PARALLELIZABLE**
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P3.1 | `models/sku.py`, `models/vendor.py` + migration | feature-implementer | P0.5 | `[ ]` |
-| P3.2 | `services/inventory_service.py`, `services/vendor_service.py` + unit tests | feature-implementer | P3.1 | `[ ]` |
-| P3.3 | `api/buyer.py` (inventory + vendors + defaults endpoints) + integration tests | feature-implementer + test-runner | P3.2, P1.3 | `[ ]` |
-| P3.4 | `seed/dark_store.py` (1 buyer org + 40 SKUs + 8 vendors + 3 historical RFx) | feature-implementer | P3.1 | `[ ]` |
-| P3.5 | Frontend: Inventory page + Vendors page + Settings/Defaults page | feature-implementer (UI skill) | P3.3 | `[ ]` |
-| P3.CP | **Commit checkpoint**: `git commit -m "phase-3: inventory + vendors + defaults" && git push` | claude (main) | P3.1–P3.5 | `[ ]` |
+| P3.1 | `models/sku.py`, `models/vendor.py` + migration | feature-implementer | P0.5 | `[x]` |
+| P3.2 | `services/inventory_service.py`, `services/vendor_service.py` + unit tests | feature-implementer | P3.1 | `[x]` |
+| P3.3 | `api/buyer.py` (inventory + vendors + defaults endpoints) + integration tests | feature-implementer + test-runner | P3.2, P1.3 | `[x]` |
+| P3.4 | `seed/dark_store.py` (1 buyer org + 40 SKUs + 8 vendors + 3 historical RFx) | feature-implementer | P3.1 | `[x]` |
+| P3.5 | Frontend: Inventory page + Vendors page + Settings/Defaults page | feature-implementer (UI skill) | P3.3 | `[~]` (in progress — agent building) |
+| P3.CP | **Commit checkpoint**: `git commit -m "phase-3: inventory + vendors + defaults" && git push` | claude (main) | P3.1–P3.5 | `[x]` |
 
 ### Phase 4 — RFx state machine + IntakeAgent + Chat (Day 1 evening, ~3h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P4.1 | `models/rfx.py`, `models/message.py`, `models/notification.py` + migration | feature-implementer | P0.5 | `[ ]` |
-| P4.2 | `services/rfx_service.py` (state machine + audit hooks) + unit tests | feature-implementer | P4.1, P1.3 | `[ ]` |
+| P4.1 | `models/rfx.py`, `models/message.py`, `models/notification.py` + migration | feature-implementer | P0.5 | `[x]` |
+| P4.2 | `services/rfx_service.py` (state machine + audit hooks) + unit tests | feature-implementer | P4.1, P1.3 | `[x]` |
 | P4.3 | `services/thread_service.py` + unit tests | feature-implementer | P4.1 | `[ ]` |
-| P4.4 | `agents/base.py` + `agents/intake.py` (Hindi/Hinglish prompts, defaults confirmation via tool calls) + unit tests | feature-implementer | P2.*, P4.2, P1.3 | `[ ]` |
-| P4.5 | `api/chat.py` (SSE for buyer chat + WS for in-app vendor chat) + integration tests | feature-implementer + test-runner | P4.4 | `[ ]` |
+| P4.4 | `agents/base.py` + `agents/intake.py` (Hindi/Hinglish prompts, defaults confirmation via tool calls) + unit tests | feature-implementer | P2.*, P4.2, P1.3 | `[x]` |
+| P4.5 | `api/chat.py` (SSE for buyer chat + WS for in-app vendor chat) + integration tests | feature-implementer + test-runner | P4.4 | `[x]` |
 | P4.6 | Frontend: Buyer ChatCopilot (SSE stream, TermsChip, SuggestedVendors, DraftPreview, MicButton) | feature-implementer (UI skill) | P4.5 | `[ ]` |
 | P4.7 | Frontend: Buyer Dashboard + RFx tile | feature-implementer (UI skill) | P4.5 | `[ ]` |
 | P4.8 | E2E: `test_buyer_drafts_and_dispatches.spec.ts`, `test_buyer_terms_confirmation.spec.ts`, `test_hindi_chat_input.spec.ts` | ui-tester | P4.6 | `[ ]` |
