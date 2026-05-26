@@ -82,6 +82,7 @@ We are not building one feature. We are building **AEROS — a procurement OS** 
 | D32 | AI provider failover | `AIProviderConfig` rows carry `priority_rank` per kind (chat/vision/asr/embedding). On provider error or timeout >5s, `ai/factory.py` falls through to the next enabled provider of the same kind; chat surfaces a one-line "switched to backup model" notice. Admin tunable in `/admin/ai/providers`. | confirmed |
 | D33 | Confidence thresholds | Per-field confidence <0.7 → yellow badge + "review" CTA; overall offer confidence = MIN of all line-item field confidences (worst-link); offers with overall <0.5 auto-flag for buyer review and cannot be awarded without explicit acknowledge. | confirmed |
 | D34 | In-app canonical thread | Whatever channel a dispatch went over (email / Telegram / in-app), the vendor's `/vendor/inbox` always shows the full thread (all messages, AI co-pilot replies, attachments, channel-of-origin badge). Vendor can always reply in-app regardless of invitation channel. Implication: email-bounce / Telegram-blocked are NOT blocking failure modes — vendor self-serves by logging in. See §3.6. | confirmed |
+| D35 | SourcingAgent channel confirmation | SourcingAgent **proposes** a dispatch plan (channel per vendor) based on vendor's available channels (priority: in-app > email > Telegram) and **asks the buyer to confirm** via a "Dispatch Plan" chat card before sending. Buyer can override per-vendor channel or approve. No silent dispatch. See §3.4. | confirmed |
 
 ---
 
@@ -255,9 +256,12 @@ Seed: 1 buyer org with 40 SKUs across 5 categories, 8 vendor orgs with realistic
                                  └────────┬─────────┘
                                           ▼ (approval gate: buyer clicks "Send")
                                  ┌──────────────────┐
-                                 │  SourcingAgent   │── fan-out per vendor:
-                                 │  composes msg,   │   email + Telegram + in-app
-                                 │  signs token,    │   (per channel order D5)
+                                 │  SourcingAgent   │── proposes dispatch plan:
+                                 │  picks channel   │   per vendor (D35), shows
+                                 │  per vendor,     │   "Dispatch Plan" card,
+                                 │  asks buyer to   │   buyer confirms/overrides,
+                                 │  confirm, signs  │   then fan-out + sign tokens
+                                 │  token, sends,   │   + schedule reminders
                                  │  schedules       │
                                  │  reminder        │
                                  └────────┬─────────┘
