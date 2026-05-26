@@ -133,6 +133,7 @@ gen.log
 MagicMock/
 ui-test-screenshots/
 dist/
+*.png
 
 # --- Backups ---
 *.bak

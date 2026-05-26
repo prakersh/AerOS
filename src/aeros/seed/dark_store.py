@@ -106,7 +106,7 @@ def seed() -> None:
 
         # Admin user
         admin = User(
-            email="admin@aeros.local",
+            email="admin@aeros.demo",
             password_hash=hash_password("admin123"),
             role=Role.ADMIN,
             display_name="Admin",
@@ -172,7 +172,7 @@ def seed() -> None:
         print("Seeded: 1 buyer org, 40 SKUs, 8 vendors, demo users.")
         print("  Buyer login:  buyer@aeros.demo / buyer123")
         print("  Vendor login: freshfarm@vendor.demo / vendor123")
-        print("  Admin login:  admin@aeros.local / admin123")
+        print("  Admin login:  admin@aeros.demo / admin123")
 
 
 if __name__ == "__main__":

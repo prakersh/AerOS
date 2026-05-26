@@ -29,6 +29,7 @@ def create_rfx(session: Session, buyer_id: int, title: str, **kwargs) -> RFxRun:
         entity_id=str(rfx.id),
         after={"title": title, "status": rfx.status.value},
     )
+    session.refresh(rfx)
     return rfx
 
 
@@ -78,6 +79,7 @@ def dispatch_rfx(session: Session, rfx_id: int, buyer_id: int) -> RFxRun:
         entity_id=str(rfx_id),
         after={"status": "dispatched", "vendor_count": len(list(vendors))},
     )
+    session.refresh(rfx)
     return rfx
 
 
@@ -102,6 +104,7 @@ def cancel_rfx(session: Session, rfx_id: int, user_id: int, reason: str) -> RFxR
         entity_id=str(rfx_id),
         after={"status": "cancelled", "reason": reason},
     )
+    session.refresh(rfx)
     return rfx
 
 
@@ -280,4 +283,5 @@ def award_rfx(session: Session, rfx_id: int, buyer_id: int, decisions: list[dict
         entity_id=str(rfx_id),
         after={"status": "awarded", "decisions_count": len(decisions)},
     )
+    session.refresh(rfx)
     return rfx

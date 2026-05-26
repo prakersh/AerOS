@@ -1,9 +1,13 @@
+import json
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from aeros.db import get_session
-from aeros.models.user import Role
+from aeros.models.user import Role, User
+from aeros.models.audit import AuditLog
+from aeros.models.user_defaults import UserDefaults
 from aeros.security.auth_context import AuthContext, require_role
 from aeros.services import inventory_service, vendor_service, rfx_service
 
@@ -117,3 +121,69 @@ def award_rfx(
         return rfx_service.award_rfx(session, rfx_id, caller.user_id, body.decisions)
     except ValueError as e:
         raise HTTPException(404, str(e))
+
+
+# --- Activity ---
+
+
+@router.get("/activity")
+def list_activity(
+    limit: int = 50,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
+):
+    logs = list(
+        session.exec(
+            select(AuditLog)
+            .where(AuditLog.actor_user_id == caller.user_id)
+            .order_by(AuditLog.created_at.desc())  # type: ignore[union-attr]
+            .limit(limit)
+        ).all()
+    )
+    results = []
+    for log in logs:
+        after = {}
+        if log.after_json:
+            try:
+                after = json.loads(log.after_json)
+            except json.JSONDecodeError:
+                pass
+        results.append({
+            "id": log.id,
+            "action": log.action,
+            "entity_type": log.entity_type,
+            "entity_id": log.entity_id,
+            "details": after,
+            "created_at": log.created_at.isoformat() if log.created_at else "",
+        })
+    return results
+
+
+# --- Defaults ---
+
+
+@router.get("/defaults")
+def get_defaults(
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
+):
+    defaults = session.exec(
+        select(UserDefaults).where(UserDefaults.user_id == caller.user_id)
+    ).first()
+    if defaults:
+        return {
+            "payment_terms": defaults.payment_terms_default,
+            "delivery_terms": defaults.delivery_terms_default,
+            "quote_validity_days": defaults.quote_validity_days_default,
+            "currency": defaults.currency_default,
+            "tax_treatment": defaults.tax_treatment_default,
+            "delivery_window": defaults.delivery_window_default,
+        }
+    return {
+        "payment_terms": "NET30",
+        "delivery_terms": "doorstep",
+        "quote_validity_days": 7,
+        "currency": "INR",
+        "tax_treatment": "exclusive",
+        "delivery_window": "next_day_5am",
+    }

@@ -10,6 +10,7 @@ from aeros.api import auth as auth_router
 from aeros.api import buyer as buyer_router
 from aeros.api import vendor as vendor_router
 from aeros.api import chat as chat_router
+from aeros.api import admin as admin_router
 
 logger = structlog.get_logger()
 
@@ -40,6 +41,7 @@ app.include_router(auth_router.router)
 app.include_router(buyer_router.router)
 app.include_router(vendor_router.router)
 app.include_router(chat_router.router)
+app.include_router(admin_router.router)
 
 
 @app.get("/health")
