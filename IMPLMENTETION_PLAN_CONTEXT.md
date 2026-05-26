@@ -50,7 +50,7 @@ We are not building one feature. We are building **AEROS — a procurement OS** 
 |---|---|---|---|
 | D1 | Product scope | AEROS — full procurement OS, mirroring Aera's 8 agents; ship 4 real, stub 4 as "Coming Soon" | confirmed |
 | D2 | Persona | Procurement agent at Blinkit/Zepto-style dark store; daily-purchase SKUs | confirmed |
-| D3 | Authenticated roles | **Buyer + Vendor + Admin** (3-tier RBAC). Admin module modeled on memo.sbs (DB-backed AI config, user mgmt, cross-tenant observability, full audit). See §3.9. | confirmed |
+| D3 | Authenticated roles | **Buyer + Vendor + Admin** (3-tier RBAC). Admin module modeled on memo.sbs (DB-backed AI config, user mgmt, cross-tenant observability, full audit). See §3.8. | confirmed |
 | D4 | Channels | In-app chat + Email (SMTP+IMAP) + Telegram bot, unified via signed correlation tokens | confirmed |
 | D5 | Channel implementation order | **Web (in-app) FIRST → Email second → Telegram last** | confirmed |
 | D6 | AI provider primary | **NVIDIA NIM** (free tier) via OpenAI-compatible SDK at `https://integrate.api.nvidia.com/v1` | confirmed |
@@ -74,8 +74,14 @@ We are not building one feature. We are building **AEROS — a procurement OS** 
 | D24 | Guardrails-first | Phase 2 explicitly includes `ai/guardrails/` + tests before any agent ships (see P2.8) | confirmed |
 | D25 | TDD enforcement | Pre-commit hook blocks impl without test; CI fails on coverage drop; ≥80% backend, 100% on `agents/`, `ai/guardrails/`, `security/`, `channels/correlation.py` | confirmed |
 | D26 | Observability & Stats | First-class observability layer modeled on memo.sbs: per-LLM-call telemetry (model, latency, tokens, cost, cache hit), per-agent-run telemetry, per-chat pipeline report (which tools fired + timings), aggregate stats dashboard. See §3.7. | confirmed |
-| D27 | Admin module | Dedicated `/admin/*` shell: DB-backed AI provider/model config (toggle, default, per-model token cap), user management (list/create/suspend/role-change), system settings (retention, rate limits, budgets), cross-tenant observability + audit-log full view, vendor KYC approval. RBAC enforced at router + service + DB-query layer. See §3.9. | confirmed |
+| D27 | Admin module | Dedicated `/admin/*` shell: DB-backed AI provider/model config (toggle, default, per-model token cap), user management (list/create/suspend/role-change), system settings (retention, rate limits, budgets), cross-tenant observability + audit-log full view, vendor KYC approval. RBAC enforced at router + service + DB-query layer. See §3.8. | confirmed |
 | D28 | Commit & Push discipline | Every significant step commits + pushes to `origin/main`; phase-level mandatory checkpoints; tags at end of Day 1 (`v0.1-day1`) and Day 2 (`v0.2-demo`). See §8.0. | confirmed |
+| D29 | Realistic procurement flows | Vendor decline (with reason), buyer withdraw/cancel RFx, offer revision history (resubmit before deadline keeps prior versions via `superseded_by_offer_id`), multi-stage reminders (T-24h + T-2h + final, idempotent per slot via `reminders_sent_json`). See §3.10. | confirmed |
+| D30 | Vendor suggestion strategy | Hybrid ranking inside IntakeAgent: filter by `Vendor.category_ids` (deterministic), rank within category by `nv-embed-v1` cosine similarity of RFx line-item SKU names to vendor's served-SKU embeddings, tie-break by `performance_score × preferred_rank`. Returns top-N (default 5). | confirmed |
+| D31 | Late offer policy | Offers arriving after `response_deadline` are accepted but flagged (`Offer.is_late=true`); ComparisonMatrix shows a "late" badge; buyer chooses whether to include in award. No silent drops. | confirmed |
+| D32 | AI provider failover | `AIProviderConfig` rows carry `priority_rank` per kind (chat/vision/asr/embedding). On provider error or timeout >5s, `ai/factory.py` falls through to the next enabled provider of the same kind; chat surfaces a one-line "switched to backup model" notice. Admin tunable in `/admin/ai/providers`. | confirmed |
+| D33 | Confidence thresholds | Per-field confidence <0.7 → yellow badge + "review" CTA; overall offer confidence = MIN of all line-item field confidences (worst-link); offers with overall <0.5 auto-flag for buyer review and cannot be awarded without explicit acknowledge. | confirmed |
+| D34 | In-app canonical thread | Whatever channel a dispatch went over (email / Telegram / in-app), the vendor's `/vendor/inbox` always shows the full thread (all messages, AI co-pilot replies, attachments, channel-of-origin badge). Vendor can always reply in-app regardless of invitation channel. Implication: email-bounce / Telegram-blocked are NOT blocking failure modes — vendor self-serves by logging in. See §3.6. | confirmed |
 
 ---
 
@@ -162,7 +168,9 @@ RFxRun(id, buyer_id, type[RFQ|RFI|RFP], status[drafting|awaiting_approval|
        title, delivery_window_start, delivery_window_end, response_deadline,
        payment_terms_for_this_rfx, delivery_terms_for_this_rfx,
        quote_validity_days_for_this_rfx, currency_for_this_rfx,
-       tax_treatment_for_this_rfx, notes_for_vendors, created_at, updated_at)
+       tax_treatment_for_this_rfx, notes_for_vendors,
+       cancelled_at?, cancelled_by_user_id?, cancelled_reason?,    # D29 buyer withdraw
+       created_at, updated_at)
        # *_for_this_rfx fields default-copied from UserDefaults at draft time,
        # buyer can override during chat ("change validity to 3 days")
 
@@ -171,7 +179,8 @@ RFxLineItem(id, rfx_id, sku_id, qty, unit_override?, target_price?,
 
 RFxVendor(id, rfx_id, vendor_id, correlation_token_hash, dispatched_at,
           last_seen_at, status[invited|viewed|quoted|declined|expired],
-          reminder_sent_at)
+          decline_reason?, declined_at?,                             # D29 vendor decline
+          reminders_sent_json)   # D29: [{slot[T-24h|T-2h|final], sent_at, channel}]
 
 Thread(id, rfx_id, vendor_id, created_at)   # one per (RFx, vendor)
 
@@ -191,6 +200,9 @@ Offer(id, rfx_id, vendor_id,
       tax_treatment, gst_pct?, additional_charges_json,
       vendor_remarks, extraction_confidence_overall,
       source_message_ids_csv, raw_extraction_json, manual_overrides_json,
+      revision_no, superseded_by_offer_id?,        # D29 revision history
+      is_late,                                     # D31 late-flag
+      total_quote_inr,                             # currency-converted via forex_service for matrix sort
       created_at, updated_at)
 
 Award(id, rfx_id, decisions_json,  # [{line_item_id, vendor_id, qty, unit_price}]
@@ -301,7 +313,7 @@ Seed: 1 buyer org with 40 SKUs across 5 categories, 8 vendor orgs with realistic
 
 **Currency normalization**: default INR; if vendor quotes in USD/EUR, store both raw + INR-converted using a stub `forex_service` (hardcoded rates for prototype, abstracted for future).
 
-**Per-field confidence**: returned by normalizer LLM as `{field: {value, confidence: 0–1, source: "page 2 line 5"}}`. Shown in ComparisonMatrix as colored badges; <0.7 prompts buyer review.
+**Per-field confidence** (D33): returned by normalizer LLM as `{field: {value, confidence: 0–1, source: "page 2 line 5"}}`. Shown in ComparisonMatrix as colored badges: <0.7 yellow + "review" CTA, <0.5 red + auto-flag. Overall offer confidence = MIN of all field confidences (worst-link rule); overall <0.5 cannot be awarded without explicit buyer acknowledge.
 
 ### 3.6 Omnichannel Reply Routing
 
@@ -313,6 +325,8 @@ Single rule: **any inbound message tagged with a valid signed correlation token 
 - **In-app outbound**: WebSocket push; UI shows thread.
 
 Each channel's inbound handler normalizes to one `Message{thread_id, sender, channel, body, attachments[]}` record. EvaluationAgent runs on the union of attachments + body for that thread, regardless of channel.
+
+**In-app is the canonical thread view (D34).** Regardless of which channel the dispatch went over, the vendor's `/vendor/inbox` always renders the complete thread: every `Message` row for that `(rfx_id, vendor_id)` — including AI co-pilot replies, attachments, and a `ChannelBadge` indicating each message's channel-of-origin. Vendor can always reply in-app even if the invitation arrived via email or Telegram. This is why email-bounce and Telegram-blocked are NOT blocking failure modes for AEROS — the vendor self-serves by logging in. We therefore do not implement bounce-retry, auto-channel-switching, or out-of-office detection.
 
 ### 3.7 Observability & Statistics layer (D26 — memo.sbs-style)
 
@@ -459,6 +473,18 @@ Vendor defaults (example): `payment_terms_offered=[NET15, NET30, advance]`, `del
 
 Vendor side: VendorAgent reads vendor's `UserDefaults` and pre-fills the quote with vendor's standard terms; vendor can adjust per RFx.
 
+### 3.10 Realistic procurement flows (D29)
+
+Beyond the happy path, the demo must handle these four flows. Each is small (≤1 model field + 1 service method + 1 UI element + 1 test) but visible.
+
+**Vendor decline.** `/vendor/rfx/<id>` has a **"Decline this RFx"** button next to the reply chat. Click → modal collects a reason (free-text + category dropdown: out-of-stock / pricing / capacity / other). Submit → `VendorAgent.decline_rfx(reason)` tool call → `RFxVendor.status='declined'`, `decline_reason`, `declined_at` set, AuditLog entry. Buyer's ComparisonMatrix renders a **"Declined"** tile with the reason in that vendor's lane (no offer card). Counts toward `Vendor.performance_score` as a response (not a lost-sale).
+
+**Buyer withdraw / cancel RFx.** `/buyer/rfx/<id>` header has a **"Withdraw RFx"** action. Click → confirmation modal lists invited vendors + asks for an optional reason. Submit → `RFxService.cancel(reason, by_user)` → `RFxRun.status='cancelled'`, `cancelled_at/by/reason` set, a system `Message` ("Buyer has withdrawn this RFx") is fanned out to every `RFxVendor` thread on each vendor's preferred channel, further extraction on incoming attachments for this RFx is disabled. Fully audited.
+
+**Offer revisions.** A vendor who has already submitted may resubmit before `response_deadline`. Each resubmit creates a **new** `Offer` row with `revision_no = prev + 1` and the prior row's `superseded_by_offer_id` set to the new id (so revision history is preserved, not lost). ComparisonMatrix shows the latest by default with a small **"v2 / v3"** badge; a hover-toggle reveals prior revisions side-by-side. Any buyer override on a prior revision is migrated forward to the latest revision (audited).
+
+**Multi-stage reminders.** `RFxVendor.reminders_sent_json` is an append-only array of `{slot: 'T-24h' | 'T-2h' | 'final', sent_at, channel}`. The reminder worker scans every 5 min; for each unsent slot whose trigger time has passed (relative to `response_deadline`), it sends via vendor's preferred channel (falls through to next preference on failure) and appends to the array. Per-slot idempotency is enforced by the array — a slot never fires twice even on worker crash + restart.
+
 ---
 
 ## 4. Security, Guardrails & Compliance (hard requirement — non-negotiable)
@@ -561,14 +587,14 @@ Two role-aware shells sharing components:
 - **Chat co-pilot** (headline) — full-page conversation with IntakeAgent. SSE streams. Inline cards: detected SKU pulls from inventory, suggested vendors, draft preview, **Terms chip** (D16 confirmation). Mic button → Groq Whisper → transcript injected. "Approve & Send" gate.
 - **Inventory** — SKU table with categories, last price, reorder points, aliases. Inline edit.
 - **Vendors** — directory grouped by category, per-vendor performance, preferred rank drag-handle, last-contact, response-rate.
-- **RFx detail** — header (status, delivery window, deadline countdown), per-vendor lanes showing every Message with **ChannelBadge** (email/telegram/in-app), Offer card per vendor as it arrives, **ComparisonMatrix** (side-by-side, sortable, lowest-price/best-lead-time highlights, per-field confidence badges, manual override pencil, **per-line-item Award** with split-award support).
+- **RFx detail** — header (status, delivery window, deadline countdown, **Withdraw RFx** action with confirmation modal), per-vendor lanes showing every Message with **ChannelBadge** (email/telegram/in-app), Offer card per vendor as it arrives with **revision badge** (v2/v3) and **late badge** if applicable, **ComparisonMatrix** (side-by-side, sortable, lowest-price/best-lead-time highlights, per-field confidence badges with <0.7 yellow / <0.5 red auto-flag, manual override pencil, **per-line-item Award** with split-award support). Declined vendors render as "Declined" tiles with reason instead of offer card.
 - **Settings → Defaults** — form for `UserDefaults`.
 - **Activity** — audit log feed.
 - **Coming-Soon tabs**: Negotiation, Contract, Invoice, Analytics (placeholder with mocked screenshot).
 
 **Vendor shell** (`/vendor`):
 - **Inbox** — list of RFx received, status, deadline countdown.
-- **RFx detail + Reply chat** — VendorAgent co-pilot walks vendor through the quote ("here's what they need: 150kg tomatoes…; paste your prices or drop a file"), upload zone (PDF/Word/Excel/CSV/image), submit button, extraction-status badge, **mic button** (D9).
+- **RFx detail + Reply chat** — full thread visible (all messages from all channels merged per D34, with ChannelBadge per message), VendorAgent co-pilot walks vendor through the quote ("here's what they need: 150kg tomatoes…; paste your prices or drop a file"), upload zone (PDF/Word/Excel/CSV/image), submit button (resubmit creates a new revision per D29), extraction-status badge, **mic button** (D9), **"Decline this RFx"** action with reason modal.
 - **Profile** — categories served, notification prefs (email/Telegram toggles, Telegram bind via deep-link button), **Defaults form**.
 
 **Admin shell** (`/admin`, D27):
@@ -978,7 +1004,8 @@ git push               # always push, never accumulate
 | P5.1 | `channels/in_app.py` + `channels/correlation.py` + unit tests | feature-implementer | P1.1, P4.2 | `[ ]` |
 | P5.2 | `agents/vendor_copilot.py` (vendor co-pilot chat) + unit tests | feature-implementer | P4.4 | `[ ]` |
 | P5.3 | `api/vendor.py` (inbox + reply + upload) + integration tests | feature-implementer + test-runner | P5.2 | `[ ]` |
-| P5.4 | Frontend: Vendor Inbox + Vendor RFxReply chat (UploadZone, MicButton, extraction-status badge) | feature-implementer (UI skill) | P5.3 | `[ ]` |
+| P5.3a | **Vendor decline (D29)**: `decline_rfx` tool in VendorAgent + `POST /api/vendor/rfx/<id>/decline` + service method on `RFxService` + audit + tests + UI button & reason modal | feature-implementer + test-runner | P5.3 | `[ ]` |
+| P5.4 | Frontend: Vendor Inbox + Vendor RFxReply chat (UploadZone, MicButton, extraction-status badge, **all-channel thread view per D34**, **resubmit-as-new-revision per D29**) | feature-implementer (UI skill) | P5.3 | `[ ]` |
 | P5.5 | E2E: `test_vendor_replies_in_app_with_pdf/excel/image/voice.spec.ts` | ui-tester | P5.4 | `[ ]` |
 | P5.CP | **Commit checkpoint**: `git commit -m "phase-5: web channel + vendor co-pilot" && git push` | claude (main) | P5.1–P5.5 | `[ ]` |
 
@@ -996,8 +1023,9 @@ git push               # always push, never accumulate
 | P6.8 | `agents/evaluation.py` + integration tests | feature-implementer + test-runner | P6.7 | `[ ]` |
 | P6.9 | `models/offer.py` + `services/offer_service.py` + migration + unit tests | feature-implementer | P4.1 | `[ ]` |
 | P6.10 | `workers/extract_offer.py` (Huey task) + integration tests | feature-implementer | P6.8, P6.9 | `[ ]` |
-| P6.11 | Frontend: RFx detail with ComparisonMatrix (side-by-side, sortable, per-field confidence badges, manual override, **split-award**) | feature-implementer (UI skill) | P6.9 | `[ ]` |
-| P6.12 | E2E: `test_comparison_matrix_and_split_award.spec.ts`, `test_multi_attachment_fusion` | ui-tester + test-runner | P6.11 | `[ ]` |
+| P6.11 | Frontend: RFx detail with ComparisonMatrix (side-by-side, sortable, per-field confidence badges per D33, manual override, **split-award**) | feature-implementer (UI skill) | P6.9 | `[ ]` |
+| P6.11a | **Realistic flows UI (D29/D31/D33)**: header **Withdraw RFx** action + confirmation modal + `RFxService.cancel` + system-message fan-out + revision badge (v2/v3) on Offer cards with hover-history toggle + late badge + low-confidence auto-flag with "must-acknowledge" gate before award + declined-vendor tile + offer-revision migration of overrides + tests | feature-implementer + test-runner | P6.11 | `[ ]` |
+| P6.12 | E2E: `test_comparison_matrix_and_split_award.spec.ts`, `test_multi_attachment_fusion`, `test_buyer_withdraws_rfx.spec.ts`, `test_offer_revision_visible.spec.ts`, `test_vendor_declines.spec.ts` | ui-tester + test-runner | P6.11a | `[ ]` |
 | P6.CP | **Commit checkpoint**: `git commit -m "phase-6: extractors + evaluation + comparison matrix" && git push` | claude (main) | P6.1–P6.12 | `[ ]` |
 
 ### Phase 7 — Channel 2: Email (Day 2 afternoon, ~2.5h)
@@ -1007,7 +1035,7 @@ git push               # always push, never accumulate
 | P7.1 | `channels/email_out.py` (aiosmtplib + Reply-To token + portal link) + tests | feature-implementer | P5.1 | `[ ]` |
 | P7.2 | `agents/sourcing.py` (compose + dispatch + schedule reminder via channels) + unit tests | feature-implementer | P4.4, P7.1, P5.1 | `[ ]` |
 | P7.3 | `channels/email_in.py` (IMAP poll, attachment download, threading) + `workers/imap_poll.py` + integration tests with aiosmtpd + fake IMAP | feature-implementer + test-runner | P7.1, P6.10 | `[ ]` |
-| P7.4 | `services/reminder_service.py` + `workers/reminders.py` + tests | feature-implementer | P7.2 | `[ ]` |
+| P7.4 | `services/reminder_service.py` + `workers/reminders.py` with **multi-slot schedule (T-24h, T-2h, final) per D29**, per-slot idempotency via `RFxVendor.reminders_sent_json`, channel-fallback on per-send failure + tests | feature-implementer | P7.2 | `[ ]` |
 | P7.5 | E2E: `test_vendor_replies_via_email_pdf.spec.ts` (uses aiosmtpd + fake IMAP) | ui-tester | P7.3 | `[ ]` |
 | P7.CP | **Commit checkpoint**: `git commit -m "phase-7: email channel (SMTP + IMAP) + reminders" && git push` | claude (main) | P7.1–P7.5 | `[ ]` |
 
