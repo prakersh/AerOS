@@ -105,12 +105,39 @@ def cancel_rfx(session: Session, rfx_id: int, user_id: int, reason: str) -> RFxR
     return rfx
 
 
-def list_rfx_for_buyer(session: Session, buyer_id: int) -> list[RFxRun]:
-    return list(
+def list_rfx_for_buyer(session: Session, buyer_id: int) -> list[dict]:
+    from aeros.models.sku import SKU
+
+    rfx_list = list(
         session.exec(
             select(RFxRun).where(RFxRun.buyer_id == buyer_id).order_by(RFxRun.created_at.desc())  # type: ignore[union-attr]
         ).all()
     )
+    results = []
+    for rfx in rfx_list:
+        vendors = list(session.exec(select(RFxVendor).where(RFxVendor.rfx_id == rfx.id)).all())
+        line_items = list(session.exec(select(RFxLineItem).where(RFxLineItem.rfx_id == rfx.id)).all())
+        li_dicts = []
+        for li in line_items:
+            sku = session.get(SKU, li.sku_id)
+            li_dicts.append({
+                "id": li.id,
+                "sku_code": sku.code if sku else "",
+                "sku_name": sku.name if sku else "",
+                "qty": li.qty,
+                "unit": li.unit_override or (sku.unit if sku else ""),
+                "target_price": li.target_price,
+            })
+        results.append({
+            "id": rfx.id,
+            "title": rfx.title,
+            "status": rfx.status.value,
+            "vendor_count": len(vendors),
+            "deadline": rfx.response_deadline.isoformat() if rfx.response_deadline else "",
+            "created_at": rfx.created_at.isoformat() if rfx.created_at else "",
+            "line_items": li_dicts,
+        })
+    return results
 
 
 def list_rfx_for_vendor(session: Session, vendor_id: int) -> list[dict]:
@@ -122,17 +149,23 @@ def list_rfx_for_vendor(session: Session, vendor_id: int) -> list[dict]:
         rfx = session.get(RFxRun, rv.rfx_id)
         if rfx:
             results.append({
-                "rfx": rfx,
-                "vendor_status": rv.status.value,
-                "dispatched_at": rv.dispatched_at,
+                "rfx_id": rfx.id,
+                "title": rfx.title,
+                "status": rv.status.value,
+                "dispatched_at": rv.dispatched_at.isoformat() if rv.dispatched_at else "",
+                "deadline": rfx.response_deadline.isoformat() if rfx.response_deadline else "",
             })
     return results
 
 
 def get_rfx_with_details(session: Session, rfx_id: int) -> dict | None:
+    from aeros.models.sku import SKU
+    from aeros.models.vendor import Vendor as VendorModel
+
     rfx = session.get(RFxRun, rfx_id)
     if not rfx:
         return None
+
     line_items = list(
         session.exec(select(RFxLineItem).where(RFxLineItem.rfx_id == rfx_id)).all()
     )
@@ -145,11 +178,61 @@ def get_rfx_with_details(session: Session, rfx_id: int) -> dict | None:
             .where(Offer.rfx_id == rfx_id, Offer.superseded_by_offer_id == None)  # noqa: E711
         ).all()
     )
+
+    li_dicts = []
+    for li in line_items:
+        sku = session.get(SKU, li.sku_id)
+        li_dicts.append({
+            "id": li.id,
+            "sku_code": sku.code if sku else "",
+            "sku_name": sku.name if sku else "",
+            "qty": li.qty,
+            "unit": li.unit_override or (sku.unit if sku else ""),
+            "target_price": li.target_price,
+        })
+
+    offer_lookup: dict[int, Offer] = {o.vendor_id: o for o in offers}
+    vendor_offers = []
+    for rv in vendors:
+        vendor = session.get(VendorModel, rv.vendor_id)
+        offer = offer_lookup.get(rv.vendor_id)
+        vo: dict = {
+            "vendor_id": rv.vendor_id,
+            "vendor_name": vendor.name if vendor else f"Vendor #{rv.vendor_id}",
+            "status": rv.status.value,
+            "decline_reason": rv.decline_reason,
+        }
+        if offer:
+            vo["total_quote"] = offer.total_quote
+            vo["lead_time"] = f"{offer.lead_time_hours}h" if offer.lead_time_hours else None
+            vo["payment_terms"] = offer.payment_terms
+            try:
+                offer_items = json.loads(offer.line_items_json)
+                vo["line_items"] = [
+                    {
+                        "line_item_id": oi.get("line_item_id"),
+                        "unit_price": oi.get("unit_price", 0),
+                        "confidence": oi.get("confidence"),
+                    }
+                    for oi in offer_items
+                ]
+            except (json.JSONDecodeError, TypeError):
+                vo["line_items"] = []
+        vendor_offers.append(vo)
+
+    delivery_window = ""
+    if rfx.delivery_window_start and rfx.delivery_window_end:
+        delivery_window = f"{rfx.delivery_window_start.isoformat()} – {rfx.delivery_window_end.isoformat()}"
+
     return {
-        "rfx": rfx,
-        "line_items": line_items,
-        "vendors": vendors,
-        "offers": offers,
+        "id": rfx.id,
+        "title": rfx.title,
+        "status": rfx.status.value,
+        "delivery_window": delivery_window,
+        "deadline": rfx.response_deadline.isoformat() if rfx.response_deadline else "",
+        "created_at": rfx.created_at.isoformat() if rfx.created_at else "",
+        "line_items": li_dicts,
+        "vendor_offers": vendor_offers,
     }
 
 

@@ -33,8 +33,12 @@ async def _extract_csv(file_path: str) -> str:
     with open(file_path, "r", newline="", encoding="utf-8", errors="replace") as f:
         content = f.read()
 
-    dialect = csv.Sniffer().sniff(content[:2048])
-    reader = csv.reader(io.StringIO(content), dialect)
+    try:
+        dialect = csv.Sniffer().sniff(content[:2048])
+    except csv.Error:
+        dialect = None  # type: ignore[assignment]
+
+    reader = csv.reader(io.StringIO(content), dialect) if dialect else csv.reader(io.StringIO(content))
     rows = []
     for row in reader:
         if any(c.strip() for c in row):

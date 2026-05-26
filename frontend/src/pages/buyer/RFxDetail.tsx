@@ -113,8 +113,9 @@ function ConfidenceDot({ confidence }: { confidence?: number }) {
 
 function useCountdown(deadline: string): string {
   const calcRemaining = useCallback((): string => {
+    if (!deadline) return "No deadline";
     const diff = new Date(deadline).getTime() - Date.now();
-    if (diff <= 0) return "Expired";
+    if (isNaN(diff) || diff <= 0) return "Expired";
 
     const days = Math.floor(diff / 86_400_000);
     const hours = Math.floor((diff % 86_400_000) / 3_600_000);

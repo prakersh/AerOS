@@ -70,8 +70,9 @@ function StatusBadge({ status }: { status: RfxStatus }) {
 /* ------------------------------------------------------------------ */
 
 function timeRemaining(deadline: string): string {
+  if (!deadline) return "No deadline";
   const diff = new Date(deadline).getTime() - Date.now();
-  if (diff <= 0) return "Expired";
+  if (isNaN(diff) || diff <= 0) return "Expired";
 
   const hours = Math.floor(diff / 3_600_000);
   const minutes = Math.floor((diff % 3_600_000) / 60_000);

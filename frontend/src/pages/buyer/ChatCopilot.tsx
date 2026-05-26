@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, type FormEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
 
-interface ChatMessage {
+interface ChatMsg {
   role: "user" | "assistant";
   content: string;
   data?: Record<string, unknown>;
@@ -23,10 +24,13 @@ interface SuggestedVendor {
 }
 
 export default function ChatCopilot() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [createdRfxId, setCreatedRfxId] = useState<number | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -36,7 +40,7 @@ export default function ChatCopilot() {
     e.preventDefault();
     if (!input.trim() || loading) return;
 
-    const userMsg: ChatMessage = {
+    const userMsg: ChatMsg = {
       role: "user",
       content: input,
       timestamp: new Date(),
@@ -57,7 +61,7 @@ export default function ChatCopilot() {
         success: boolean;
       }>("/api/chat", { message: input, history });
 
-      const assistantMsg: ChatMessage = {
+      const assistantMsg: ChatMsg = {
         role: "assistant",
         content: resp.message,
         data: resp.data,
@@ -75,6 +79,76 @@ export default function ChatCopilot() {
       ]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleConfirmDraft = async (draft: Record<string, unknown>) => {
+    setActionLoading(true);
+    try {
+      const resp = await api.post<{
+        message: string;
+        data: Record<string, unknown>;
+        success: boolean;
+      }>("/api/chat/create-rfx", { draft });
+
+      const rfxId = resp.data?.rfx_id as number | undefined;
+      if (rfxId) setCreatedRfxId(rfxId);
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: resp.message,
+          data: resp.data,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (err: unknown) {
+      const errMsg =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: string }).message)
+          : "Failed to create RFx";
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `Error: ${errMsg}`, timestamp: new Date() },
+      ]);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleConfirmDispatch = async (
+    rfxId: number,
+    plan: Array<Record<string, unknown>>,
+  ) => {
+    setActionLoading(true);
+    try {
+      const resp = await api.post<{
+        message: string;
+        data: Record<string, unknown>;
+        success: boolean;
+      }>("/api/chat/dispatch", { rfx_id: rfxId, dispatch_plan: plan });
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: resp.message,
+          data: resp.data,
+          timestamp: new Date(),
+        },
+      ]);
+    } catch (err: unknown) {
+      const errMsg =
+        err && typeof err === "object" && "message" in err
+          ? String((err as { message: string }).message)
+          : "Failed to dispatch";
+      setMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: `Error: ${errMsg}`, timestamp: new Date() },
+      ]);
+    } finally {
+      setActionLoading(false);
     }
   };
 
@@ -113,17 +187,42 @@ export default function ChatCopilot() {
               }`}
             >
               <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
-              {msg.data?.draft && (
-                <DraftCard draft={msg.data.draft as Record<string, unknown>} />
+              {!!msg.data?.draft && (
+                <DraftCard
+                  draft={msg.data.draft as Record<string, unknown>}
+                  onConfirm={handleConfirmDraft}
+                  confirmed={!!createdRfxId}
+                  loading={actionLoading}
+                />
               )}
-              {msg.data?.terms_confirmation && (
+              {!!msg.data?.terms_confirmation && (
                 <TermsChip terms={msg.data.terms_confirmation as Record<string, unknown>} />
               )}
-              {msg.data?.suggested_vendors && (
+              {!!msg.data?.suggested_vendors && (
                 <VendorSuggestions vendors={msg.data.suggested_vendors as SuggestedVendor[]} />
               )}
-              {msg.data?.dispatch_plan && (
-                <DispatchPlanCard plan={msg.data.dispatch_plan as Array<Record<string, unknown>>} />
+              {!!msg.data?.dispatch_plan && (
+                <DispatchPlanCard
+                  plan={msg.data.dispatch_plan as Array<Record<string, unknown>>}
+                  rfxId={createdRfxId}
+                  onConfirm={handleConfirmDispatch}
+                  loading={actionLoading}
+                />
+              )}
+              {!!msg.data?.rfx_id && msg.data?.status === "created" && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/buyer/rfx/${msg.data!.rfx_id}`)}
+                  className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 underline"
+                >
+                  View RFx Details
+                </button>
+              )}
+              {msg.data?.status === "dispatched" && (
+                <div className="mt-2 flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+                  <span className="text-xs text-green-400">Dispatched successfully</span>
+                </div>
               )}
               <p className="text-[10px] mt-1 opacity-50">
                 {msg.timestamp.toLocaleTimeString()}
@@ -168,12 +267,22 @@ export default function ChatCopilot() {
   );
 }
 
-function DraftCard({ draft }: { draft: Record<string, unknown> }) {
+function DraftCard({
+  draft,
+  onConfirm,
+  confirmed,
+  loading,
+}: {
+  draft: Record<string, unknown>;
+  onConfirm: (draft: Record<string, unknown>) => void;
+  confirmed: boolean;
+  loading: boolean;
+}) {
   const items = (draft.line_items as DraftLineItem[]) || [];
   return (
     <div className="mt-3 rounded-lg border border-zinc-700 bg-zinc-900 p-3">
       <p className="text-xs font-semibold text-indigo-400 mb-2">Draft RFQ</p>
-      {draft.title && <p className="text-xs text-zinc-300 mb-2">{String(draft.title)}</p>}
+      {!!draft.title && <p className="text-xs text-zinc-300 mb-2">{String(draft.title)}</p>}
       <table className="w-full text-xs">
         <thead>
           <tr className="text-zinc-500 border-b border-zinc-800">
@@ -192,6 +301,24 @@ function DraftCard({ draft }: { draft: Record<string, unknown> }) {
           ))}
         </tbody>
       </table>
+      {!confirmed && (
+        <button
+          type="button"
+          disabled={loading}
+          onClick={() => onConfirm(draft)}
+          className="mt-3 w-full rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
+        >
+          {loading ? "Creating..." : "Confirm & Create RFx"}
+        </button>
+      )}
+      {confirmed && (
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-green-400">
+          <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+          RFx Created
+        </div>
+      )}
     </div>
   );
 }
@@ -226,10 +353,28 @@ function VendorSuggestions({ vendors }: { vendors: SuggestedVendor[] }) {
   );
 }
 
-function DispatchPlanCard({ plan }: { plan: Array<Record<string, unknown>> }) {
+function DispatchPlanCard({
+  plan,
+  rfxId,
+  onConfirm,
+  loading,
+}: {
+  plan: Array<Record<string, unknown>>;
+  rfxId: number | null;
+  onConfirm: (rfxId: number, plan: Array<Record<string, unknown>>) => void;
+  loading: boolean;
+}) {
+  const [dispatched, setDispatched] = useState(false);
+
+  const handleClick = () => {
+    if (!rfxId) return;
+    onConfirm(rfxId, plan);
+    setDispatched(true);
+  };
+
   return (
     <div className="mt-3 rounded-lg border border-blue-800/50 bg-blue-900/20 p-3">
-      <p className="text-xs font-semibold text-blue-400 mb-2">Dispatch Plan (confirm to send)</p>
+      <p className="text-xs font-semibold text-blue-400 mb-2">Dispatch Plan</p>
       {plan.map((entry, i) => (
         <div key={i} className="flex items-center justify-between py-1 text-xs border-b border-blue-800/30 last:border-0">
           <span className="text-zinc-300">{String(entry.vendor_name)}</span>
@@ -239,6 +384,19 @@ function DispatchPlanCard({ plan }: { plan: Array<Record<string, unknown>> }) {
           </div>
         </div>
       ))}
+      {!dispatched && rfxId && (
+        <button
+          type="button"
+          disabled={loading}
+          onClick={handleClick}
+          className="mt-3 w-full rounded-lg bg-green-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-green-500 disabled:opacity-50"
+        >
+          {loading ? "Dispatching..." : "Confirm & Dispatch to Vendors"}
+        </button>
+      )}
+      {!rfxId && !dispatched && (
+        <p className="mt-2 text-[10px] text-zinc-500">Create the RFx first before dispatching</p>
+      )}
     </div>
   );
 }

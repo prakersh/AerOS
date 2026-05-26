@@ -29,7 +29,10 @@ const STATUS_COLORS: Record<InboxStatus, string> = {
 };
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -37,8 +40,9 @@ function formatDate(iso: string): string {
 }
 
 function formatCountdown(deadline: string): { text: string; urgent: boolean } {
+  if (!deadline) return { text: "No deadline", urgent: false };
   const diff = new Date(deadline).getTime() - Date.now();
-  if (diff <= 0) return { text: "Expired", urgent: true };
+  if (isNaN(diff) || diff <= 0) return { text: "Expired", urgent: true };
 
   const hours = Math.floor(diff / (1000 * 60 * 60));
   const days = Math.floor(hours / 24);

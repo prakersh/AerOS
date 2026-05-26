@@ -18,6 +18,9 @@ def create_offer_from_extraction(
     source_message_ids: list[int],
     is_late: bool = False,
 ) -> Offer:
+    from aeros.models.rfx import RFxLineItem
+    from aeros.models.sku import SKU
+
     # Check for existing offer (revision)
     existing = session.exec(
         select(Offer)
@@ -33,10 +36,36 @@ def create_offer_from_extraction(
     if existing:
         revision_no = existing.revision_no + 1
 
+    # Map extracted line items to RFx line items by fuzzy name matching
+    rfx_line_items = list(
+        session.exec(select(RFxLineItem).where(RFxLineItem.rfx_id == rfx_id)).all()
+    )
+    li_lookup: dict[str, int] = {}
+    for rli in rfx_line_items:
+        sku = session.get(SKU, rli.sku_id)
+        if sku:
+            li_lookup[sku.name.lower()] = rli.id  # type: ignore[arg-type]
+
+    raw_items = extraction_data.get("line_items", [])
+    mapped_items = []
+    for item in raw_items:
+        sku_name = (item.get("sku_name") or "").lower()
+        line_item_id = None
+        for name, lid in li_lookup.items():
+            if name in sku_name or sku_name in name:
+                line_item_id = lid
+                break
+        confidence_per_field = item.get("confidence_per_field", {})
+        mapped_items.append({
+            **item,
+            "line_item_id": line_item_id,
+            "confidence": confidence_per_field.get("unit_price", item.get("confidence")),
+        })
+
     offer = Offer(
         rfx_id=rfx_id,
         vendor_id=vendor_id,
-        line_items_json=json.dumps(extraction_data.get("line_items", [])),
+        line_items_json=json.dumps(mapped_items),
         total_quote=extraction_data.get("total_quote"),
         currency=extraction_data.get("currency", "INR"),
         lead_time_hours=extraction_data.get("lead_time_hours"),
