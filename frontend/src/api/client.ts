@@ -13,6 +13,11 @@ class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  private getCsrfToken(): string {
+    const match = document.cookie.match(/(?:^|;\s*)aeros_csrf=([^;]*)/);
+    return match ? decodeURIComponent(match[1]) : "";
+  }
+
   private async request<T>(
     method: string,
     path: string,
@@ -22,6 +27,10 @@ class ApiClient {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
     };
+    if (method !== "GET" && method !== "HEAD") {
+      const csrf = this.getCsrfToken();
+      if (csrf) headers["x-csrf-token"] = csrf;
+    }
 
     const res = await fetch(url, {
       method,
@@ -72,9 +81,13 @@ class ApiClient {
     const formData = new FormData();
     formData.append("file", file);
     const url = `${this.baseUrl}${path}`;
+    const headers: Record<string, string> = {};
+    const csrf = this.getCsrfToken();
+    if (csrf) headers["x-csrf-token"] = csrf;
     const res = await fetch(url, {
       method: "POST",
       credentials: "include",
+      headers,
       body: formData,
     });
     if (!res.ok) {

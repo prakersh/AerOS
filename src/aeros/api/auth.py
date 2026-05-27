@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Session
 
+from aeros.config import settings
 from aeros.db import get_session
-from aeros.models.user import Role
+from aeros.models.user import Role, UserStatus
 from aeros.security.auth_context import AuthContext, get_current_user
 from aeros.security.jwt import create_access_token, create_refresh_token, decode_token
 from aeros.services import auth_service
@@ -22,6 +23,11 @@ class RegisterRequest(BaseModel):
     display_name: str
     role: str = "buyer"
 
+    def __init__(self, **data: object) -> None:
+        super().__init__(**data)
+        if len(self.password) < 8:
+            raise ValueError("Password must be at least 8 characters")
+
 
 class UserResponse(BaseModel):
     id: int
@@ -29,6 +35,16 @@ class UserResponse(BaseModel):
     role: str
     display_name: str
     org_id: int | None
+
+
+def _set_auth_cookies(response: Response, access: str, refresh: str) -> None:
+    secure = not settings.debug
+    response.set_cookie(
+        "access_token", access, httponly=True, samesite="lax", max_age=15 * 60, secure=secure
+    )
+    response.set_cookie(
+        "refresh_token", refresh, httponly=True, samesite="lax", max_age=7 * 86400, secure=secure
+    )
 
 
 @router.post("/login")
@@ -40,12 +56,7 @@ def login(body: LoginRequest, response: Response, session: Session = Depends(get
     access = create_access_token(user.id, user.role.value)  # type: ignore[arg-type]
     refresh = create_refresh_token(user.id)  # type: ignore[arg-type]
 
-    response.set_cookie(
-        "access_token", access, httponly=True, samesite="lax", max_age=15 * 60
-    )
-    response.set_cookie(
-        "refresh_token", refresh, httponly=True, samesite="lax", max_age=7 * 86400
-    )
+    _set_auth_cookies(response, access, refresh)
     return UserResponse(
         id=user.id,  # type: ignore[arg-type]
         email=user.email,
@@ -69,12 +80,7 @@ def register(body: RegisterRequest, response: Response, session: Session = Depen
     access = create_access_token(user.id, user.role.value)  # type: ignore[arg-type]
     refresh = create_refresh_token(user.id)  # type: ignore[arg-type]
 
-    response.set_cookie(
-        "access_token", access, httponly=True, samesite="lax", max_age=15 * 60
-    )
-    response.set_cookie(
-        "refresh_token", refresh, httponly=True, samesite="lax", max_age=7 * 86400
-    )
+    _set_auth_cookies(response, access, refresh)
     return UserResponse(
         id=user.id,  # type: ignore[arg-type]
         email=user.email,
@@ -106,7 +112,11 @@ def me(current_user: AuthContext = Depends(get_current_user), session: Session =
 
 
 @router.post("/refresh")
-def refresh(response: Response, refresh_token: str | None = None):
+def refresh(
+    response: Response,
+    session: Session = Depends(get_session),
+    refresh_token: str | None = Cookie(default=None),
+):
     if not refresh_token:
         raise HTTPException(status_code=401, detail="No refresh token")
     try:
@@ -117,8 +127,15 @@ def refresh(response: Response, refresh_token: str | None = None):
         raise HTTPException(status_code=401, detail="Invalid token type")
 
     user_id = int(payload["sub"])
-    access = create_access_token(user_id, payload.get("role", "buyer"))
+    user = auth_service.get_user_by_id(session, user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="User not found")
+    if user.status != UserStatus.ACTIVE:
+        raise HTTPException(status_code=403, detail="Account suspended")
+
+    access = create_access_token(user_id, user.role.value)  # type: ignore[arg-type]
+    secure = not settings.debug
     response.set_cookie(
-        "access_token", access, httponly=True, samesite="lax", max_age=15 * 60
+        "access_token", access, httponly=True, samesite="lax", max_age=15 * 60, secure=secure
     )
     return {"ok": True}

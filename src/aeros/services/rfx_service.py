@@ -229,6 +229,7 @@ def get_rfx_with_details(session: Session, rfx_id: int) -> dict | None:
 
     return {
         "id": rfx.id,
+        "buyer_id": rfx.buyer_id,
         "title": rfx.title,
         "status": rfx.status.value,
         "delivery_window": delivery_window,

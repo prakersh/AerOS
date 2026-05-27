@@ -128,7 +128,7 @@ async def upload_file(
     sha = hashlib.sha256(content).hexdigest()
     upload_dir = os.path.join(settings.upload_dir, str(rfx_id), str(vendor.id))
     os.makedirs(upload_dir, exist_ok=True)
-    filename = file.filename or "upload"
+    filename = os.path.basename(file.filename or "upload")
     storage_path = os.path.join(upload_dir, f"{sha[:8]}_{filename}")
     with open(storage_path, "wb") as f:
         f.write(content)

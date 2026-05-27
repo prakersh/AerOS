@@ -1,6 +1,7 @@
 import json
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlmodel import Session, select, func
 
 from aeros.db import get_session
@@ -10,6 +11,7 @@ from aeros.models.rfx import RFxRun, Attachment
 from aeros.models.vendor import Vendor
 from aeros.models.offer import Offer
 from aeros.security.auth_context import AuthContext, require_role
+from aeros.services import admin_service, ai_config_service, system_settings_service
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -86,3 +88,144 @@ def list_audit(
             "created_at": log.created_at.isoformat() if log.created_at else "",
         })
     return results
+
+
+# ---------------------------------------------------------------------------
+# User suspend / reactivate
+# ---------------------------------------------------------------------------
+
+
+class SuspendRequest(BaseModel):
+    reason: str = ""
+
+
+@router.post("/users/{user_id}/suspend")
+def suspend_user(
+    user_id: int,
+    body: SuspendRequest,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.ADMIN),
+) -> dict:
+    """Suspend a user account."""
+    try:
+        user = admin_service.suspend_user(
+            session, user_id, caller.user_id, reason=body.reason
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {
+        "id": user.id,
+        "email": user.email,
+        "status": user.status.value,
+        "suspended_at": user.suspended_at.isoformat() if user.suspended_at else "",
+    }
+
+
+@router.post("/users/{user_id}/reactivate")
+def reactivate_user(
+    user_id: int,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.ADMIN),
+) -> dict:
+    """Reactivate a suspended user account."""
+    try:
+        user = admin_service.reactivate_user(session, user_id, caller.user_id)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {
+        "id": user.id,
+        "email": user.email,
+        "status": user.status.value,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Organizations
+# ---------------------------------------------------------------------------
+
+
+@router.get("/orgs")
+def list_orgs(
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.ADMIN),
+) -> list[dict]:
+    """List all organizations."""
+    orgs = admin_service.list_organizations(session)
+    return [
+        {
+            "id": o.id,
+            "name": o.name,
+            "type": o.type.value,
+            "created_at": o.created_at.isoformat() if o.created_at else "",
+        }
+        for o in orgs
+    ]
+
+
+# ---------------------------------------------------------------------------
+# AI Providers
+# ---------------------------------------------------------------------------
+
+
+@router.get("/ai/providers")
+def list_ai_providers(
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.ADMIN),
+) -> list[dict]:
+    """List configured AI providers."""
+    return ai_config_service.list_providers(session)
+
+
+class TestProviderRequest(BaseModel):
+    provider_name: str
+
+
+@router.post("/ai/providers/test")
+def test_ai_provider(
+    body: TestProviderRequest,
+    caller: AuthContext = require_role(Role.ADMIN),
+) -> dict:
+    """Test connectivity to an AI provider."""
+    return ai_config_service.test_provider_connection(body.provider_name)
+
+
+# ---------------------------------------------------------------------------
+# System Settings
+# ---------------------------------------------------------------------------
+
+
+@router.get("/settings")
+def get_settings(
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.ADMIN),
+) -> list[dict]:
+    """Get all system settings."""
+    return system_settings_service.get_all_settings(session)
+
+
+class UpdateSettingRequest(BaseModel):
+    value: str
+
+
+@router.put("/settings/{key}")
+def update_setting(
+    key: str,
+    body: UpdateSettingRequest,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.ADMIN),
+) -> dict:
+    """Update a system setting."""
+    return system_settings_service.update_setting(session, key, body.value, caller.user_id)
+
+
+# ---------------------------------------------------------------------------
+# Health
+# ---------------------------------------------------------------------------
+
+
+@router.get("/health")
+def system_health(
+    caller: AuthContext = require_role(Role.ADMIN),
+) -> dict:
+    """Get system health status."""
+    return admin_service.get_system_health()

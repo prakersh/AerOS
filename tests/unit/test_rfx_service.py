@@ -208,3 +208,39 @@ def test_get_rfx_with_details(session, buyer, skus, vendor_record):
     assert details["vendor_offers"][0]["vendor_id"] == vendor_record.id
     assert details["vendor_offers"][0]["vendor_name"] == "Test Vendor Co"
     assert details["vendor_offers"][0]["status"] == "invited"
+
+
+def test_decline_rfx_vendor(session, buyer, vendor_record):
+    """decline_rfx_vendor should set status to DECLINED with reason."""
+    rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Decline Test")
+    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="dec_hash")
+
+    rv = rfx_service.decline_rfx_vendor(session, rfx.id, vendor_record.id, reason="No stock")
+    assert rv.status == RFxVendorStatus.DECLINED
+    assert rv.decline_reason == "No stock"
+    assert rv.declined_at is not None
+
+
+def test_decline_rfx_vendor_not_invited(session, buyer, vendor_record):
+    """decline_rfx_vendor should raise ValueError when vendor not invited."""
+    rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="No Invite Test")
+    import pytest
+    with pytest.raises(ValueError, match="not invited"):
+        rfx_service.decline_rfx_vendor(session, rfx.id, vendor_record.id, reason="test")
+
+
+def test_award_rfx(session, buyer, vendor_record):
+    """award_rfx should create an Award and set RFx status to AWARDED."""
+    rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Award Test")
+    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="award_hash")
+
+    decisions = [{"vendor_id": vendor_record.id, "items": [1, 2]}]
+    result = rfx_service.award_rfx(session, rfx.id, buyer.id, decisions)
+
+    assert result.status == RFxStatus.AWARDED
+    # Check award was created
+    from sqlmodel import select
+    from aeros.models.award import Award
+    award = session.exec(select(Award).where(Award.rfx_id == rfx.id)).first()
+    assert award is not None
+    assert award.awarded_by_user_id == buyer.id

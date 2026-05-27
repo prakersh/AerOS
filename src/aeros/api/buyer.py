@@ -86,6 +86,8 @@ def get_rfx(
     details = rfx_service.get_rfx_with_details(session, rfx_id)
     if not details:
         raise HTTPException(404, "RFx not found")
+    if caller.role == Role.BUYER and details.get("buyer_id") and details["buyer_id"] != caller.user_id:
+        raise HTTPException(403, "Not your RFx")
     return details
 
 

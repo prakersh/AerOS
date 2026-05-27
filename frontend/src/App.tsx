@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { Routes, Route, Navigate, Outlet } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth";
+import ProtectedRoute from "@/components/ProtectedRoute";
 import { SidebarLayout, type NavSection } from "@/components/layouts/Sidebar";
 import { TopBar } from "@/components/layouts/TopBar";
 import {
@@ -10,6 +11,7 @@ import {
 } from "@/components/layouts/icons";
 
 import Login from "@/pages/auth/Login";
+import Register from "@/pages/auth/Register";
 import BuyerDashboard from "@/pages/buyer/Dashboard";
 import ChatCopilot from "@/pages/buyer/ChatCopilot";
 import Inventory from "@/pages/buyer/Inventory";
@@ -110,7 +112,20 @@ function AdminShell() {
 }
 
 function RootRedirect() {
-  const { user } = useAuthStore();
+  const { user, initialized, fetchMe } = useAuthStore();
+
+  useEffect(() => {
+    if (!initialized) fetchMe();
+  }, [initialized, fetchMe]);
+
+  if (!initialized) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-950">
+        <div className="text-sm text-zinc-500">Loading...</div>
+      </div>
+    );
+  }
+
   if (!user) return <Navigate to="/login" replace />;
   if (user.role === "vendor") return <Navigate to="/vendor/inbox" replace />;
   if (user.role === "admin") return <Navigate to="/admin/dashboard" replace />;
@@ -118,38 +133,42 @@ function RootRedirect() {
 }
 
 export function App() {
-  const { fetchMe } = useAuthStore();
-  useEffect(() => { fetchMe(); }, [fetchMe]);
-
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
       <Route path="/" element={<RootRedirect />} />
 
-      <Route element={<BuyerShell />}>
-        <Route path="/buyer/dashboard" element={<BuyerDashboard />} />
-        <Route path="/buyer/chat" element={<ChatCopilot />} />
-        <Route path="/buyer/inventory" element={<Inventory />} />
-        <Route path="/buyer/vendors" element={<BuyerVendors />} />
-        <Route path="/buyer/rfx/:id" element={<RFxDetail />} />
-        <Route path="/buyer/settings" element={<BuyerSettings />} />
-        <Route path="/buyer/activity" element={<BuyerActivity />} />
-        <Route path="/buyer/observability" element={<BuyerObservability />} />
+      <Route element={<ProtectedRoute allowedRoles={["buyer", "admin"]} />}>
+        <Route element={<BuyerShell />}>
+          <Route path="/buyer/dashboard" element={<BuyerDashboard />} />
+          <Route path="/buyer/chat" element={<ChatCopilot />} />
+          <Route path="/buyer/inventory" element={<Inventory />} />
+          <Route path="/buyer/vendors" element={<BuyerVendors />} />
+          <Route path="/buyer/rfx/:id" element={<RFxDetail />} />
+          <Route path="/buyer/settings" element={<BuyerSettings />} />
+          <Route path="/buyer/activity" element={<BuyerActivity />} />
+          <Route path="/buyer/observability" element={<BuyerObservability />} />
+        </Route>
       </Route>
 
-      <Route element={<VendorShell />}>
-        <Route path="/vendor/inbox" element={<VendorInbox />} />
-        <Route path="/vendor/rfx/:id" element={<VendorRFxReply />} />
-        <Route path="/vendor/profile" element={<VendorProfile />} />
+      <Route element={<ProtectedRoute allowedRoles={["vendor"]} />}>
+        <Route element={<VendorShell />}>
+          <Route path="/vendor/inbox" element={<VendorInbox />} />
+          <Route path="/vendor/rfx/:id" element={<VendorRFxReply />} />
+          <Route path="/vendor/profile" element={<VendorProfile />} />
+        </Route>
       </Route>
 
-      <Route element={<AdminShell />}>
-        <Route path="/admin/dashboard" element={<AdminDashboard />} />
-        <Route path="/admin/users" element={<AdminUsers />} />
-        <Route path="/admin/ai/providers" element={<AdminAIProviders />} />
-        <Route path="/admin/settings" element={<AdminSettings />} />
-        <Route path="/admin/observability" element={<AdminObservability />} />
-        <Route path="/admin/audit" element={<AdminAudit />} />
+      <Route element={<ProtectedRoute allowedRoles={["admin"]} />}>
+        <Route element={<AdminShell />}>
+          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/users" element={<AdminUsers />} />
+          <Route path="/admin/ai/providers" element={<AdminAIProviders />} />
+          <Route path="/admin/settings" element={<AdminSettings />} />
+          <Route path="/admin/observability" element={<AdminObservability />} />
+          <Route path="/admin/audit" element={<AdminAudit />} />
+        </Route>
       </Route>
     </Routes>
   );

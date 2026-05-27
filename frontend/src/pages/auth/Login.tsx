@@ -1,12 +1,28 @@
-import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
+import { Navigate, useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth";
 
 export default function Login() {
   const navigate = useNavigate();
-  const { login, loading, error, clearError } = useAuthStore();
+  const location = useLocation();
+  const { user, initialized, login, loading, error, clearError, fetchMe } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const successMessage = (location.state as { message?: string })?.message;
+
+  useEffect(() => {
+    if (!initialized) fetchMe();
+  }, [initialized, fetchMe]);
+
+  if (initialized && user) {
+    const dest =
+      user.role === "vendor"
+        ? "/vendor/inbox"
+        : user.role === "admin"
+          ? "/admin/dashboard"
+          : "/buyer/dashboard";
+    return <Navigate to={dest} replace />;
+  }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -76,6 +92,10 @@ export default function Login() {
             />
           </div>
 
+          {successMessage && (
+            <p className="text-sm text-green-400">{successMessage}</p>
+          )}
+
           {error && (
             <p className="text-sm text-red-400">{error}</p>
           )}
@@ -89,6 +109,14 @@ export default function Login() {
           </button>
         </form>
 
+        <p className="mt-4 text-sm text-zinc-500 text-center">
+          Don't have an account?{" "}
+          <Link to="/register" className="text-indigo-600 hover:underline">
+            Register
+          </Link>
+        </p>
+
+        {import.meta.env.DEV && (
         <div className="mt-6 rounded-lg border border-zinc-800/50 bg-zinc-900/50 p-4">
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
             Demo Credentials
@@ -120,6 +148,7 @@ export default function Login() {
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

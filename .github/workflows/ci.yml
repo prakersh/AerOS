@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+      - name: Ruff lint
+        run: ruff check src/ tests/
+      - name: Ruff format check
+        run: ruff format --check src/ tests/
+      - name: Type check
+        run: mypy src/aeros/ --ignore-missing-imports
+      - name: Tests
+        run: pytest tests/ -q --tb=short
+      - name: Secret scan
+        run: |
+          python -c "
+          import re, pathlib, sys
+          patterns = [r'(?i)(password|secret|api.?key|token)\s*[:=]\s*[\"'\\''][^\"\\']{8,}', r'-----BEGIN .* PRIVATE KEY-----']
+          found = False
+          for f in pathlib.Path('src').rglob('*.py'):
+              content = f.read_text(errors='ignore')
+              for p in patterns:
+                  if re.search(p, content):
+                      print(f'SECRET: {f}')
+                      found = True
+          sys.exit(1 if found else 0)
+          "
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install
+        run: npm install
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build

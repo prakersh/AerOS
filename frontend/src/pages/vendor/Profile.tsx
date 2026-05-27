@@ -51,6 +51,68 @@ function Toggle({
 }
 
 /* ------------------------------------------------------------------ */
+/* Telegram modal                                                      */
+/* ------------------------------------------------------------------ */
+
+function TelegramModal({ onClose }: { onClose: () => void }) {
+  const { user } = useAuthStore();
+  const token = user?.id ?? "unknown";
+  const deepLink = `https://t.me/aeros_bot?start=${token}`;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+      <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6">
+        <h3 className="text-lg font-semibold text-zinc-100">
+          Bind Telegram Account
+        </h3>
+        <p className="mt-2 text-sm text-zinc-400">
+          Click the link below to open Telegram and connect your account to
+          AEROS notifications.
+        </p>
+
+        <div className="mt-4 rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+          <p className="text-xs text-zinc-500 mb-1">Your personal bind link:</p>
+          <a
+            href={deepLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="break-all font-mono text-sm text-indigo-400 hover:underline"
+          >
+            {deepLink}
+          </a>
+        </div>
+
+        <ol className="mt-4 space-y-2 text-sm text-zinc-400">
+          <li className="flex gap-2">
+            <span className="shrink-0 font-medium text-zinc-300">1.</span>
+            Click the link above (or copy it to Telegram).
+          </li>
+          <li className="flex gap-2">
+            <span className="shrink-0 font-medium text-zinc-300">2.</span>
+            Press <span className="font-medium text-zinc-200">Start</span> in the
+            Telegram bot chat.
+          </li>
+          <li className="flex gap-2">
+            <span className="shrink-0 font-medium text-zinc-300">3.</span>
+            You will receive a confirmation message once bound.
+          </li>
+        </ol>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-zinc-700"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Main component                                                      */
 /* ------------------------------------------------------------------ */
 
@@ -62,6 +124,8 @@ export default function VendorProfile() {
     telegram: false,
     in_app: true,
   });
+
+  const [showTelegramModal, setShowTelegramModal] = useState(false);
 
   const togglePref = (key: keyof NotificationPrefs) => {
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -129,9 +193,18 @@ export default function VendorProfile() {
             />
           </div>
 
+          <p className="mt-3 text-[11px] text-zinc-600">
+            Notification preferences are read-only in this release. Changes will
+            be available once the notification service is fully enabled.
+          </p>
+
           {/* Bind Telegram */}
           <div className="mt-6 border-t border-zinc-800 pt-4">
-            <button className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100">
+            <button
+              type="button"
+              onClick={() => setShowTelegramModal(true)}
+              className="flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:border-zinc-600 hover:text-zinc-100"
+            >
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M11.994 2C6.47 2 2 6.478 2 12.004c0 5.525 4.47 10.002 9.994 10.002 5.525 0 10.006-4.477 10.006-10.002C22 6.478 17.52 2 11.994 2zm4.806 6.813l-1.65 7.776c-.124.558-.45.694-.912.432l-2.52-1.858-1.215 1.17c-.135.135-.248.248-.508.248l.18-2.563 4.66-4.21c.203-.18-.044-.28-.315-.1l-5.76 3.627-2.48-.775c-.54-.168-.55-.54.112-.8l9.692-3.735c.45-.163.843.11.696.788z" />
               </svg>
@@ -143,6 +216,11 @@ export default function VendorProfile() {
           </div>
         </div>
       </div>
+
+      {/* Telegram modal */}
+      {showTelegramModal && (
+        <TelegramModal onClose={() => setShowTelegramModal(false)} />
+      )}
     </div>
   );
 }

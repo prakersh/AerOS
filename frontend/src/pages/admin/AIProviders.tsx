@@ -1,3 +1,7 @@
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { api } from "@/api/client";
+
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
@@ -12,40 +16,10 @@ interface AIProvider {
   status: ProviderStatus;
 }
 
-/* ------------------------------------------------------------------ */
-/* Mock data                                                           */
-/* ------------------------------------------------------------------ */
-
-const MOCK_PROVIDERS: AIProvider[] = [
-  {
-    id: 1,
-    name: "NVIDIA NIM (Chat)",
-    capability: "Text Generation / Chat Completion",
-    model: "deepseek-ai/deepseek-v4-flash",
-    status: "active",
-  },
-  {
-    id: 2,
-    name: "NVIDIA NIM (Vision)",
-    capability: "Document & Image Understanding",
-    model: "meta/llama-3.2-90b-vision-instruct",
-    status: "active",
-  },
-  {
-    id: 3,
-    name: "NVIDIA NIM (Embeddings)",
-    capability: "Vector Embeddings",
-    model: "nvidia/nv-embed-v1",
-    status: "active",
-  },
-  {
-    id: 4,
-    name: "Groq (ASR / Whisper)",
-    capability: "Automatic Speech Recognition",
-    model: null,
-    status: "active",
-  },
-];
+interface TestResult {
+  ok: boolean;
+  error?: string;
+}
 
 /* ------------------------------------------------------------------ */
 /* Status badge                                                        */
@@ -86,6 +60,33 @@ function ProviderIcon() {
 /* ------------------------------------------------------------------ */
 
 export default function AdminAIProviders() {
+  const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
+
+  const {
+    data: providers = [],
+    isLoading,
+    error,
+  } = useQuery<AIProvider[]>({
+    queryKey: ["admin", "ai-providers"],
+    queryFn: () => api.get<AIProvider[]>("/api/admin/ai/providers"),
+  });
+
+  const testMutation = useMutation({
+    mutationFn: (providerName: string) =>
+      api.post<TestResult>("/api/admin/ai/providers/test", {
+        provider_name: providerName,
+      }),
+    onSuccess: (data, providerName) => {
+      setTestResults((prev) => ({ ...prev, [providerName]: data }));
+    },
+    onError: (_err, providerName) => {
+      setTestResults((prev) => ({
+        ...prev,
+        [providerName]: { ok: false, error: "Connection test failed" },
+      }));
+    },
+  });
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
@@ -97,48 +98,86 @@ export default function AdminAIProviders() {
         </p>
       </div>
 
-      {/* Provider Cards */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        {MOCK_PROVIDERS.map((provider) => (
-          <div
-            key={provider.id}
-            className="rounded-xl border border-zinc-800 bg-zinc-900 p-5 transition hover:border-zinc-700"
-          >
-            <div className="flex items-start gap-4">
-              <ProviderIcon />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-medium text-zinc-200">
-                    {provider.name}
-                  </h3>
-                  <span
-                    className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLES[provider.status]}`}
-                  >
-                    {provider.status}
-                  </span>
-                </div>
-                <p className="mt-1 text-xs text-zinc-500">
-                  {provider.capability}
-                </p>
-                {provider.model && (
-                  <p className="mt-2 rounded-md bg-zinc-950 px-2.5 py-1.5 font-mono text-xs text-zinc-400">
-                    {provider.model}
-                  </p>
-                )}
-              </div>
-            </div>
+      {/* Loading state */}
+      {isLoading && (
+        <div className="flex items-center justify-center py-12">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-indigo-500" />
+          <span className="ml-3 text-sm text-zinc-500">Loading providers...</span>
+        </div>
+      )}
 
-            <div className="mt-4 flex justify-end">
-              <button
-                type="button"
-                className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-300"
+      {/* Error state */}
+      {error && !isLoading && (
+        <div className="rounded-xl border border-red-800/50 bg-red-900/20 p-4">
+          <p className="text-sm text-red-400">Failed to load AI providers.</p>
+        </div>
+      )}
+
+      {/* Provider Cards */}
+      {!isLoading && !error && (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {providers.map((provider) => {
+            const result = testResults[provider.name];
+            const isTesting =
+              testMutation.isPending &&
+              testMutation.variables === provider.name;
+
+            return (
+              <div
+                key={provider.id}
+                className="rounded-xl border border-zinc-800 bg-zinc-900 p-5 transition hover:border-zinc-700"
               >
-                Test Connection
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+                <div className="flex items-start gap-4">
+                  <ProviderIcon />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-medium text-zinc-200">
+                        {provider.name}
+                      </h3>
+                      <span
+                        className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLES[provider.status]}`}
+                      >
+                        {provider.status}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      {provider.capability}
+                    </p>
+                    {provider.model && (
+                      <p className="mt-2 rounded-md bg-zinc-950 px-2.5 py-1.5 font-mono text-xs text-zinc-400">
+                        {provider.model}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-between">
+                  {/* Test result message */}
+                  <div className="text-xs">
+                    {result?.ok === true && (
+                      <span className="text-green-400">Connection OK</span>
+                    )}
+                    {result?.ok === false && (
+                      <span className="text-red-400">
+                        {result.error ?? "Failed"}
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isTesting}
+                    onClick={() => testMutation.mutate(provider.name)}
+                    className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-300 disabled:opacity-50"
+                  >
+                    {isTesting ? "Testing..." : "Test Connection"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <p className="text-xs text-zinc-600">
         Provider management and failover configuration will be available in a

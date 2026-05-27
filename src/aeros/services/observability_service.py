@@ -1,0 +1,225 @@
+"""Observability service for dashboard aggregations and trace lookups."""
+
+from datetime import datetime, timedelta
+
+from sqlmodel import Session, func, select
+
+from aeros.models.observability import (
+    AgentRunLog,
+    ChannelEventLog,
+    LLMCallLog,
+    PipelineReport,
+)
+
+
+def get_summary_cards(session: Session, days: int = 7) -> dict:
+    """Aggregate telemetry data into summary cards for the dashboard.
+
+    Args:
+        session: Database session.
+        days: Number of days to look back.
+
+    Returns:
+        Dictionary with aggregated metrics (calls, tokens, cost, etc.).
+    """
+    since = datetime.utcnow() - timedelta(days=days)
+
+    total_llm_calls = session.exec(
+        select(func.count(LLMCallLog.id)).where(LLMCallLog.created_at >= since)
+    ).one() or 0
+
+    total_tokens = session.exec(
+        select(func.sum(LLMCallLog.total_tokens)).where(
+            LLMCallLog.created_at >= since
+        )
+    ).one() or 0
+
+    total_cost = session.exec(
+        select(func.sum(LLMCallLog.estimated_cost_usd)).where(
+            LLMCallLog.created_at >= since
+        )
+    ).one() or 0.0
+
+    total_agent_runs = session.exec(
+        select(func.count(AgentRunLog.id)).where(AgentRunLog.started_at >= since)
+    ).one() or 0
+
+    avg_latency = session.exec(
+        select(func.avg(LLMCallLog.latency_ms)).where(
+            LLMCallLog.created_at >= since
+        )
+    ).one() or 0
+
+    error_count = session.exec(
+        select(func.count(LLMCallLog.id)).where(
+            LLMCallLog.created_at >= since, LLMCallLog.status == "error"
+        )
+    ).one() or 0
+
+    channel_events = session.exec(
+        select(func.count(ChannelEventLog.id)).where(
+            ChannelEventLog.created_at >= since
+        )
+    ).one() or 0
+
+    return {
+        "total_llm_calls": total_llm_calls,
+        "total_tokens": total_tokens,
+        "total_cost_usd": round(float(total_cost), 4),
+        "total_agent_runs": total_agent_runs,
+        "avg_latency_ms": round(float(avg_latency), 1),
+        "error_count": error_count,
+        "error_rate": round(error_count / max(total_llm_calls, 1) * 100, 2),
+        "channel_events": channel_events,
+        "period_days": days,
+    }
+
+
+def get_recent_calls(session: Session, limit: int = 50) -> list[dict]:
+    """Get the most recent LLM call logs.
+
+    Args:
+        session: Database session.
+        limit: Maximum number of records to return.
+
+    Returns:
+        List of dicts with call metadata.
+    """
+    calls = list(
+        session.exec(
+            select(LLMCallLog)
+            .order_by(LLMCallLog.created_at.desc())  # type: ignore[union-attr]
+            .limit(limit)
+        ).all()
+    )
+    return [
+        {
+            "id": c.id,
+            "trace_id": c.trace_id,
+            "provider": c.provider,
+            "model": c.model,
+            "total_tokens": c.total_tokens,
+            "latency_ms": c.latency_ms,
+            "cost_usd": c.estimated_cost_usd,
+            "status": c.status,
+            "rfx_id": c.rfx_id,
+            "created_at": c.created_at.isoformat() if c.created_at else "",
+        }
+        for c in calls
+    ]
+
+
+def get_timeline(session: Session, rfx_id: int) -> list[dict]:
+    """Get a chronological timeline of events for a specific RFx.
+
+    Args:
+        session: Database session.
+        rfx_id: The RFx run ID to filter by.
+
+    Returns:
+        Sorted list of agent run and channel event dicts.
+    """
+    events: list[dict] = []
+
+    agent_runs = list(
+        session.exec(
+            select(AgentRunLog)
+            .where(AgentRunLog.rfx_id == rfx_id)
+            .order_by(AgentRunLog.started_at)
+        ).all()
+    )
+    for r in agent_runs:
+        events.append(
+            {
+                "type": "agent_run",
+                "id": r.id,
+                "name": r.agent_name,
+                "status": r.status,
+                "duration_ms": r.duration_ms,
+                "tokens": r.total_tokens,
+                "timestamp": r.started_at.isoformat() if r.started_at else "",
+            }
+        )
+
+    channel_events = list(
+        session.exec(
+            select(ChannelEventLog)
+            .where(ChannelEventLog.rfx_id == rfx_id)
+            .order_by(ChannelEventLog.created_at)
+        ).all()
+    )
+    for e in channel_events:
+        events.append(
+            {
+                "type": "channel_event",
+                "id": e.id,
+                "channel": e.channel,
+                "event_type": e.event_type,
+                "direction": e.direction,
+                "status": e.status,
+                "timestamp": e.created_at.isoformat() if e.created_at else "",
+            }
+        )
+
+    events.sort(key=lambda e: e.get("timestamp", ""))
+    return events
+
+
+def get_trace(session: Session, trace_id: str) -> dict:
+    """Get all telemetry events correlated by a trace ID.
+
+    Args:
+        session: Database session.
+        trace_id: The trace ID to look up.
+
+    Returns:
+        Dictionary with agent_runs, llm_calls, and channel_events lists.
+    """
+    agent_runs = list(
+        session.exec(
+            select(AgentRunLog).where(AgentRunLog.trace_id == trace_id)
+        ).all()
+    )
+    llm_calls = list(
+        session.exec(
+            select(LLMCallLog).where(LLMCallLog.trace_id == trace_id)
+        ).all()
+    )
+    channel_events = list(
+        session.exec(
+            select(ChannelEventLog).where(ChannelEventLog.trace_id == trace_id)
+        ).all()
+    )
+
+    return {
+        "trace_id": trace_id,
+        "agent_runs": [
+            {
+                "id": r.id,
+                "name": r.agent_name,
+                "status": r.status,
+                "duration_ms": r.duration_ms,
+                "tokens": r.total_tokens,
+            }
+            for r in agent_runs
+        ],
+        "llm_calls": [
+            {
+                "id": c.id,
+                "model": c.model,
+                "tokens": c.total_tokens,
+                "latency_ms": c.latency_ms,
+                "status": c.status,
+            }
+            for c in llm_calls
+        ],
+        "channel_events": [
+            {
+                "id": e.id,
+                "channel": e.channel,
+                "event_type": e.event_type,
+                "status": e.status,
+            }
+            for e in channel_events
+        ],
+    }
