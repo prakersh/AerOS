@@ -10,10 +10,12 @@ type ProviderStatus = "active" | "inactive" | "error";
 
 interface AIProvider {
   id: number;
-  name: string;
+  provider_name: string;
+  display_name: string;
   capability: string;
-  model: string | null;
+  model_id: string | null;
   status: ProviderStatus;
+  is_default?: boolean;
 }
 
 interface TestResult {
@@ -117,10 +119,10 @@ export default function AdminAIProviders() {
       {!isLoading && !error && (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {providers.map((provider) => {
-            const result = testResults[provider.name];
+            const result = testResults[provider.provider_name];
             const isTesting =
               testMutation.isPending &&
-              testMutation.variables === provider.name;
+              testMutation.variables === provider.provider_name;
 
             return (
               <div
@@ -132,7 +134,7 @@ export default function AdminAIProviders() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-medium text-zinc-200">
-                        {provider.name}
+                        {provider.display_name}
                       </h3>
                       <span
                         className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLES[provider.status]}`}
@@ -143,9 +145,9 @@ export default function AdminAIProviders() {
                     <p className="mt-1 text-xs text-zinc-500">
                       {provider.capability}
                     </p>
-                    {provider.model && (
+                    {provider.model_id && (
                       <p className="mt-2 rounded-md bg-zinc-950 px-2.5 py-1.5 font-mono text-xs text-zinc-400">
-                        {provider.model}
+                        {provider.model_id}
                       </p>
                     )}
                   </div>
@@ -167,7 +169,7 @@ export default function AdminAIProviders() {
                   <button
                     type="button"
                     disabled={isTesting}
-                    onClick={() => testMutation.mutate(provider.name)}
+                    onClick={() => testMutation.mutate(provider.provider_name)}
                     className="rounded-lg border border-zinc-700 px-3 py-1.5 text-xs font-medium text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-300 disabled:opacity-50"
                   >
                     {isTesting ? "Testing..." : "Test Connection"}

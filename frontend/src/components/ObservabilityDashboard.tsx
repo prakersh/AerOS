@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 /* ------------------------------------------------------------------ */
 
 interface ObservabilitySummary {
-  total_calls: number;
+  total_llm_calls: number;
   total_tokens: number;
   total_cost_usd: number;
   error_rate: number;
@@ -135,7 +135,7 @@ export default function ObservabilityDashboard({ scope }: ObservabilityDashboard
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <KpiCard
             label="Total LLM Calls"
-            value={summary?.total_calls ?? 0}
+            value={summary?.total_llm_calls ?? 0}
             accent="text-indigo-400"
           />
           <KpiCard

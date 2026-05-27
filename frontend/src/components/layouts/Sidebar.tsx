@@ -82,7 +82,7 @@ export function SidebarLayout({
                 )}
                 {section.items.map((item) => (
                   <NavLink
-                    key={item.to}
+                    key={item.label}
                     to={item.disabled ? "#" : item.to}
                     onClick={(e) => item.disabled && e.preventDefault()}
                     className={({ isActive }) =>
