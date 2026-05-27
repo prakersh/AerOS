@@ -1,0 +1,20 @@
+Dear Procurement Team,
+
+Thank you for your enquiry. Please find our quotation for daily essentials below:
+
+Item                    Qty     Unit    Unit Price (INR)    Total (INR)
+------------------------------------------------------------------------
+Amul Butter (500g)       50     pcs          265.00         13,250.00
+Britannia Bread          100    pcs           40.00          4,000.00
+Eggs (Farm Fresh)        200    dozen         72.00         14,400.00
+Milk (Toned, Pouch)      300    ltr           28.00          8,400.00
+------------------------------------------------------------------------
+Grand Total:                                                40,050.00
+
+Payment Terms: NET15
+Delivery: Daily before 6 AM
+Validity: 7 days from date of this quote
+
+Regards,
+Daily Needs Distributors
+Contact: +91-98765-43210

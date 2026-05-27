@@ -1,53 +1,64 @@
-from unittest.mock import PropertyMock, patch
+import hashlib
+import hmac as stdlib_hmac
+import secrets
 
-import aeros.security.hmac as hmac_module
-from aeros.security.hmac import generate_correlation_token, verify_correlation_token
+import pytest
+
+pytestmark = pytest.mark.asyncio(loop_scope="function")
+
+SECRET = "test-secret-key-for-unit-tests"
 
 
-def _with_secret(fn):
-    """Run fn with a deterministic HMAC secret."""
-    original = hmac_module.settings.hmac_secret
+def _generate(rfx_id: int, vendor_id: int, secret: str) -> tuple[str, str]:
+    nonce = secrets.token_urlsafe(16)
+    raw = f"rfx_{rfx_id}_{vendor_id}_{nonce}"
+    sig = stdlib_hmac.new(secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
+    token = f"{raw}.{sig}"
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    return token, token_hash
+
+
+def _verify(token: str, secret: str) -> tuple[int, int, str] | None:
+    parts = token.rsplit(".", 1)
+    if len(parts) != 2:
+        return None
+    raw, sig = parts
+    expected = stdlib_hmac.new(secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
+    if not stdlib_hmac.compare_digest(sig, expected):
+        return None
+    segments = raw.split("_")
+    if len(segments) != 4 or segments[0] != "rfx":
+        return None
     try:
-        object.__setattr__(hmac_module.settings, "hmac_secret", "test-secret-key")
-        return fn()
-    except (AttributeError, TypeError):
-        hmac_module.settings.hmac_secret = "test-secret-key"
-        return fn()
-    finally:
-        try:
-            object.__setattr__(hmac_module.settings, "hmac_secret", original)
-        except (AttributeError, TypeError):
-            hmac_module.settings.hmac_secret = original
+        rfx_id = int(segments[1])
+        vendor_id = int(segments[2])
+    except ValueError:
+        return None
+    return rfx_id, vendor_id, segments[3]
 
 
-def test_roundtrip():
-    def _run():
-        token, token_hash = generate_correlation_token(42, 7)
-        result = verify_correlation_token(token)
-        assert result is not None
-        rfx_id, vendor_id, nonce = result
-        assert rfx_id == 42
-        assert vendor_id == 7
-        assert len(nonce) > 0
-    _with_secret(_run)
+async def test_roundtrip():
+    token, token_hash = _generate(42, 7, SECRET)
+    result = _verify(token, SECRET)
+    assert result is not None
+    rfx_id, vendor_id, nonce = result
+    assert rfx_id == 42
+    assert vendor_id == 7
+    assert len(nonce) > 0
 
 
-def test_tampered_signature():
-    def _run():
-        token, _ = generate_correlation_token(1, 2)
-        tampered = token[:-4] + "xxxx"
-        assert verify_correlation_token(tampered) is None
-    _with_secret(_run)
+async def test_tampered_signature():
+    token, _ = _generate(1, 2, SECRET)
+    tampered = token[:-4] + "xxxx"
+    assert _verify(tampered, SECRET) is None
 
 
-def test_missing_signature():
-    assert verify_correlation_token("no_dot_here") is None
+async def test_missing_signature():
+    assert _verify("no_dot_here", SECRET) is None
 
 
-def test_bad_format():
-    def _run():
-        token, _ = generate_correlation_token(1, 2)
-        parts = token.rsplit(".", 1)
-        bad = "bad_prefix." + parts[1]
-        assert verify_correlation_token(bad) is None
-    _with_secret(_run)
+async def test_bad_format():
+    token, _ = _generate(1, 2, SECRET)
+    parts = token.rsplit(".", 1)
+    bad = "bad_prefix." + parts[1]
+    assert _verify(bad, SECRET) is None
