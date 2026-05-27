@@ -1,6 +1,6 @@
 """Tests for AI provider factory functions."""
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestAIFactory:

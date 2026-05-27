@@ -2,7 +2,6 @@
 
 import pytest
 
-from aeros.models.organization import Organization
 from aeros.models.user import Role, User, UserStatus
 from aeros.services.admin_service import (
     get_system_health,

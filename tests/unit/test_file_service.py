@@ -1,14 +1,10 @@
 """Tests for file_service — validation, MIME detection, and file saving."""
 
 import os
-import tempfile
-
-import pytest
 
 from aeros.services.file_service import (
     ALLOWED_MIME_TYPES,
     BLOCKED_EXTENSIONS,
-    FileValidation,
     save_file,
     validate_file,
 )

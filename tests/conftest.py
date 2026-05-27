@@ -4,13 +4,13 @@ from sqlalchemy import StaticPool, create_engine
 from sqlmodel import Session, SQLModel
 
 from aeros.config import settings
-from aeros.main import app
 from aeros.db import get_session
-from aeros.services.auth_service import hash_password
+from aeros.main import app
+from aeros.models import *  # noqa: F403 — register all models
+from aeros.models.organization import Organization, OrgType
 from aeros.models.user import Role, User
-from aeros.models.organization import OrgType, Organization
 from aeros.models.user_defaults import UserDefaults
-from aeros.models import *  # noqa: F401, F403 — register all models
+from aeros.services.auth_service import hash_password
 
 # Enable debug mode for tests (skips CSRF, secret validation, etc.)
 settings.debug = True

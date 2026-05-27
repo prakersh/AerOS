@@ -26,7 +26,7 @@ def _verify(token: str, secret: str) -> tuple[int, int, str] | None:
     expected = stdlib_hmac.new(secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
     if not stdlib_hmac.compare_digest(sig, expected):
         return None
-    segments = raw.split("_")
+    segments = raw.split("_", 3)
     if len(segments) != 4 or segments[0] != "rfx":
         return None
     try:

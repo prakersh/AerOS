@@ -2,7 +2,7 @@
 
 import json
 import traceback
-from datetime import datetime, timezone
+from datetime import datetime
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,14 +12,14 @@ from sqlmodel import Session, select
 
 logger = structlog.get_logger()
 
-from aeros.db import get_session
-from aeros.models.user import Role
-from aeros.models.sku import SKU
-from aeros.security.auth_context import AuthContext, get_current_user
 from aeros.agents.base import AgentContext
 from aeros.agents.intake import IntakeAgent
 from aeros.agents.sourcing import SourcingAgent
 from aeros.ai.factory import get_chat_provider, get_vision_provider
+from aeros.db import get_session
+from aeros.models.sku import SKU
+from aeros.models.user import Role
+from aeros.security.auth_context import AuthContext, get_current_user
 from aeros.services import rfx_service
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
@@ -75,11 +75,34 @@ async def chat(
             )
 
     elif caller.role == Role.VENDOR:
-        return JSONResponse(content={
-            "message": "Vendor co-pilot coming soon. For now, please use the reply and upload features.",
-            "data": {},
-            "success": True,
-        })
+        from aeros.agents.vendor_copilot import VendorCopilotAgent
+
+        agent = VendorCopilotAgent()
+        chat_provider = get_chat_provider()
+        vision_provider = get_vision_provider()
+
+        ctx = AgentContext(
+            session=session,
+            caller=caller,
+            chat_provider=chat_provider,
+            vision_provider=vision_provider,
+            rfx_id=body.rfx_id,
+            metadata={"history": body.history},
+        )
+
+        try:
+            result = await agent.run(ctx, body.message)
+            return JSONResponse(content={
+                "message": result.message,
+                "data": result.data,
+                "success": result.success,
+            })
+        except Exception as e:
+            logger.error("vendor_chat.error", error=str(e), traceback=traceback.format_exc())
+            return JSONResponse(
+                status_code=500,
+                content={"message": f"AI error: {e}", "data": {}, "success": False},
+            )
 
     raise HTTPException(403, "Chat not available for this role")
 

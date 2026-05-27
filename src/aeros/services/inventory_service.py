@@ -1,6 +1,6 @@
 from sqlmodel import Session, select
 
-from aeros.models.sku import Category, SKU
+from aeros.models.sku import SKU, Category
 
 
 def list_categories(session: Session) -> list[Category]:

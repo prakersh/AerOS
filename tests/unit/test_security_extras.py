@@ -1,11 +1,11 @@
 """Tests for security headers, HMAC verification, auth_context, and db_scope."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
 
-from aeros.models.user import Role
-from aeros.security.auth_context import AuthContext, require_role
+import pytest
 
+from aeros.models.user import Role
+from aeros.security.auth_context import AuthContext
 
 # ---- Security headers middleware ----
 
@@ -13,9 +13,10 @@ from aeros.security.auth_context import AuthContext, require_role
 class TestSecurityHeaders:
     async def test_headers_added_to_response(self):
         """Security headers should be added to every response."""
-        from aeros.security.headers import SecurityHeadersMiddleware, SECURITY_HEADERS
         from starlette.requests import Request
         from starlette.responses import Response
+
+        from aeros.security.headers import SECURITY_HEADERS, SecurityHeadersMiddleware
 
         middleware = SecurityHeadersMiddleware(app=None)
 
@@ -29,7 +30,6 @@ class TestSecurityHeaders:
         request = Request(scope)
         call_next = AsyncMock(return_value=Response(content="ok"))
 
-        import asyncio
         result = await middleware.dispatch(request, call_next)
 
         for header, value in SECURITY_HEADERS.items():
@@ -102,7 +102,7 @@ class TestDbScope:
 
     def test_unknown_role_raises(self):
         """Unknown role should raise MissingScopeError."""
-        from aeros.db_scope import for_user, MissingScopeError
+        from aeros.db_scope import MissingScopeError, for_user
 
         caller = AuthContext(user_id=1, role="unknown_role")
         mock_stmt = MagicMock()

@@ -3,7 +3,7 @@
 import json
 
 import structlog
-from sqlmodel import Session, select
+from sqlmodel import Session
 
 from aeros.models.user import User
 from aeros.models.vendor import Vendor

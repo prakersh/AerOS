@@ -4,7 +4,7 @@ import re
 
 
 async def extract_email_body(file_path: str, **kwargs) -> str:
-    with open(file_path, "r", encoding="utf-8", errors="replace") as f:
+    with open(file_path, encoding="utf-8", errors="replace") as f:
         content = f.read()
 
     if "<html" in content.lower() or "<body" in content.lower():

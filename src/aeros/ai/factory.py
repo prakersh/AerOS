@@ -1,9 +1,8 @@
 """Factory for AI providers — reads config, returns provider instances."""
 
-from aeros.config import settings
-from aeros.ai.openai_compatible import OpenAICompatibleProvider
 from aeros.ai.groq_asr import GroqASRProvider
-
+from aeros.ai.openai_compatible import OpenAICompatibleProvider
+from aeros.config import settings
 
 _NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
 

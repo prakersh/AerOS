@@ -2,8 +2,8 @@
 
 import pytest
 
-from aeros.models.organization import OrgType, Organization
-from aeros.models.sku import Category, SKU
+from aeros.models.organization import Organization, OrgType
+from aeros.models.sku import SKU, Category
 from aeros.services import inventory_service
 
 

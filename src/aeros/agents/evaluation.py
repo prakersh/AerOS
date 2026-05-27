@@ -1,17 +1,16 @@
 """EvaluationAgent — extracts offers from vendor attachments + email bodies."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlmodel import select
 
 from aeros.agents.base import AgentContext, AgentResult, BaseAgent
 from aeros.ai.base import ChatMessage
-from aeros.ai.prompts.evaluation import EXTRACTION_SYSTEM_PROMPT, GLEANING_PROMPT
 from aeros.ai.extractors.router import route_extraction
+from aeros.ai.prompts.evaluation import EXTRACTION_SYSTEM_PROMPT, GLEANING_PROMPT
 from aeros.ai.schemas import ExtractedOffer
 from aeros.models.rfx import Attachment, ExtractionStatus, Message
-from aeros.models.offer import Offer
 
 
 class EvaluationAgent(BaseAgent):
@@ -46,7 +45,7 @@ class EvaluationAgent(BaseAgent):
                 )
                 snippets.append(f"[{att.filename} ({att.mime_type})]\n{text}")
                 att.extraction_status = ExtractionStatus.EXTRACTED
-                att.extracted_at = datetime.now(timezone.utc)
+                att.extracted_at = datetime.now(UTC)
             except Exception as e:
                 snippets.append(f"[{att.filename}] Extraction failed: {e}")
                 att.extraction_status = ExtractionStatus.FAILED
@@ -79,7 +78,7 @@ class EvaluationAgent(BaseAgent):
             ChatMessage(
                 role="user",
                 content=GLEANING_PROMPT.format(
-                    source_text=combined[:3000],
+                    source_text=combined[:30000],
                     previous_extraction=response.content,
                 ),
             ),

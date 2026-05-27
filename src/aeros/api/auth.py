@@ -4,7 +4,7 @@ from sqlmodel import Session
 
 from aeros.config import settings
 from aeros.db import get_session
-from aeros.models.user import Role, UserStatus
+from aeros.models.user import UserStatus
 from aeros.security.auth_context import AuthContext, get_current_user
 from aeros.security.jwt import create_access_token, create_refresh_token, decode_token
 from aeros.services import auth_service

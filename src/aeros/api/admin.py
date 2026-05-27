@@ -2,14 +2,14 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlmodel import Session, select, func
+from sqlmodel import Session, func, select
 
 from aeros.db import get_session
-from aeros.models.user import Role, User
 from aeros.models.audit import AuditLog
-from aeros.models.rfx import RFxRun, Attachment
-from aeros.models.vendor import Vendor
 from aeros.models.offer import Offer
+from aeros.models.rfx import Attachment, RFxRun
+from aeros.models.user import Role, User
+from aeros.models.vendor import Vendor
 from aeros.security.auth_context import AuthContext, require_role
 from aeros.services import admin_service, ai_config_service, system_settings_service
 

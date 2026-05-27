@@ -5,25 +5,10 @@ from sqlmodel import Session, SQLModel, create_engine
 
 # Import ALL models so their tables are created in metadata
 from aeros.models.organization import Organization, OrgType
-from aeros.models.user import User, Role
+from aeros.models.user import Role, User
 from aeros.models.user_defaults import UserDefaults
-from aeros.models.vendor import Vendor
-from aeros.models.rfx import (
-    RFxRun,
-    RFxLineItem,
-    RFxVendor,
-    Thread,
-    Message,
-    Attachment,
-)
-from aeros.models.sku import Category, SKU
-from aeros.models.offer import Offer
-from aeros.models.award import Award, PurchaseOrder
-from aeros.models.audit import AuditLog
-from aeros.models.notification import Notification
-from aeros.models.llm_cache import LLMCache
-from aeros.services.auth_service import hash_password
 from aeros.services import defaults_service
+from aeros.services.auth_service import hash_password
 
 
 @pytest.fixture

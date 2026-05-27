@@ -1,4 +1,4 @@
-from aeros.services.auth_service import hash_password, verify_password, authenticate, register_user
+from aeros.services.auth_service import authenticate, hash_password, register_user, verify_password
 
 
 def test_hash_and_verify():

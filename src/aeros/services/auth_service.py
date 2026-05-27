@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import bcrypt
 from sqlmodel import Session, select
@@ -23,7 +23,7 @@ def authenticate(session: Session, email: str, password: str) -> User | None:
         return None
     if not verify_password(password, user.password_hash):
         return None
-    user.last_login_at = datetime.now(timezone.utc)
+    user.last_login_at = datetime.now(UTC)
     session.add(user)
     session.commit()
     session.refresh(user)

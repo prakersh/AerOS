@@ -8,7 +8,6 @@ from aeros.models.observability import (
     AgentRunLog,
     ChannelEventLog,
     LLMCallLog,
-    PipelineReport,
 )
 
 

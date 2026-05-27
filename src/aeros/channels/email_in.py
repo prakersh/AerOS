@@ -1,11 +1,9 @@
 """Inbound email processing — IMAP poll + parse for vendor replies."""
 
-import asyncio
 import email
 import hashlib
 import os
 import re
-from email.message import EmailMessage
 from typing import Any
 
 import structlog

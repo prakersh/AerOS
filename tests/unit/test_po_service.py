@@ -2,7 +2,7 @@
 
 import pytest
 
-from aeros.models.award import Award, PurchaseOrder
+from aeros.models.award import Award
 from aeros.models.rfx import RFxRun, RFxStatus
 from aeros.services.po_service import (
     create_award,

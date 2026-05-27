@@ -16,7 +16,6 @@ Covers:
 
 import asyncio
 import json
-from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -24,28 +23,16 @@ import pytest
 from sqlmodel import Session, SQLModel, create_engine
 
 from aeros.models.organization import Organization, OrgType
-from aeros.models.user import User, Role
-from aeros.models.user_defaults import UserDefaults
-from aeros.models.vendor import Vendor
 from aeros.models.rfx import (
     RFxRun,
     RFxStatus,
-    RFxLineItem,
     RFxVendor,
     RFxVendorStatus,
     Thread,
-    Message,
-    Attachment,
-    ExtractionStatus,
 )
-from aeros.models.sku import Category, SKU
-from aeros.models.offer import Offer
-from aeros.models.award import Award, PurchaseOrder
-from aeros.models.audit import AuditLog
-from aeros.models.notification import Notification
-from aeros.models.llm_cache import LLMCache
+from aeros.models.user import Role, User
+from aeros.models.vendor import Vendor
 from aeros.services.auth_service import hash_password
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -301,11 +288,12 @@ class TestEmailInChannel:
 
     def test_parse_email_multipart(self) -> None:
         """Should parse multipart email with text and attachment."""
-        from aeros.channels.email_in import parse_email_message
+        from email import encoders
+        from email.mime.base import MIMEBase
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText
-        from email.mime.base import MIMEBase
-        from email import encoders
+
+        from aeros.channels.email_in import parse_email_message
 
         msg = MIMEMultipart()
         msg["From"] = "vendor@test.com"
@@ -499,8 +487,8 @@ class TestVendorCopilotAgent:
     @pytest.mark.asyncio
     async def test_vendor_copilot_returns_result(self, session: Session) -> None:
         """Should return an AgentResult with parsed JSON data."""
+        from aeros.agents.base import AgentContext
         from aeros.agents.vendor_copilot import VendorCopilotAgent
-        from aeros.agents.base import AgentContext, AgentResult
         from aeros.ai.base import ChatResponse
 
         mock_provider = AsyncMock()
@@ -531,8 +519,8 @@ class TestVendorCopilotAgent:
     @pytest.mark.asyncio
     async def test_vendor_copilot_handles_invalid_json(self, session: Session) -> None:
         """Should gracefully handle non-JSON LLM response."""
-        from aeros.agents.vendor_copilot import VendorCopilotAgent
         from aeros.agents.base import AgentContext
+        from aeros.agents.vendor_copilot import VendorCopilotAgent
         from aeros.ai.base import ChatResponse
 
         mock_provider = AsyncMock()
@@ -658,7 +646,7 @@ class TestReminderService:
 
     def test_mark_reminder_sent(self, session: Session, rfx_vendor: RFxVendor) -> None:
         """Should persist slot name in reminders_sent_json."""
-        from aeros.services.reminder_service import mark_reminder_sent, get_reminders_sent
+        from aeros.services.reminder_service import get_reminders_sent, mark_reminder_sent
 
         mark_reminder_sent(session, rfx_vendor.id, "T-24h")
         session.refresh(rfx_vendor)
@@ -668,7 +656,7 @@ class TestReminderService:
 
     def test_mark_reminder_sent_idempotent(self, session: Session, rfx_vendor: RFxVendor) -> None:
         """Should not duplicate slot names."""
-        from aeros.services.reminder_service import mark_reminder_sent, get_reminders_sent
+        from aeros.services.reminder_service import get_reminders_sent, mark_reminder_sent
 
         mark_reminder_sent(session, rfx_vendor.id, "T-24h")
         mark_reminder_sent(session, rfx_vendor.id, "T-24h")
@@ -767,8 +755,8 @@ class TestPORenderWorker:
     @pytest.mark.asyncio
     async def test_render_and_send_po_success(self) -> None:
         """Should return True when PO agent succeeds."""
-        from aeros.workers.po_render import render_and_send_po
         from aeros.agents.base import AgentResult
+        from aeros.workers.po_render import render_and_send_po
 
         mock_agent_result = AgentResult(
             message="Generated 1 PO",
@@ -798,8 +786,8 @@ class TestPORenderWorker:
     @pytest.mark.asyncio
     async def test_render_and_send_po_failure(self) -> None:
         """Should return False when PO agent fails."""
-        from aeros.workers.po_render import render_and_send_po
         from aeros.agents.base import AgentResult
+        from aeros.workers.po_render import render_and_send_po
 
         mock_agent_result = AgentResult(
             message="Failed to generate PO",

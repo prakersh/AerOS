@@ -2,8 +2,6 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from aeros.ai.groq_asr import GroqASRProvider
 
 

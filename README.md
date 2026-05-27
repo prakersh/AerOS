@@ -64,10 +64,11 @@ bodies. AEROS turns every reply, on every channel, into one normalized
 
 ## Status
 
-**Planning complete. Implementation pending.**
-
-See [`IMPLMENTETION_PLAN_CONTEXT.md`](./IMPLMENTETION_PLAN_CONTEXT.md) for
-the full design, work-packet tracker, and live progress checkboxes.
+**Prototype complete and demo-ready.** All core agents (Intake, Sourcing,
+Evaluation, Vendor Co-pilot) are fully implemented with real AI calls via
+NVIDIA NIM. Format-agnostic extraction covers PDF, Word, Excel, CSV, images,
+and email bodies. Side-by-side comparison matrix with per-line-item award is
+functional.
 
 ## License
 

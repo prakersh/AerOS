@@ -4,10 +4,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from aeros.models.organization import OrgType, Organization
+from aeros.models.organization import Organization, OrgType
 from aeros.models.rfx import (
     Attachment,
-    ExtractionStatus,
     Message,
     RFxRun,
     RFxStatus,

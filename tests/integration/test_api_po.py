@@ -3,11 +3,9 @@
 import pytest
 
 from aeros.models.award import Award, PurchaseOrder
-from aeros.models.organization import OrgType, Organization
 from aeros.models.rfx import RFxRun, RFxStatus
 from aeros.models.user import Role, User
 from aeros.services.auth_service import hash_password
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

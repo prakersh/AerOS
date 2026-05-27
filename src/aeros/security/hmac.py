@@ -22,7 +22,7 @@ def verify_correlation_token(token: str) -> tuple[int, int, str] | None:
     expected = hmac.new(settings.hmac_secret.encode(), raw.encode(), hashlib.sha256).hexdigest()
     if not hmac.compare_digest(sig, expected):
         return None
-    segments = raw.split("_")
+    segments = raw.split("_", 3)
     if len(segments) != 4 or segments[0] != "rfx":
         return None
     try:

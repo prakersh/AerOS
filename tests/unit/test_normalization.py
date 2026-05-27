@@ -1,15 +1,12 @@
 """Tests for aeros.ai.normalization — unit/currency normalization utilities."""
 
-import pytest
 
 from aeros.ai.normalization import (
-    UNIT_ALIASES,
     convert_quantity,
     normalize_currency,
     normalize_unit,
     parse_price_string,
 )
-
 
 # ---------- normalize_unit ----------
 

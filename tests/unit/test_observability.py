@@ -1,19 +1,12 @@
 """Tests for telemetry and observability services."""
 
 import json
-from datetime import datetime, timedelta
 
 import pytest
-from sqlmodel import Session, SQLModel, create_engine
 from sqlalchemy import StaticPool
+from sqlmodel import Session, SQLModel, create_engine
 
-from aeros.models.observability import (
-    LLMCallLog,
-    AgentRunLog,
-    ChannelEventLog,
-    PipelineReport,
-)
-from aeros.services import telemetry_service, observability_service
+from aeros.services import observability_service, telemetry_service
 
 
 @pytest.fixture

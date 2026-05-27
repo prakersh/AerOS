@@ -5,7 +5,6 @@ Run with: python tests/fixtures/vendor_quotes/generate_fixtures.py
 
 import csv
 import os
-import sys
 
 FIXTURES_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -146,7 +145,7 @@ def generate_png() -> None:
     try:
         font_large = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 20)
         font_normal = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", 14)
-    except (OSError, IOError):
+    except OSError:
         font_large = ImageFont.load_default()
         font_normal = ImageFont.load_default()
 

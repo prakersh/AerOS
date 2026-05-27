@@ -1,6 +1,5 @@
 """Telegram bot integration — send messages and download files."""
 
-import hashlib
 import hmac
 import os
 

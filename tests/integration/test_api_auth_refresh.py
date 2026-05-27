@@ -1,8 +1,7 @@
 """Tests for the /api/auth/refresh endpoint."""
 
-import pytest
 
-from aeros.security.jwt import create_access_token, create_refresh_token
+from aeros.security.jwt import create_access_token
 
 
 class TestRefreshEndpoint:

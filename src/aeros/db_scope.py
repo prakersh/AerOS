@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlmodel import select
-
 from aeros.models.user import Role
 from aeros.security.auth_context import AuthContext
 

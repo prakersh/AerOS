@@ -2,18 +2,14 @@
 
 import json
 import os
-from datetime import datetime, timezone
-
-from sqlmodel import select
+from datetime import UTC, datetime
 
 from aeros.agents.base import AgentContext, AgentResult, BaseAgent
 from aeros.channels.email_out import send_po_email
-from aeros.config import settings
 from aeros.models.award import Award, PurchaseOrder
-from aeros.models.rfx import RFxRun, RFxLineItem
-from aeros.models.vendor import Vendor
+from aeros.models.rfx import RFxRun
 from aeros.models.sku import SKU
-
+from aeros.models.vendor import Vendor
 
 PO_HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -116,7 +112,7 @@ class POAgent(BaseAgent):
             if not vendor:
                 continue
 
-            po_number = f"PO-{rfx.id}-{vendor_id}-{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+            po_number = f"PO-{rfx.id}-{vendor_id}-{datetime.now(UTC).strftime('%Y%m%d')}"
 
             # Build line items HTML
             total = 0.0
@@ -137,7 +133,7 @@ class POAgent(BaseAgent):
 
             html = PO_HTML_TEMPLATE.format(
                 po_number=po_number,
-                date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                date=datetime.now(UTC).strftime("%Y-%m-%d"),
                 vendor_name=vendor.name,
                 vendor_email=vendor.primary_email,
                 line_items_html="\n".join(li_html_parts),

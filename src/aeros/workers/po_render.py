@@ -21,8 +21,8 @@ async def render_and_send_po(
     Returns:
         True if all POs were generated successfully, False otherwise.
     """
-    from aeros.agents.po import POAgent
     from aeros.agents.base import AgentContext
+    from aeros.agents.po import POAgent
     from aeros.ai.factory import get_chat_provider
     from aeros.security.auth_context import AuthContext
 

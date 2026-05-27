@@ -1,7 +1,6 @@
 """Service-level reminder management for RFx vendor reminders."""
 
 import json
-from datetime import datetime
 
 from sqlmodel import Session, select
 

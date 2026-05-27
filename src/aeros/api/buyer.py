@@ -5,11 +5,11 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from aeros.db import get_session
-from aeros.models.user import Role, User
 from aeros.models.audit import AuditLog
+from aeros.models.user import Role
 from aeros.models.user_defaults import UserDefaults
 from aeros.security.auth_context import AuthContext, require_role
-from aeros.services import inventory_service, vendor_service, rfx_service, defaults_service
+from aeros.services import defaults_service, inventory_service, rfx_service, vendor_service
 
 router = APIRouter(prefix="/api/buyer", tags=["buyer"])
 

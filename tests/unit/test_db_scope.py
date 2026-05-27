@@ -7,7 +7,6 @@ from aeros.db_scope import MissingScopeError, for_user
 from aeros.models.user import Role
 from aeros.security.auth_context import AuthContext
 
-
 # --- Dummy model for testing scope filters ---
 
 

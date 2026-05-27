@@ -1,8 +1,6 @@
 """Tests for email_out channel — SMTP outbound functionality."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
+from unittest.mock import AsyncMock, patch
 
 
 class TestSendRfxInvitation:

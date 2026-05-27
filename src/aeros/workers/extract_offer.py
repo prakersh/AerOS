@@ -34,8 +34,8 @@ async def extract_offer_from_attachment(
     Returns:
         True if extraction succeeded, False otherwise.
     """
-    from aeros.agents.evaluation import EvaluationAgent
     from aeros.agents.base import AgentContext
+    from aeros.agents.evaluation import EvaluationAgent
     from aeros.ai.factory import get_chat_provider, get_vision_provider
     from aeros.security.auth_context import AuthContext
 

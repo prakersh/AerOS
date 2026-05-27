@@ -9,21 +9,16 @@ Covers the vendor demo flow:
 
 import io
 import json
-import os
-import tempfile
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
 from aeros.ai.base import ChatResponse
-from aeros.models.organization import OrgType, Organization
-from aeros.models.rfx import RFxRun, RFxStatus, RFxVendor, RFxVendorStatus, Thread
-from aeros.models.sku import Category, SKU
+from aeros.models.organization import Organization, OrgType
+from aeros.models.sku import SKU, Category
 from aeros.models.user import Role, User
-from aeros.models.user_defaults import UserDefaults
 from aeros.models.vendor import Vendor
 from aeros.services.auth_service import hash_password
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

@@ -7,9 +7,6 @@ from sqlmodel import select
 from aeros.agents.base import AgentContext, AgentResult, BaseAgent
 from aeros.ai.base import ChatMessage
 from aeros.ai.prompts.intake import INTAKE_SYSTEM_PROMPT
-from aeros.ai.schemas import RFxDraft
-from aeros.models.sku import SKU
-from aeros.models.vendor import Vendor
 from aeros.models.user_defaults import UserDefaults
 from aeros.services import inventory_service, vendor_service
 

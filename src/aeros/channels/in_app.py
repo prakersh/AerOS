@@ -3,7 +3,7 @@
 import structlog
 from sqlmodel import Session, select
 
-from aeros.models.rfx import Thread, Message
+from aeros.models.rfx import Message
 
 logger = structlog.get_logger()
 

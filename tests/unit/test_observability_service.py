@@ -1,6 +1,6 @@
 """Tests for observability_service — dashboard aggregations and trace lookups."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 import pytest
 

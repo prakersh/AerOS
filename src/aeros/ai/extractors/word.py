@@ -1,10 +1,18 @@
 """Word document extractor."""
 
+from zipfile import BadZipFile
+
 from docx import Document
 
 
 async def extract_word(file_path: str, **kwargs) -> str:
-    doc = Document(file_path)
+    try:
+        doc = Document(file_path)
+    except BadZipFile:
+        with open(file_path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+        return text if text.strip() else "[Unreadable Word document — binary .doc format]"
+
     parts = []
 
     for para in doc.paragraphs:

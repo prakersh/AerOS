@@ -1,6 +1,6 @@
 """Tests for offer_fusion_service — multi-attachment extraction fusion."""
 
-from aeros.services.offer_fusion_service import fuse_extractions, _match_key
+from aeros.services.offer_fusion_service import _match_key, fuse_extractions
 
 
 class TestMatchKey:

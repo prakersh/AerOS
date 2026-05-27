@@ -1,12 +1,11 @@
 """Offer service — CRUD + fusion for extracted offers."""
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
 from aeros.models.offer import Offer
-from aeros.models.rfx import RFxRun
 from aeros.services.audit_service import log_action
 
 
@@ -84,14 +83,10 @@ def create_offer_from_extraction(
     )
     session.add(offer)
 
-    # Supersede previous offer
-    if existing:
-        existing.superseded_by_offer_id = offer.id
-        session.add(existing)
-
     session.commit()
     session.refresh(offer)
 
+    # Supersede previous offer (must happen after commit so offer.id is set)
     if existing:
         existing.superseded_by_offer_id = offer.id
         session.add(existing)
@@ -135,10 +130,10 @@ def override_offer_field(
     overrides[field_name] = {
         "value": new_value,
         "overridden_by": user_id,
-        "overridden_at": datetime.now(timezone.utc).isoformat(),
+        "overridden_at": datetime.now(UTC).isoformat(),
     }
     offer.manual_overrides_json = json.dumps(overrides)
-    offer.updated_at = datetime.now(timezone.utc)
+    offer.updated_at = datetime.now(UTC)
     session.add(offer)
     session.commit()
     session.refresh(offer)

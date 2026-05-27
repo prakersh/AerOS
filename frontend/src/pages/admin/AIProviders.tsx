@@ -6,7 +6,7 @@ import { api } from "@/api/client";
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
 
-type ProviderStatus = "active" | "inactive" | "error";
+type ProviderStatus = "active" | "inactive" | "error" | "disabled";
 
 interface AIProvider {
   id: number;
@@ -31,6 +31,7 @@ const STATUS_STYLES: Record<ProviderStatus, string> = {
   active: "bg-green-900/40 text-green-400",
   inactive: "bg-zinc-700/50 text-zinc-400",
   error: "bg-red-900/40 text-red-400",
+  disabled: "bg-yellow-900/40 text-yellow-400",
 };
 
 /* ------------------------------------------------------------------ */

@@ -1,15 +1,12 @@
 """Tests for notifications channel — fan-out to vendor channels."""
 
-import json
 from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from aeros.models.organization import OrgType, Organization
-from aeros.models.vendor import Vendor
-from aeros.models.user import User
-from aeros.services.auth_service import hash_password
 from aeros.channels.notifications import notify_vendor
+from aeros.models.organization import Organization, OrgType
+from aeros.models.vendor import Vendor
 
 
 @pytest.fixture

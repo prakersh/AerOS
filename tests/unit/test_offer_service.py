@@ -4,15 +4,13 @@ import json
 
 import pytest
 
-from aeros.models.organization import OrgType, Organization
-from aeros.models.offer import Offer
+from aeros.models.organization import Organization, OrgType
 from aeros.models.rfx import RFxLineItem, RFxRun, RFxStatus
-from aeros.models.sku import Category, SKU
+from aeros.models.sku import SKU, Category
 from aeros.models.user import Role, User
-from aeros.models.vendor import Vendor, KYCStatus
-from aeros.services.auth_service import hash_password
+from aeros.models.vendor import KYCStatus, Vendor
 from aeros.services import offer_service
-
+from aeros.services.auth_service import hash_password
 
 # ---- fixtures ----
 

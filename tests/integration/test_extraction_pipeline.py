@@ -9,16 +9,11 @@ Tests each extractor with real file artifacts (created in tmp_path):
 6. route_extraction — correct dispatcher routing by MIME type
 """
 
-import csv
-import io
-import os
-import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from aeros.ai.base import VisionResponse
-
 
 # ---------------------------------------------------------------------------
 # PDF Extraction

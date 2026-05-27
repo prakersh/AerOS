@@ -16,11 +16,11 @@ interface ObservabilitySummary {
 interface LLMCall {
   id: number;
   model: string;
-  tokens: number;
+  total_tokens: number;
   latency_ms: number;
-  cost: number;
+  cost_usd: number;
   status: string;
-  timestamp: string;
+  created_at: string;
 }
 
 interface ObservabilityDashboardProps {
@@ -73,7 +73,7 @@ function formatCost(cost: number): string {
 }
 
 function formatPercent(rate: number): string {
-  return `${(rate * 100).toFixed(1)}%`;
+  return `${rate.toFixed(1)}%`;
 }
 
 const STATUS_STYLES: Record<string, string> = {
@@ -209,13 +209,13 @@ export default function ObservabilityDashboard({ scope }: ObservabilityDashboard
                     {call.model}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-400">
-                    {call.tokens.toLocaleString()}
+                    {call.total_tokens.toLocaleString()}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-400">
                     {call.latency_ms}ms
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-400">
-                    {formatCost(call.cost)}
+                    {formatCost(call.cost_usd)}
                   </td>
                   <td className="whitespace-nowrap px-4 py-3">
                     <span
@@ -225,7 +225,7 @@ export default function ObservabilityDashboard({ scope }: ObservabilityDashboard
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-500">
-                    {formatTimestamp(call.timestamp)}
+                    {formatTimestamp(call.created_at)}
                   </td>
                 </tr>
               ))}

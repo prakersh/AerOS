@@ -1,22 +1,22 @@
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from aeros.api import admin as admin_router
+from aeros.api import auth as auth_router
+from aeros.api import buyer as buyer_router
+from aeros.api import chat as chat_router
+from aeros.api import inbound_telegram as telegram_router
+from aeros.api import observability as observability_router
+from aeros.api import po as po_router
+from aeros.api import vendor as vendor_router
 from aeros.config import settings
 from aeros.security.csrf import CSRFMiddleware
 from aeros.security.headers import SecurityHeadersMiddleware
 from aeros.security.rate_limit import RateLimitMiddleware
-from aeros.api import auth as auth_router
-from aeros.api import buyer as buyer_router
-from aeros.api import vendor as vendor_router
-from aeros.api import chat as chat_router
-from aeros.api import admin as admin_router
-from aeros.api import po as po_router
-from aeros.api import observability as observability_router
-from aeros.api import inbound_telegram as telegram_router
 
 logger = structlog.get_logger()
 

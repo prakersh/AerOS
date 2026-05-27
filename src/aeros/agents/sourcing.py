@@ -9,10 +9,9 @@ from aeros.ai.base import ChatMessage
 from aeros.channels.correlation import generate_correlation_token
 from aeros.channels.email_out import send_rfx_invitation
 from aeros.config import settings
-from aeros.models.rfx import RFxLineItem, RFxRun, RFxVendor, Thread, Message
+from aeros.models.rfx import Message, RFxLineItem, RFxRun, Thread
 from aeros.models.vendor import Vendor
 from aeros.services import rfx_service
-
 
 SOURCING_SYSTEM_PROMPT = """You are the AEROS Sourcing Agent. Your job is to compose clear, professional vendor invitation messages for RFQs.
 
@@ -146,6 +145,15 @@ Currency: {rfx.currency_for_this_rfx}
                     rfx_title=rfx.title,
                     rfx_summary=summary,
                     correlation_token=token,
+                    portal_url=portal_url,
+                )
+            elif channel == "telegram" and vendor.telegram_chat_id:
+                from aeros.channels.telegram_bot import send_rfx_invitation as tg_send
+                await tg_send(
+                    chat_id=vendor.telegram_chat_id,
+                    vendor_name=vendor.name,
+                    rfx_title=rfx.title,
+                    rfx_summary=summary,
                     portal_url=portal_url,
                 )
             # in_app: create a system message in the thread

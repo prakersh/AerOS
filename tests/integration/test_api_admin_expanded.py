@@ -2,10 +2,8 @@
 
 import pytest
 
-from aeros.models.organization import OrgType, Organization
-from aeros.models.user import Role, User, UserStatus
+from aeros.models.user import Role, User
 from aeros.services.auth_service import hash_password
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

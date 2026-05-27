@@ -1,8 +1,9 @@
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlmodel import Session, select
 
+from aeros.models.offer import Offer
 from aeros.models.rfx import (
     RFxLineItem,
     RFxRun,
@@ -11,7 +12,6 @@ from aeros.models.rfx import (
     RFxVendorStatus,
     Thread,
 )
-from aeros.models.offer import Offer
 from aeros.services.audit_service import log_action
 
 
@@ -46,10 +46,19 @@ def add_line_items(session: Session, rfx_id: int, items: list[dict]) -> list[RFx
 
 
 def invite_vendor(session: Session, rfx_id: int, vendor_id: int, token_hash: str) -> RFxVendor:
+    existing = session.exec(
+        select(RFxVendor).where(RFxVendor.rfx_id == rfx_id, RFxVendor.vendor_id == vendor_id)
+    ).first()
+    if existing:
+        return existing
     rv = RFxVendor(rfx_id=rfx_id, vendor_id=vendor_id, correlation_token_hash=token_hash)
     session.add(rv)
-    thread = Thread(rfx_id=rfx_id, vendor_id=vendor_id)
-    session.add(thread)
+    existing_thread = session.exec(
+        select(Thread).where(Thread.rfx_id == rfx_id, Thread.vendor_id == vendor_id)
+    ).first()
+    if not existing_thread:
+        thread = Thread(rfx_id=rfx_id, vendor_id=vendor_id)
+        session.add(thread)
     session.commit()
     session.refresh(rv)
     return rv
@@ -59,13 +68,15 @@ def dispatch_rfx(session: Session, rfx_id: int, buyer_id: int) -> RFxRun:
     rfx = session.get(RFxRun, rfx_id)
     if not rfx:
         raise ValueError("RFx not found")
+    if rfx.status == RFxStatus.DISPATCHED:
+        return rfx
     rfx.status = RFxStatus.DISPATCHED
-    rfx.updated_at = datetime.now(timezone.utc)
+    rfx.updated_at = datetime.now(UTC)
     session.add(rfx)
 
     vendors = session.exec(select(RFxVendor).where(RFxVendor.rfx_id == rfx_id)).all()
     for rv in vendors:
-        rv.dispatched_at = datetime.now(timezone.utc)
+        rv.dispatched_at = datetime.now(UTC)
         session.add(rv)
 
     session.commit()
@@ -88,10 +99,10 @@ def cancel_rfx(session: Session, rfx_id: int, user_id: int, reason: str) -> RFxR
     if not rfx:
         raise ValueError("RFx not found")
     rfx.status = RFxStatus.CANCELLED
-    rfx.cancelled_at = datetime.now(timezone.utc)
+    rfx.cancelled_at = datetime.now(UTC)
     rfx.cancelled_by_user_id = user_id
     rfx.cancelled_reason = reason
-    rfx.updated_at = datetime.now(timezone.utc)
+    rfx.updated_at = datetime.now(UTC)
     session.add(rfx)
     session.commit()
     session.refresh(rfx)
@@ -250,7 +261,7 @@ def decline_rfx_vendor(
         raise ValueError("Vendor not invited to this RFx")
     rv.status = RFxVendorStatus.DECLINED
     rv.decline_reason = reason
-    rv.declined_at = datetime.now(timezone.utc)
+    rv.declined_at = datetime.now(UTC)
     session.add(rv)
     session.commit()
     session.refresh(rv)
@@ -263,7 +274,7 @@ def award_rfx(session: Session, rfx_id: int, buyer_id: int, decisions: list[dict
     if not rfx:
         raise ValueError("RFx not found")
     rfx.status = RFxStatus.AWARDED
-    rfx.updated_at = datetime.now(timezone.utc)
+    rfx.updated_at = datetime.now(UTC)
     session.add(rfx)
 
     award = Award(

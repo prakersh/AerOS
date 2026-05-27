@@ -30,7 +30,7 @@ async def _extract_excel(file_path: str) -> str:
 
 
 async def _extract_csv(file_path: str) -> str:
-    with open(file_path, "r", newline="", encoding="utf-8", errors="replace") as f:
+    with open(file_path, newline="", encoding="utf-8", errors="replace") as f:
         content = f.read()
 
     try:

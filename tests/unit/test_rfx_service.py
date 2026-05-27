@@ -1,14 +1,13 @@
 import pytest
 
-from aeros.models.organization import OrgType, Organization
-from aeros.models.rfx import RFxRun, RFxLineItem, RFxStatus, RFxVendor, RFxVendorStatus, Thread
-from aeros.models.sku import Category, SKU
+from aeros.models.organization import Organization, OrgType
+from aeros.models.rfx import RFxStatus, RFxVendorStatus, Thread
+from aeros.models.sku import SKU, Category
 from aeros.models.user import Role, User
 from aeros.models.user_defaults import UserDefaults
 from aeros.models.vendor import Vendor
 from aeros.services import rfx_service
 from aeros.services.auth_service import hash_password
-
 
 # ---- fixtures local to rfx_service tests ----
 
@@ -240,6 +239,7 @@ def test_award_rfx(session, buyer, vendor_record):
     assert result.status == RFxStatus.AWARDED
     # Check award was created
     from sqlmodel import select
+
     from aeros.models.award import Award
     award = session.exec(select(Award).where(Award.rfx_id == rfx.id)).first()
     assert award is not None

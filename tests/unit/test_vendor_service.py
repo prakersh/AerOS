@@ -2,10 +2,9 @@
 
 import pytest
 
-from aeros.models.organization import OrgType, Organization
-from aeros.models.vendor import Vendor, KYCStatus
+from aeros.models.organization import Organization, OrgType
+from aeros.models.vendor import KYCStatus, Vendor
 from aeros.services import vendor_service
-
 
 # ---- fixtures ----
 

@@ -8,17 +8,15 @@ Covers:
 """
 
 import secrets
-from unittest.mock import patch
+from datetime import UTC
 
 import pytest
 
-from aeros.models.organization import OrgType, Organization
+from aeros.models.organization import Organization, OrgType
 from aeros.models.user import Role, User, UserStatus
-from aeros.models.user_defaults import UserDefaults
 from aeros.models.vendor import Vendor
-from aeros.security.jwt import create_access_token, create_refresh_token
+from aeros.security.jwt import create_refresh_token
 from aeros.services.auth_service import hash_password
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -403,8 +401,9 @@ class TestTokenMechanics:
     def test_expired_access_token_rejected(self, client, buyer_user):
         """An expired access token should be rejected."""
         # Create a token with very short TTL that is already expired
+        from datetime import datetime, timedelta
+
         import jwt as pyjwt
-        from datetime import datetime, timezone, timedelta
 
         from aeros.config import settings
 
@@ -412,7 +411,7 @@ class TestTokenMechanics:
             "sub": str(buyer_user.id),
             "role": "buyer",
             "type": "access",
-            "exp": datetime.now(timezone.utc) - timedelta(minutes=1),
+            "exp": datetime.now(UTC) - timedelta(minutes=1),
         }
         expired_token = pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
         client.cookies.set("access_token", expired_token)
@@ -422,14 +421,15 @@ class TestTokenMechanics:
 
     def test_tampered_token_rejected(self, client, buyer_user):
         """A token signed with the wrong secret should be rejected."""
+        from datetime import datetime, timedelta
+
         import jwt as pyjwt
-        from datetime import datetime, timezone, timedelta
 
         payload = {
             "sub": str(buyer_user.id),
             "role": "buyer",
             "type": "access",
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=15),
+            "exp": datetime.now(UTC) + timedelta(minutes=15),
         }
         bad_token = pyjwt.encode(payload, "wrong-secret", algorithm="HS256")
         client.cookies.set("access_token", bad_token)

@@ -2,8 +2,6 @@
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
-
 from aeros.ai.base import ChatMessage
 from aeros.ai.openai_compatible import OpenAICompatibleProvider
 

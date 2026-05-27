@@ -1,14 +1,12 @@
 """Tests for RBAC isolation across API endpoints."""
 
+from datetime import UTC
+
 import pytest
-from fastapi.testclient import TestClient
 
-from aeros.models.organization import OrgType, Organization
 from aeros.models.user import Role, User
-from aeros.models.user_defaults import UserDefaults
-from aeros.services.auth_service import hash_password
 from aeros.security.jwt import create_access_token
-
+from aeros.services.auth_service import hash_password
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -173,15 +171,17 @@ class TestTamperedToken:
 
     def test_expired_token_rejected(self, client):
         """An expired token should be rejected with 401."""
+        from datetime import datetime, timedelta
+
         import jwt as pyjwt
-        from datetime import datetime, timezone, timedelta
+
         from aeros.config import settings
 
         payload = {
             "sub": "1",
             "role": "admin",
             "type": "access",
-            "exp": datetime.now(timezone.utc) - timedelta(hours=1),
+            "exp": datetime.now(UTC) - timedelta(hours=1),
         }
         token = pyjwt.encode(payload, settings.jwt_secret, algorithm="HS256")
         client.cookies.set("access_token", token)
@@ -190,14 +190,15 @@ class TestTamperedToken:
 
     def test_wrong_secret_rejected(self, client):
         """A token signed with wrong secret should be rejected."""
+        from datetime import datetime, timedelta
+
         import jwt as pyjwt
-        from datetime import datetime, timezone, timedelta
 
         payload = {
             "sub": "1",
             "role": "admin",
             "type": "access",
-            "exp": datetime.now(timezone.utc) + timedelta(hours=1),
+            "exp": datetime.now(UTC) + timedelta(hours=1),
         }
         token = pyjwt.encode(payload, "wrong-secret-key", algorithm="HS256")
         client.cookies.set("access_token", token)

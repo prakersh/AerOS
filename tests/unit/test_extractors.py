@@ -1,15 +1,10 @@
 """Tests for AI extractors — router, email_body, spreadsheet, word, pdf, image."""
 
-import csv
-import io
-import os
-import tempfile
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from aeros.ai.base import VisionResponse
-
 
 # ---- router tests ----
 
@@ -17,7 +12,7 @@ from aeros.ai.base import VisionResponse
 class TestRouter:
     async def test_routes_pdf(self):
         """PDF MIME type should route to extract_pdf."""
-        from aeros.ai.extractors.router import route_extraction, MIME_ROUTER
+        from aeros.ai.extractors.router import MIME_ROUTER
 
         assert "application/pdf" in MIME_ROUTER
 

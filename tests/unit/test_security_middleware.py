@@ -1,6 +1,5 @@
 """Tests for security middleware — CSRF and rate limiting."""
 
-import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,7 +7,6 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.requests import Request
 from starlette.responses import Response
-
 
 # ---- CSRF tests ----
 

@@ -1,7 +1,8 @@
 """SMTP outbound — sends RFx invitations and notifications to vendors."""
 
-import aiosmtplib
 from email.message import EmailMessage
+
+import aiosmtplib
 
 from aeros.config import settings
 

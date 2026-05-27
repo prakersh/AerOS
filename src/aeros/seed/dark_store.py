@@ -1,12 +1,12 @@
 """Seed demo data for AEROS dark-store persona."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from sqlmodel import Session, select
 
 from aeros.db import create_db_and_tables, engine
 from aeros.models.offer import Offer
-from aeros.models.organization import OrgType, Organization
+from aeros.models.organization import Organization, OrgType
 from aeros.models.rfx import (
     Message,
     RFxLineItem,
@@ -16,7 +16,7 @@ from aeros.models.rfx import (
     RFxVendorStatus,
     Thread,
 )
-from aeros.models.sku import Category, SKU
+from aeros.models.sku import SKU, Category
 from aeros.models.user import Role, User
 from aeros.models.user_defaults import UserDefaults
 from aeros.models.vendor import KYCStatus, Vendor
@@ -183,7 +183,7 @@ def seed() -> None:
         session.flush()
 
         # --- Demo RFx: dispatched with vendor invitations + one quoted offer ---
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         rfx = RFxRun(
             buyer_id=buyer.id,
             title="Weekly Dairy & Produce Replenishment – W23",

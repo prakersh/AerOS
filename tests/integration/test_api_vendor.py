@@ -1,11 +1,9 @@
 import pytest
 
-from aeros.models.organization import OrgType, Organization
+from aeros.models.organization import Organization, OrgType
 from aeros.models.user import Role, User
-from aeros.models.user_defaults import UserDefaults
 from aeros.models.vendor import Vendor
 from aeros.services.auth_service import hash_password
-
 
 # ---- vendor-specific fixtures ----
 

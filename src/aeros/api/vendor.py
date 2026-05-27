@@ -1,22 +1,27 @@
-import json
-import os
 import hashlib
+import os
 import re
 import traceback
-from datetime import datetime, timezone
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-from aeros.db import get_session
 from aeros.config import settings
+from aeros.db import get_session
+from aeros.models.rfx import (
+    Attachment,
+    ExtractionStatus,
+    Message,
+    RFxVendor,
+    RFxVendorStatus,
+    Thread,
+)
 from aeros.models.user import Role
-from aeros.models.rfx import Attachment, ExtractionStatus, Message, Thread, RFxVendor, RFxVendorStatus
 from aeros.models.vendor import Vendor
 from aeros.security.auth_context import AuthContext, require_role
-from aeros.services import rfx_service, offer_service
+from aeros.services import offer_service, rfx_service
 
 logger = structlog.get_logger()
 
@@ -122,7 +127,7 @@ async def upload_file(
     if not thread:
         raise HTTPException(404, "Thread not found")
 
-    content = file.file.read()
+    content = await file.read()
     if len(content) > settings.max_upload_size_mb * 1024 * 1024:
         raise HTTPException(413, "File too large")
 
@@ -161,8 +166,8 @@ async def upload_file(
 
     # Trigger extraction inline (background worker later)
     try:
-        from aeros.agents.evaluation import EvaluationAgent
         from aeros.agents.base import AgentContext
+        from aeros.agents.evaluation import EvaluationAgent
         from aeros.ai.factory import get_chat_provider, get_vision_provider
 
         agent = EvaluationAgent()
