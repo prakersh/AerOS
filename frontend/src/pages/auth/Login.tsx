@@ -1,42 +1,25 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { Navigate, useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth";
 
 export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, initialized, login, loading, error, clearError, fetchMe } = useAuthStore();
+  const { user, initialized, login, loading, error, clearError } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const successMessage = (location.state as { message?: string })?.message;
 
-  useEffect(() => {
-    if (!initialized) fetchMe();
-  }, [initialized, fetchMe]);
-
   if (initialized && user) {
-    const dest =
-      user.role === "vendor"
-        ? "/vendor/inbox"
-        : user.role === "admin"
-          ? "/admin/dashboard"
-          : "/buyer/dashboard";
-    return <Navigate to={dest} replace />;
+    return <Navigate to="/" replace />;
   }
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     clearError();
     await login(email, password);
-    const user = useAuthStore.getState().user;
-    if (user) {
-      const dest =
-        user.role === "vendor"
-          ? "/vendor/inbox"
-          : user.role === "admin"
-            ? "/admin/dashboard"
-            : "/buyer/dashboard";
-      navigate(dest, { replace: true });
+    if (useAuthStore.getState().user) {
+      navigate("/", { replace: true });
     }
   };
 

@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from aeros.config import settings
 from aeros.security.csrf import CSRFMiddleware
+from aeros.security.headers import SecurityHeadersMiddleware
 from aeros.security.rate_limit import RateLimitMiddleware
 from aeros.api import auth as auth_router
 from aeros.api import buyer as buyer_router
@@ -39,6 +40,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RateLimitMiddleware, requests_per_minute=120, burst=20)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(

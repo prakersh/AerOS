@@ -12,55 +12,57 @@ from aeros.models.observability import (
 )
 
 
-def get_summary_cards(session: Session, days: int = 7) -> dict:
+def get_summary_cards(
+    session: Session, days: int = 7, user_id: int | None = None
+) -> dict:
     """Aggregate telemetry data into summary cards for the dashboard.
 
     Args:
         session: Database session.
         days: Number of days to look back.
+        user_id: If provided, filter to only this user's data.
 
     Returns:
         Dictionary with aggregated metrics (calls, tokens, cost, etc.).
     """
     since = datetime.utcnow() - timedelta(days=days)
 
-    total_llm_calls = session.exec(
-        select(func.count(LLMCallLog.id)).where(LLMCallLog.created_at >= since)
-    ).one() or 0
+    llm_base = select(func.count(LLMCallLog.id)).where(LLMCallLog.created_at >= since)
+    tokens_base = select(func.sum(LLMCallLog.total_tokens)).where(
+        LLMCallLog.created_at >= since
+    )
+    cost_base = select(func.sum(LLMCallLog.estimated_cost_usd)).where(
+        LLMCallLog.created_at >= since
+    )
+    agent_base = select(func.count(AgentRunLog.id)).where(
+        AgentRunLog.started_at >= since
+    )
+    latency_base = select(func.avg(LLMCallLog.latency_ms)).where(
+        LLMCallLog.created_at >= since
+    )
+    error_base = select(func.count(LLMCallLog.id)).where(
+        LLMCallLog.created_at >= since, LLMCallLog.status == "error"
+    )
+    channel_base = select(func.count(ChannelEventLog.id)).where(
+        ChannelEventLog.created_at >= since
+    )
 
-    total_tokens = session.exec(
-        select(func.sum(LLMCallLog.total_tokens)).where(
-            LLMCallLog.created_at >= since
-        )
-    ).one() or 0
+    if user_id is not None:
+        llm_base = llm_base.where(LLMCallLog.user_id == user_id)
+        tokens_base = tokens_base.where(LLMCallLog.user_id == user_id)
+        cost_base = cost_base.where(LLMCallLog.user_id == user_id)
+        agent_base = agent_base.where(AgentRunLog.user_id == user_id)
+        latency_base = latency_base.where(LLMCallLog.user_id == user_id)
+        error_base = error_base.where(LLMCallLog.user_id == user_id)
+        # ChannelEventLog does not have user_id, so skip filtering
 
-    total_cost = session.exec(
-        select(func.sum(LLMCallLog.estimated_cost_usd)).where(
-            LLMCallLog.created_at >= since
-        )
-    ).one() or 0.0
-
-    total_agent_runs = session.exec(
-        select(func.count(AgentRunLog.id)).where(AgentRunLog.started_at >= since)
-    ).one() or 0
-
-    avg_latency = session.exec(
-        select(func.avg(LLMCallLog.latency_ms)).where(
-            LLMCallLog.created_at >= since
-        )
-    ).one() or 0
-
-    error_count = session.exec(
-        select(func.count(LLMCallLog.id)).where(
-            LLMCallLog.created_at >= since, LLMCallLog.status == "error"
-        )
-    ).one() or 0
-
-    channel_events = session.exec(
-        select(func.count(ChannelEventLog.id)).where(
-            ChannelEventLog.created_at >= since
-        )
-    ).one() or 0
+    total_llm_calls = session.exec(llm_base).one() or 0
+    total_tokens = session.exec(tokens_base).one() or 0
+    total_cost = session.exec(cost_base).one() or 0.0
+    total_agent_runs = session.exec(agent_base).one() or 0
+    avg_latency = session.exec(latency_base).one() or 0
+    error_count = session.exec(error_base).one() or 0
+    channel_events = session.exec(channel_base).one() or 0
 
     return {
         "total_llm_calls": total_llm_calls,
@@ -75,23 +77,27 @@ def get_summary_cards(session: Session, days: int = 7) -> dict:
     }
 
 
-def get_recent_calls(session: Session, limit: int = 50) -> list[dict]:
+def get_recent_calls(
+    session: Session, limit: int = 50, user_id: int | None = None
+) -> list[dict]:
     """Get the most recent LLM call logs.
 
     Args:
         session: Database session.
         limit: Maximum number of records to return.
+        user_id: If provided, filter to only this user's calls.
 
     Returns:
         List of dicts with call metadata.
     """
-    calls = list(
-        session.exec(
-            select(LLMCallLog)
-            .order_by(LLMCallLog.created_at.desc())  # type: ignore[union-attr]
-            .limit(limit)
-        ).all()
+    query = select(LLMCallLog).order_by(
+        LLMCallLog.created_at.desc()  # type: ignore[union-attr]
     )
+    if user_id is not None:
+        query = query.where(LLMCallLog.user_id == user_id)
+    query = query.limit(limit)
+
+    calls = list(session.exec(query).all())
     return [
         {
             "id": c.id,

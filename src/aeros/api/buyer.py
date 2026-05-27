@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -9,9 +9,32 @@ from aeros.models.user import Role, User
 from aeros.models.audit import AuditLog
 from aeros.models.user_defaults import UserDefaults
 from aeros.security.auth_context import AuthContext, require_role
-from aeros.services import inventory_service, vendor_service, rfx_service
+from aeros.services import inventory_service, vendor_service, rfx_service, defaults_service
 
 router = APIRouter(prefix="/api/buyer", tags=["buyer"])
+
+
+# --- Helpers ---
+
+
+def _verify_rfx_ownership(session: Session, rfx_id: int, caller: AuthContext) -> None:
+    """Verify the caller owns this RFx. Admins bypass.
+
+    Args:
+        session: Database session.
+        rfx_id: The RFx to check.
+        caller: Authenticated user context.
+
+    Raises:
+        HTTPException: 404 if RFx not found, 403 if not the owner.
+    """
+    if caller.role == Role.ADMIN:
+        return
+    details = rfx_service.get_rfx_with_details(session, rfx_id)
+    if not details:
+        raise HTTPException(404, "RFx not found")
+    if details.get("buyer_id") and details["buyer_id"] != caller.user_id:
+        raise HTTPException(403, "Not your RFx")
 
 
 # --- Inventory ---
@@ -83,11 +106,10 @@ def get_rfx(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
 ):
+    _verify_rfx_ownership(session, rfx_id, caller)
     details = rfx_service.get_rfx_with_details(session, rfx_id)
     if not details:
         raise HTTPException(404, "RFx not found")
-    if caller.role == Role.BUYER and details.get("buyer_id") and details["buyer_id"] != caller.user_id:
-        raise HTTPException(403, "Not your RFx")
     return details
 
 
@@ -102,10 +124,14 @@ def cancel_rfx(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER),
 ):
+    _verify_rfx_ownership(session, rfx_id, caller)
     try:
         return rfx_service.cancel_rfx(session, rfx_id, caller.user_id, body.reason)
     except ValueError as e:
-        raise HTTPException(404, str(e))
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(404, msg)
+        raise HTTPException(400, msg)
 
 
 class AwardRequest(BaseModel):
@@ -119,10 +145,14 @@ def award_rfx(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER),
 ):
+    _verify_rfx_ownership(session, rfx_id, caller)
     try:
         return rfx_service.award_rfx(session, rfx_id, caller.user_id, body.decisions)
     except ValueError as e:
-        raise HTTPException(404, str(e))
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(404, msg)
+        raise HTTPException(400, msg)
 
 
 # --- Activity ---
@@ -130,7 +160,7 @@ def award_rfx(
 
 @router.get("/activity")
 def list_activity(
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=500),
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
 ):
@@ -164,28 +194,32 @@ def list_activity(
 # --- Defaults ---
 
 
+def _defaults_to_dict(d: UserDefaults) -> dict:
+    """Convert a UserDefaults model to the API response dict.
+
+    Args:
+        d: The UserDefaults instance.
+
+    Returns:
+        Dictionary with default procurement settings.
+    """
+    return {
+        "payment_terms": d.payment_terms_default,
+        "delivery_terms": d.delivery_terms_default,
+        "quote_validity_days": d.quote_validity_days_default,
+        "currency": d.currency_default,
+        "tax_treatment": d.tax_treatment_default,
+        "delivery_window": d.delivery_window_default,
+    }
+
+
 @router.get("/defaults")
 def get_defaults(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
 ):
-    defaults = session.exec(
-        select(UserDefaults).where(UserDefaults.user_id == caller.user_id)
-    ).first()
-    if defaults:
-        return {
-            "payment_terms": defaults.payment_terms_default,
-            "delivery_terms": defaults.delivery_terms_default,
-            "quote_validity_days": defaults.quote_validity_days_default,
-            "currency": defaults.currency_default,
-            "tax_treatment": defaults.tax_treatment_default,
-            "delivery_window": defaults.delivery_window_default,
-        }
-    return {
-        "payment_terms": "NET30",
-        "delivery_terms": "doorstep",
-        "quote_validity_days": 7,
-        "currency": "INR",
-        "tax_treatment": "exclusive",
-        "delivery_window": "next_day_5am",
-    }
+    d = defaults_service.get_defaults(session, caller.user_id)
+    if d:
+        return _defaults_to_dict(d)
+    d = defaults_service.ensure_defaults(session, caller.user_id)
+    return _defaults_to_dict(d)

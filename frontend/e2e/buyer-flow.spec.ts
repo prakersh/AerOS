@@ -15,7 +15,7 @@ test.describe("Buyer Portal", () => {
     });
 
     test("shows active RFx tiles", async ({ page }) => {
-      await page.waitForTimeout(2000);
+      await page.waitForLoadState("networkidle");
       const tiles = page.locator('a[href*="/buyer/rfx/"]');
       const count = await tiles.count();
       expect(count).toBeGreaterThanOrEqual(0);
@@ -38,8 +38,11 @@ test.describe("Buyer Portal", () => {
       await page.fill("textarea", "I need 100kg rice");
       await page.keyboard.press("Enter");
       await expect(page.locator("text=100kg rice")).toBeVisible({ timeout: 5000 });
-      // Wait for AI response
-      await page.waitForTimeout(10000);
+      // Wait for AI response via network rather than arbitrary timeout
+      await page.waitForResponse(
+        (resp) => resp.url().includes("/api/") && resp.status() === 200,
+        { timeout: 15000 }
+      );
       const messages = page.locator('[class*="message"], [class*="bubble"]');
       expect(await messages.count()).toBeGreaterThan(1);
     });
@@ -47,16 +50,23 @@ test.describe("Buyer Portal", () => {
 
   test.describe("RFx Detail & Comparison Matrix", () => {
     test("RFx detail page shows line items and vendor responses", async ({ page }) => {
-      await page.evaluate(() => (window.location.href = "/buyer/rfx/1"));
-      await page.waitForTimeout(3000);
+      // Navigate dynamically: click first RFx tile from the dashboard
+      await page.waitForLoadState("networkidle");
+      const rfxLink = page.locator('a[href*="/buyer/rfx/"]').first();
+      await expect(rfxLink).toBeVisible({ timeout: 10000 });
+      await rfxLink.click();
+      await page.waitForLoadState("networkidle");
       await expect(page.locator("text=Line Items")).toBeVisible({ timeout: 10000 });
       await expect(page.locator("text=Vendor Responses")).toBeVisible();
       await expect(page.locator("text=Comparison Matrix")).toBeVisible();
     });
 
     test("comparison matrix shows vendor prices with confidence", async ({ page }) => {
-      await page.evaluate(() => (window.location.href = "/buyer/rfx/1"));
-      await page.waitForTimeout(3000);
+      await page.waitForLoadState("networkidle");
+      const rfxLink = page.locator('a[href*="/buyer/rfx/"]').first();
+      await expect(rfxLink).toBeVisible({ timeout: 10000 });
+      await rfxLink.click();
+      await page.waitForLoadState("networkidle");
       // Should show price cells with confidence indicators
       const matrix = page.locator("text=Comparison Matrix");
       await expect(matrix).toBeVisible({ timeout: 10000 });
@@ -66,14 +76,18 @@ test.describe("Buyer Portal", () => {
     });
 
     test("Withdraw RFx button opens cancel modal", async ({ page }) => {
-      await page.evaluate(() => (window.location.href = "/buyer/rfx/1"));
-      await page.waitForTimeout(3000);
+      await page.waitForLoadState("networkidle");
+      const rfxLink = page.locator('a[href*="/buyer/rfx/"]').first();
+      await expect(rfxLink).toBeVisible({ timeout: 10000 });
+      await rfxLink.click();
+      await page.waitForLoadState("networkidle");
       const withdrawBtn = page.locator('button:has-text("Withdraw")');
-      if (await withdrawBtn.isVisible()) {
-        await withdrawBtn.click();
-        // Should show modal or confirmation
-        await page.waitForTimeout(1000);
-      }
+      await expect(withdrawBtn).toBeVisible({ timeout: 10000 });
+      await withdrawBtn.click();
+      // Should show modal or confirmation dialog
+      await expect(
+        page.locator('[role="dialog"], [class*="modal"], [class*="Modal"]')
+      ).toBeVisible({ timeout: 5000 });
     });
   });
 
@@ -81,10 +95,11 @@ test.describe("Buyer Portal", () => {
     test("inventory page loads with search and table", async ({ page }) => {
       await page.goto("/buyer/inventory");
       await expect(page.locator("text=Inventory")).toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(2000);
-      // Should have category tabs or search
-      const content = await page.content();
-      expect(content).toBeTruthy();
+      await page.waitForLoadState("networkidle");
+      // Verify meaningful content loaded (table or search input)
+      await expect(
+        page.locator("table, input[type='search'], input[placeholder*='search' i]").first()
+      ).toBeVisible({ timeout: 10000 });
     });
   });
 
@@ -92,7 +107,7 @@ test.describe("Buyer Portal", () => {
     test("vendors page shows vendor cards", async ({ page }) => {
       await page.goto("/buyer/vendors");
       await expect(page.locator("text=Vendors")).toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(2000);
+      await page.waitForLoadState("networkidle");
     });
   });
 

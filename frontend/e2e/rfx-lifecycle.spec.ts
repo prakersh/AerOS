@@ -5,7 +5,7 @@ test.describe("RFx Full Lifecycle", () => {
   test("buyer can view dashboard with RFx data", async ({ page }) => {
     await loginAsBuyer(page);
     await expect(page.locator("text=Dashboard")).toBeVisible();
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState("networkidle");
     // Should show KPI cards
     await expect(page.locator("text=Open RFx")).toBeVisible();
     await expect(page.locator("text=Vendors")).toBeVisible();
@@ -13,8 +13,13 @@ test.describe("RFx Full Lifecycle", () => {
 
   test("buyer can navigate to RFx detail with comparison matrix", async ({ page }) => {
     await loginAsBuyer(page);
-    await page.evaluate(() => (window.location.href = "/buyer/rfx/1"));
-    await page.waitForTimeout(3000);
+    await page.waitForLoadState("networkidle");
+
+    // Navigate dynamically via the first RFx tile
+    const rfxLink = page.locator('a[href*="/buyer/rfx/"]').first();
+    await expect(rfxLink).toBeVisible({ timeout: 10000 });
+    await rfxLink.click();
+    await page.waitForLoadState("networkidle");
 
     // Verify all sections present
     await expect(page.locator("text=Line Items")).toBeVisible({ timeout: 10000 });
@@ -41,8 +46,11 @@ test.describe("RFx Full Lifecycle", () => {
     // User message should appear
     await expect(page.locator("text=50kg tomatoes")).toBeVisible({ timeout: 5000 });
 
-    // AI should respond
-    await page.waitForTimeout(15000);
+    // Wait for AI response via network rather than arbitrary timeout
+    await page.waitForResponse(
+      (resp) => resp.url().includes("/api/") && resp.status() === 200,
+      { timeout: 20000 }
+    );
     const pageContent = await page.content();
     expect(pageContent.length).toBeGreaterThan(500);
   });
@@ -50,33 +58,32 @@ test.describe("RFx Full Lifecycle", () => {
   test("vendor can view inbox and navigate to RFx", async ({ page }) => {
     await loginAsVendor(page);
     await expect(page.locator("text=Inbox")).toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState("networkidle");
   });
 
   test("vendor can view RFx thread", async ({ page }) => {
     await loginAsVendor(page);
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState("networkidle");
     const rfxLink = page.locator('a[href*="/vendor/rfx/"]').first();
-    if (await rfxLink.isVisible()) {
-      await rfxLink.click();
-      await page.waitForTimeout(2000);
-      // Should show thread messages
-      await expect(page.locator("textarea")).toBeVisible({ timeout: 10000 });
-    }
+    await expect(rfxLink).toBeVisible({ timeout: 10000 });
+    await rfxLink.click();
+    await page.waitForLoadState("networkidle");
+    // Should show thread messages
+    await expect(page.locator("textarea")).toBeVisible({ timeout: 10000 });
   });
 
   test("admin can view audit log", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto("/admin/audit");
     await expect(page.locator("text=Audit")).toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState("networkidle");
   });
 
   test("admin can view user management", async ({ page }) => {
     await loginAsAdmin(page);
     await page.goto("/admin/users");
     await expect(page.locator("text=Users")).toBeVisible({ timeout: 10000 });
-    await page.waitForTimeout(2000);
+    await page.waitForLoadState("networkidle");
   });
 
   test("cross-role navigation is blocked", async ({ page }) => {

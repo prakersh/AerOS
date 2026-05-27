@@ -151,21 +151,23 @@ class TestAdminCanAccessAll:
 
 class TestTamperedToken:
     def test_tampered_role_rejected(self, client):
-        """A token with a role that doesn't match the DB should still
-        be parsed, but if we craft a token with a role not in the enum,
-        it should fail during AuthContext construction."""
-        # Create a token with an invalid role
+        """A token with a role not in the enum should be rejected."""
         token = create_access_token(user_id=9999, role="superadmin")
         client.cookies.set("access_token", token)
-        # The Role enum raises ValueError for 'superadmin', which propagates
-        # through FastAPI's dependency injection as an unhandled error.
-        # Either the server returns an error status, or the exception
-        # propagates through TestClient -- both confirm access is denied.
+        # Role('superadmin') raises ValueError inside FastAPI's dependency
+        # injection.  Depending on the Starlette version, that either
+        # surfaces as a 500 response or propagates through the TestClient
+        # as a ValueError / ExceptionGroup.  Both prove the tampered
+        # token is rejected.  We must NOT catch AssertionError — that
+        # would hide a genuine test failure.
         try:
             resp = client.get("/api/admin/stats")
-            assert resp.status_code >= 400
-        except (ValueError, Exception):
-            # ValueError from Role('superadmin') proves the tampered
+            # Must get 401, 403, or 500 — never 200
+            assert resp.status_code in (401, 403, 500), (
+                f"Tampered token accepted with status {resp.status_code}"
+            )
+        except (ValueError, ExceptionGroup):
+            # ValueError from Role('superadmin') confirms the tampered
             # token is rejected at the auth layer.
             pass
 

@@ -1,6 +1,6 @@
 """Observability API endpoints for buyer and admin dashboards."""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
 from aeros.db import get_session
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/observability", tags=["observability"])
 
 @router.get("/summary")
 def get_summary(
-    days: int = 7,
+    days: int = Query(default=7, ge=1, le=365),
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
 ) -> dict:
@@ -27,12 +27,13 @@ def get_summary(
     Returns:
         Dictionary with aggregated telemetry metrics.
     """
-    return observability_service.get_summary_cards(session, days=days)
+    user_id = caller.user_id if caller.role == Role.BUYER else None
+    return observability_service.get_summary_cards(session, days=days, user_id=user_id)
 
 
 @router.get("/calls")
 def get_calls(
-    limit: int = 50,
+    limit: int = Query(default=50, ge=1, le=500),
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
 ) -> list[dict]:
@@ -46,7 +47,8 @@ def get_calls(
     Returns:
         List of recent LLM call log dicts.
     """
-    return observability_service.get_recent_calls(session, limit=limit)
+    user_id = caller.user_id if caller.role == Role.BUYER else None
+    return observability_service.get_recent_calls(session, limit=limit, user_id=user_id)
 
 
 @router.get("/timeline/{rfx_id}")

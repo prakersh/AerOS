@@ -172,7 +172,7 @@ export default function VendorProfile() {
             Notification Preferences
           </h2>
 
-          <div className="divide-y divide-zinc-800">
+          <div className="divide-y divide-zinc-800 pointer-events-none opacity-60">
             <Toggle
               label="Email notifications"
               description="Receive RFx invitations and updates via email."

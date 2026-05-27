@@ -112,13 +112,9 @@ function AdminShell() {
 }
 
 function RootRedirect() {
-  const { user, initialized, fetchMe } = useAuthStore();
+  const { user, initialized, loading } = useAuthStore();
 
-  useEffect(() => {
-    if (!initialized) fetchMe();
-  }, [initialized, fetchMe]);
-
-  if (!initialized) {
+  if (!initialized || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-zinc-950">
         <div className="text-sm text-zinc-500">Loading...</div>
@@ -133,6 +129,12 @@ function RootRedirect() {
 }
 
 export function App() {
+  const { fetchMe, initialized } = useAuthStore();
+
+  useEffect(() => {
+    if (!initialized) fetchMe();
+  }, [fetchMe, initialized]);
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />

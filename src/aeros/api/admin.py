@@ -1,6 +1,6 @@
 import json
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlmodel import Session, select, func
 
@@ -57,7 +57,7 @@ def list_users(
 
 @router.get("/audit")
 def list_audit(
-    limit: int = 100,
+    limit: int = Query(default=100, ge=1, le=500),
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.ADMIN),
 ):

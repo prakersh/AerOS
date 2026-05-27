@@ -18,7 +18,7 @@ test.describe("Admin Portal", () => {
     test("users page shows user table", async ({ page }) => {
       await page.goto("/admin/users");
       await expect(page.locator("text=Users")).toBeVisible({ timeout: 10000 });
-      await page.waitForTimeout(2000);
+      await page.waitForLoadState("networkidle");
     });
   });
 

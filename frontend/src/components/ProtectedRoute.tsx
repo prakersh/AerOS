@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import { Navigate, Outlet } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth";
 
@@ -7,13 +6,7 @@ interface ProtectedRouteProps {
 }
 
 export default function ProtectedRoute({ allowedRoles }: ProtectedRouteProps) {
-  const { user, loading, initialized, fetchMe } = useAuthStore();
-
-  useEffect(() => {
-    if (!initialized) {
-      fetchMe();
-    }
-  }, [initialized, fetchMe]);
+  const { user, loading, initialized } = useAuthStore();
 
   if (!initialized || loading) {
     return (

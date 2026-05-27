@@ -134,8 +134,6 @@ def refresh(
         raise HTTPException(status_code=403, detail="Account suspended")
 
     access = create_access_token(user_id, user.role.value)  # type: ignore[arg-type]
-    secure = not settings.debug
-    response.set_cookie(
-        "access_token", access, httponly=True, samesite="lax", max_age=15 * 60, secure=secure
-    )
+    new_refresh = create_refresh_token(user_id)
+    _set_auth_cookies(response, access, new_refresh)
     return {"ok": True}
