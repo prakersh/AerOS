@@ -1,22 +1,70 @@
 """OpenAI-compatible provider — works with NVIDIA NIM, OpenAI, Azure, etc."""
 
 import base64
+import time
+import uuid
 
+import structlog
 from openai import AsyncOpenAI
 
 from aeros.ai.base import (
-    ASRResponse,
     ChatMessage,
     ChatResponse,
     EmbeddingResponse,
     VisionResponse,
 )
 
+logger = structlog.get_logger()
+
+
+def _log_llm_call(
+    trace_id: str,
+    provider: str,
+    model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    latency_ms: int,
+    status: str = "success",
+    error_message: str | None = None,
+    rfx_id: int | None = None,
+    user_id: int | None = None,
+):
+    try:
+        from sqlmodel import Session
+
+        from aeros.db import engine
+        from aeros.models.observability import LLMCallLog
+
+        total_tokens = prompt_tokens + completion_tokens
+        cost_per_m = 0.001  # rough estimate
+        estimated_cost = total_tokens * cost_per_m / 1_000_000
+
+        with Session(engine) as session:
+            log = LLMCallLog(
+                trace_id=trace_id,
+                provider=provider,
+                model=model,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                latency_ms=latency_ms,
+                estimated_cost_usd=estimated_cost,
+                status=status,
+                error_message=error_message,
+                rfx_id=rfx_id,
+                user_id=user_id,
+            )
+            session.add(log)
+            session.commit()
+    except Exception as e:
+        logger.warning("observability.log_failed", error=str(e))
+
 
 class OpenAICompatibleProvider:
     def __init__(self, base_url: str, api_key: str, default_model: str = ""):
         self._client = AsyncOpenAI(base_url=base_url, api_key=api_key)
         self._default_model = default_model
+        self._provider_name = base_url.split("//")[-1].split("/")[0]
 
     async def chat(
         self,
@@ -36,13 +84,35 @@ class OpenAICompatibleProvider:
         if response_format:
             kwargs["response_format"] = response_format
 
-        resp = await self._client.chat.completions.create(**kwargs)
+        trace_id = uuid.uuid4().hex[:16]
+        t0 = time.monotonic()
+        status = "success"
+        error_msg = None
+
+        try:
+            resp = await self._client.chat.completions.create(**kwargs)
+        except Exception as e:
+            status = "error"
+            error_msg = str(e)
+            latency_ms = int((time.monotonic() - t0) * 1000)
+            _log_llm_call(trace_id, self._provider_name, kwargs["model"],
+                          0, 0, latency_ms, status, error_msg)
+            raise
+
+        latency_ms = int((time.monotonic() - t0) * 1000)
         choice = resp.choices[0]
         usage = resp.usage
+
+        prompt_tokens = usage.prompt_tokens if usage else 0
+        completion_tokens = usage.completion_tokens if usage else 0
+        _log_llm_call(trace_id, self._provider_name,
+                       resp.model or kwargs["model"],
+                       prompt_tokens, completion_tokens, latency_ms)
+
         return ChatResponse(
             content=choice.message.content or "",
-            input_tokens=usage.prompt_tokens if usage else 0,
-            output_tokens=usage.completion_tokens if usage else 0,
+            input_tokens=prompt_tokens,
+            output_tokens=completion_tokens,
             model=resp.model or kwargs["model"],
             finish_reason=choice.finish_reason or "",
         )
@@ -67,18 +137,38 @@ class OpenAICompatibleProvider:
                 ],
             }
         ]
-        resp = await self._client.chat.completions.create(
-            model=model or self._default_model,
-            messages=messages,
-            max_tokens=4096,
-            temperature=0.1,
-        )
+
+        used_model = model or self._default_model
+        trace_id = uuid.uuid4().hex[:16]
+        t0 = time.monotonic()
+
+        try:
+            resp = await self._client.chat.completions.create(
+                model=used_model,
+                messages=messages,
+                max_tokens=4096,
+                temperature=0.1,
+            )
+        except Exception as e:
+            latency_ms = int((time.monotonic() - t0) * 1000)
+            _log_llm_call(trace_id, self._provider_name, used_model,
+                          0, 0, latency_ms, "error", str(e))
+            raise
+
+        latency_ms = int((time.monotonic() - t0) * 1000)
         choice = resp.choices[0]
         usage = resp.usage
+
+        prompt_tokens = usage.prompt_tokens if usage else 0
+        completion_tokens = usage.completion_tokens if usage else 0
+        _log_llm_call(trace_id, self._provider_name,
+                       resp.model or used_model,
+                       prompt_tokens, completion_tokens, latency_ms)
+
         return VisionResponse(
             content=choice.message.content or "",
-            input_tokens=usage.prompt_tokens if usage else 0,
-            output_tokens=usage.completion_tokens if usage else 0,
+            input_tokens=prompt_tokens,
+            output_tokens=completion_tokens,
             model=resp.model or "",
         )
 

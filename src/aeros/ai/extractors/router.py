@@ -1,11 +1,10 @@
 """Format router — dispatches to the correct extractor based on MIME type."""
 
-from aeros.ai.extractors.pdf import extract_pdf
-from aeros.ai.extractors.word import extract_word
-from aeros.ai.extractors.spreadsheet import extract_spreadsheet
-from aeros.ai.extractors.image import extract_image
 from aeros.ai.extractors.email_body import extract_email_body
-from aeros.ai.base import ChatMessage
+from aeros.ai.extractors.image import extract_image
+from aeros.ai.extractors.pdf import extract_pdf
+from aeros.ai.extractors.spreadsheet import extract_spreadsheet
+from aeros.ai.extractors.word import extract_word
 
 MIME_ROUTER = {
     "application/pdf": extract_pdf,
@@ -32,6 +31,6 @@ async def route_extraction(
     if not extractor:
         return f"[Unsupported format: {mime_type}]"
 
-    if mime_type.startswith("image/"):
+    if mime_type.startswith("image/") or mime_type == "application/pdf":
         return await extractor(file_path, vision_provider=vision_provider)
     return await extractor(file_path)

@@ -173,7 +173,7 @@ class TestInAppChannel:
         """Should create a Message with channel='in_app' and persist it."""
         from aeros.channels.in_app import deliver_in_app
 
-        msg = asyncio.get_event_loop().run_until_complete(
+        msg = asyncio.run(
             deliver_in_app(session, thread.id, "Hello from in-app")
         )
 
@@ -187,7 +187,7 @@ class TestInAppChannel:
         """Should set sender_user_id and sender_kind when provided."""
         from aeros.channels.in_app import deliver_in_app
 
-        msg = asyncio.get_event_loop().run_until_complete(
+        msg = asyncio.run(
             deliver_in_app(session, thread.id, "Buyer message", sender_kind="buyer", sender_user_id=buyer.id)
         )
 
@@ -198,7 +198,7 @@ class TestInAppChannel:
         """Should store body_html when provided."""
         from aeros.channels.in_app import deliver_in_app
 
-        msg = asyncio.get_event_loop().run_until_complete(
+        msg = asyncio.run(
             deliver_in_app(session, thread.id, "plain", body_html="<p>rich</p>")
         )
 
@@ -208,7 +208,7 @@ class TestInAppChannel:
         """Should create a system message with RFQ notification text."""
         from aeros.channels.in_app import send_rfx_notification_in_app
 
-        msg = asyncio.get_event_loop().run_until_complete(
+        msg = asyncio.run(
             send_rfx_notification_in_app(session, thread.id, "Steel RFQ", "Need 100 tons")
         )
 
@@ -227,13 +227,13 @@ class TestInAppChannel:
         """Should count messages after last_seen_message_id."""
         from aeros.channels.in_app import deliver_in_app, get_unread_count
 
-        m1 = asyncio.get_event_loop().run_until_complete(
+        m1 = asyncio.run(
             deliver_in_app(session, thread.id, "msg1")
         )
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             deliver_in_app(session, thread.id, "msg2")
         )
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             deliver_in_app(session, thread.id, "msg3")
         )
 

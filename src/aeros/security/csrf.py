@@ -1,8 +1,8 @@
 import secrets
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.responses import Response
+from starlette.responses import JSONResponse, Response
 
 from aeros.config import settings
 
@@ -15,7 +15,6 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         secure = not settings.debug
 
-        # Skip CSRF validation in debug/test mode
         if settings.debug:
             response = await call_next(request)
             if CSRF_COOKIE not in request.cookies:
@@ -38,7 +37,10 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         header_token = request.headers.get(CSRF_HEADER)
 
         if not cookie_token or not header_token or cookie_token != header_token:
-            raise HTTPException(403, "CSRF validation failed")
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "CSRF validation failed"},
+            )
 
         response = await call_next(request)
         return response

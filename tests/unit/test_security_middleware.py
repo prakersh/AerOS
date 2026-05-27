@@ -69,7 +69,7 @@ class TestCSRFMiddleware:
             assert resp.status_code == 200
 
     def test_post_fails_without_tokens_via_dispatch(self):
-        """POST without CSRF tokens should raise 403."""
+        """POST without CSRF tokens should return 403."""
         from aeros.security.csrf import CSRFMiddleware
 
         middleware = CSRFMiddleware(app=None)
@@ -77,19 +77,15 @@ class TestCSRFMiddleware:
 
         call_next = AsyncMock()
 
-        async def run_dispatch():
-            return await middleware.dispatch(request, call_next)
-
         import asyncio
         with patch("aeros.security.csrf.settings") as mock_settings:
             mock_settings.debug = False
-            with pytest.raises(Exception) as exc_info:
-                asyncio.run(run_dispatch())
-            assert exc_info.value.status_code == 403
+            result = asyncio.run(middleware.dispatch(request, call_next))
+        assert result.status_code == 403
         call_next.assert_not_called()
 
     def test_post_fails_with_mismatched_tokens_via_dispatch(self):
-        """POST with mismatched cookie/header should raise 403."""
+        """POST with mismatched cookie/header should return 403."""
         from aeros.security.csrf import CSRFMiddleware
 
         middleware = CSRFMiddleware(app=None)
@@ -100,15 +96,11 @@ class TestCSRFMiddleware:
         )
         call_next = AsyncMock()
 
-        async def run_dispatch():
-            return await middleware.dispatch(request, call_next)
-
         import asyncio
         with patch("aeros.security.csrf.settings") as mock_settings:
             mock_settings.debug = False
-            with pytest.raises(Exception) as exc_info:
-                asyncio.run(run_dispatch())
-            assert exc_info.value.status_code == 403
+            result = asyncio.run(middleware.dispatch(request, call_next))
+        assert result.status_code == 403
 
     def test_post_succeeds_with_matching_tokens_via_dispatch(self):
         """POST with matching cookie and header should succeed."""
@@ -131,7 +123,7 @@ class TestCSRFMiddleware:
         call_next.assert_called_once()
 
     def test_post_fails_with_only_cookie_via_dispatch(self):
-        """POST with only cookie but no header should raise 403."""
+        """POST with only cookie but no header should return 403."""
         from aeros.security.csrf import CSRFMiddleware
 
         middleware = CSRFMiddleware(app=None)
@@ -143,12 +135,11 @@ class TestCSRFMiddleware:
         import asyncio
         with patch("aeros.security.csrf.settings") as mock_settings:
             mock_settings.debug = False
-            with pytest.raises(Exception) as exc_info:
-                asyncio.run(middleware.dispatch(request, call_next))
-            assert exc_info.value.status_code == 403
+            result = asyncio.run(middleware.dispatch(request, call_next))
+        assert result.status_code == 403
 
     def test_post_fails_with_only_header_via_dispatch(self):
-        """POST with only header but no cookie should raise 403."""
+        """POST with only header but no cookie should return 403."""
         from aeros.security.csrf import CSRFMiddleware
 
         middleware = CSRFMiddleware(app=None)
@@ -160,9 +151,8 @@ class TestCSRFMiddleware:
         import asyncio
         with patch("aeros.security.csrf.settings") as mock_settings:
             mock_settings.debug = False
-            with pytest.raises(Exception) as exc_info:
-                asyncio.run(middleware.dispatch(request, call_next))
-            assert exc_info.value.status_code == 403
+            result = asyncio.run(middleware.dispatch(request, call_next))
+        assert result.status_code == 403
 
     def test_safe_method_does_not_set_cookie_if_already_present(self):
         """GET with existing CSRF cookie should not set a new one."""

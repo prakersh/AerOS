@@ -1,12 +1,24 @@
 """Seed demo data for AEROS dark-store persona."""
 
+from datetime import datetime, timedelta, timezone
+
 from sqlmodel import Session, select
 
 from aeros.db import create_db_and_tables, engine
+from aeros.models.offer import Offer
 from aeros.models.organization import OrgType, Organization
+from aeros.models.rfx import (
+    Message,
+    RFxLineItem,
+    RFxRun,
+    RFxStatus,
+    RFxVendor,
+    RFxVendorStatus,
+    Thread,
+)
+from aeros.models.sku import Category, SKU
 from aeros.models.user import Role, User
 from aeros.models.user_defaults import UserDefaults
-from aeros.models.sku import Category, SKU
 from aeros.models.vendor import KYCStatus, Vendor
 from aeros.services.auth_service import hash_password
 
@@ -168,8 +180,104 @@ def seed() -> None:
             )
             session.add(vendor)
 
+        session.flush()
+
+        # --- Demo RFx: dispatched with vendor invitations + one quoted offer ---
+        now = datetime.now(timezone.utc)
+        rfx = RFxRun(
+            buyer_id=buyer.id,
+            title="Weekly Dairy & Produce Replenishment – W23",
+            status=RFxStatus.DISPATCHED,
+            response_deadline=now + timedelta(days=2),
+            delivery_window_start=now + timedelta(days=3),
+            delivery_window_end=now + timedelta(days=4),
+        )
+        session.add(rfx)
+        session.flush()
+
+        sku_items = [
+            ("FV001", 200, "kg", 18.0),
+            ("FV002", 150, "kg", 22.0),
+            ("DE001", 300, "ltr", 56.0),
+            ("DE004", 50, "kg", 320.0),
+        ]
+        sku_map = {}
+        for code, qty, unit, target in sku_items:
+            sku = session.exec(select(SKU).where(SKU.code == code)).first()
+            if sku:
+                li = RFxLineItem(
+                    rfx_id=rfx.id, sku_id=sku.id, qty=qty,
+                    unit_override=unit, target_price=target,
+                )
+                session.add(li)
+                session.flush()
+                sku_map[code] = li
+
+        vendors_to_invite = session.exec(
+            select(Vendor).where(Vendor.primary_email.in_(
+                ["freshfarm@vendor.demo", "sabzi@vendor.demo", "kirana@vendor.demo"]
+            ))
+        ).all()
+
+        import hashlib
+        for v in vendors_to_invite:
+            token_hash = hashlib.sha256(f"demo-token-{v.id}".encode()).hexdigest()
+            rv = RFxVendor(
+                rfx_id=rfx.id, vendor_id=v.id,
+                correlation_token_hash=token_hash,
+                dispatched_at=now,
+                status=RFxVendorStatus.INVITED,
+            )
+            session.add(rv)
+            session.flush()
+
+            thread = Thread(rfx_id=rfx.id, vendor_id=v.id)
+            session.add(thread)
+            session.flush()
+
+            msg = Message(
+                thread_id=thread.id,
+                sender_kind="system",
+                channel="in_app",
+                body_text=f"You have been invited to quote for: {rfx.title}",
+            )
+            session.add(msg)
+
+        # Simulate one quoted vendor (FreshFarm Dairy)
+        freshfarm = next((v for v in vendors_to_invite if v.primary_email == "freshfarm@vendor.demo"), None)
+        if freshfarm:
+            fv = session.exec(
+                select(RFxVendor).where(
+                    RFxVendor.rfx_id == rfx.id,
+                    RFxVendor.vendor_id == freshfarm.id,
+                )
+            ).first()
+            if fv:
+                fv.status = RFxVendorStatus.QUOTED
+                session.add(fv)
+
+            import json
+            line_items_json = json.dumps([
+                {"sku_name": "Tomato", "unit_price": 16.5, "qty": 200, "unit": "kg", "total": 3300, "confidence": 0.92},
+                {"sku_name": "Onion", "unit_price": 20.0, "qty": 150, "unit": "kg", "total": 3000, "confidence": 0.88},
+                {"sku_name": "Full Cream Milk", "unit_price": 52.0, "qty": 300, "unit": "ltr", "total": 15600, "confidence": 0.95},
+                {"sku_name": "Paneer", "unit_price": 290.0, "qty": 50, "unit": "kg", "total": 14500, "confidence": 0.85},
+            ])
+            offer = Offer(
+                rfx_id=rfx.id,
+                vendor_id=freshfarm.id,
+                total_quote=36400.0,
+                currency="INR",
+                payment_terms="NET15",
+                delivery_terms="doorstep",
+                lead_time_hours=18,
+                extraction_confidence_overall=0.90,
+                line_items_json=line_items_json,
+            )
+            session.add(offer)
+
         session.commit()
-        print("Seeded: 1 buyer org, 40 SKUs, 8 vendors, demo users.")
+        print("Seeded: 1 buyer org, 40 SKUs, 8 vendors, 1 RFx (dispatched), demo users.")
         print("  Buyer login:  buyer@aeros.demo / buyer123")
         print("  Vendor login: freshfarm@vendor.demo / vendor123")
         print("  Admin login:  admin@aeros.demo / admin123")

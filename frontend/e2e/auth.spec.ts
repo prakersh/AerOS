@@ -30,7 +30,7 @@ test.describe("Authentication", () => {
   test("login as buyer redirects to buyer dashboard", async ({ page }) => {
     await loginAsBuyer(page);
     await expect(page.url()).toContain("/buyer/dashboard");
-    await expect(page.locator("text=Dashboard")).toBeVisible();
+    await expect(page.locator("h1")).toContainText("Dashboard");
   });
 
   test("login as vendor redirects to vendor inbox", async ({ page }) => {
@@ -75,8 +75,8 @@ test.describe("Authentication", () => {
 
   test("full page reload preserves session", async ({ page }) => {
     await loginAsBuyer(page);
-    await page.evaluate(() => (window.location.href = "/buyer/dashboard"));
+    await page.goto("/buyer/dashboard");
     await page.waitForURL("**/buyer/dashboard", { timeout: 15000 });
-    await expect(page.locator("text=Dashboard")).toBeVisible();
+    await expect(page.locator("h1")).toContainText("Dashboard");
   });
 });

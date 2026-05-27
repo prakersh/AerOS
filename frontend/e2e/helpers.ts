@@ -4,11 +4,7 @@ export async function login(page: Page, email: string, password: string) {
   await page.goto("/login");
   await page.fill('input[type="email"]', email);
   await page.fill('input[type="password"]', password);
-  // Use evaluate to ensure click fires (Playwright sometimes misses React form submits)
-  await page.evaluate(() => {
-    const btn = document.querySelector('button[type="submit"]');
-    if (btn) (btn as HTMLButtonElement).click();
-  });
+  await page.locator('button[type="submit"]').click();
 }
 
 export async function loginAsBuyer(page: Page) {
