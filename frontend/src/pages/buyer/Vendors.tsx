@@ -114,7 +114,7 @@ export default function Vendors() {
                   key={vendor.id}
                   type="button"
                   onClick={() => setSelectedVendor(vendor)}
-                  className="rounded-xl border border-zinc-800 bg-zinc-900 p-5 text-left transition hover:border-zinc-700"
+                  className="rounded-xl border border-zinc-800 bg-zinc-900 p-5 text-left transition-all duration-200 hover:border-zinc-700 hover:bg-zinc-800/50 hover:shadow-lg hover:shadow-black/20"
                 >
                   {/* Name + KYC */}
                   <div className="flex items-start justify-between">

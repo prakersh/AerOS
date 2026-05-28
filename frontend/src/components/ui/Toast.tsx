@@ -41,12 +41,21 @@ export function ToastContainer() {
       {items.map((t) => (
         <div
           key={t.id}
-          className={`rounded-lg border px-4 py-3 text-sm shadow-lg transition-all duration-300 ${
+          className={`animate-slide-up flex items-center gap-2.5 rounded-lg border px-4 py-3 text-sm shadow-xl shadow-black/30 backdrop-blur-sm ${
             t.type === "success"
-              ? "border-green-800/50 bg-green-900/80 text-green-300"
-              : "border-red-800/50 bg-red-900/80 text-red-300"
+              ? "border-green-800/50 bg-green-900/90 text-green-300"
+              : "border-red-800/50 bg-red-900/90 text-red-300"
           }`}
         >
+          {t.type === "success" ? (
+            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          ) : (
+            <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+          )}
           {t.message}
         </div>
       ))}

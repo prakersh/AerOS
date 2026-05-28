@@ -132,7 +132,7 @@ export default function Activity() {
                 key={entry.id}
                 type="button"
                 onClick={() => setSelectedEntry(entry)}
-                className={`flex w-full items-start gap-4 rounded-lg border border-zinc-800 border-l-4 bg-zinc-900 px-4 py-3 text-left transition hover:bg-zinc-800/50 ${borderClass}`}
+                className={`flex w-full items-start gap-4 rounded-lg border border-zinc-800 border-l-4 bg-zinc-900 px-4 py-3 text-left transition-all duration-200 hover:bg-zinc-800/50 hover:shadow-md hover:shadow-black/10 ${borderClass}`}
               >
                 <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800">
                   <svg className="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>

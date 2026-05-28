@@ -88,7 +88,7 @@ export default function AdminDashboard() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">
+          <h2 className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
             Recent Activity
           </h2>
           <div className="mt-4 space-y-3">
@@ -113,7 +113,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-zinc-500">
+          <h2 className="text-[11px] font-medium uppercase tracking-wider text-zinc-500">
             System Health
           </h2>
           <div className="mt-4 space-y-3">

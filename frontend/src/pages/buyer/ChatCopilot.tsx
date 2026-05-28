@@ -540,13 +540,21 @@ export default function ChatCopilot() {
       <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
         {/* Empty state */}
         {messages.length === 0 && (
-          <div className="flex h-full items-center justify-center">
-            <div className="text-center">
-              <p className="text-zinc-400 text-sm">
-                Start by telling me what you need to procure.
+          <div className="flex h-full items-center justify-center animate-fade-in">
+            <div className="text-center max-w-md">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-600/10 ring-1 ring-indigo-600/20">
+                <svg className="h-7 w-7 text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 8.25h9m-9 3H12m-9.75 1.51c0 1.6 1.123 2.994 2.707 3.227 1.129.166 2.27.293 3.423.379.35.026.67.21.865.501L12 21l2.755-4.133a1.14 1.14 0 01.865-.501 48.172 48.172 0 003.423-.379c1.584-.233 2.707-1.626 2.707-3.228V6.741c0-1.602-1.123-2.995-2.707-3.228A48.394 48.394 0 0012 3c-2.392 0-4.744.175-7.043.513C3.373 3.746 2.25 5.14 2.25 6.741v6.018z" />
+                </svg>
+              </div>
+              <h3 className="text-base font-semibold text-zinc-200">
+                What do you need to procure?
+              </h3>
+              <p className="text-zinc-500 text-xs mt-2 leading-relaxed">
+                Tell me in plain language — I&apos;ll draft the purchase request, find vendors, and handle dispatch.
               </p>
-              <p className="text-zinc-600 text-xs mt-2">
-                Example: &quot;I need 150kg tomatoes, 80kg onions, and 500L milk by tomorrow 5 AM&quot;
+              <p className="text-zinc-600 text-[11px] mt-3 italic">
+                e.g. &quot;I need 150kg tomatoes, 80kg onions, and 500L milk by tomorrow 5 AM&quot;
               </p>
             </div>
           </div>
@@ -766,7 +774,7 @@ export default function ChatCopilot() {
           </button>
         </div>
         <p className="mt-1.5 text-[10px] text-zinc-600">
-          Press <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-[10px]">Ctrl</kbd>+<kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-[10px]">Enter</kbd> to send &middot; <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-[10px]">Enter</kbd> for newline
+          Press <kbd className="rounded border border-zinc-700 bg-zinc-800 px-1 py-0.5 text-[10px]">Enter</kbd> or click Send &middot; Attach files with the clip icon &middot; Voice input supported
         </p>
       </form>
 

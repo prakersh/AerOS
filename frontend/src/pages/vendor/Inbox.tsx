@@ -248,7 +248,7 @@ export default function VendorInbox() {
                 key={item.rfx_id}
                 onClick={() => navigate(`/vendor/rfx/${item.rfx_id}`)}
                 data-testid="inbox-item"
-                className={`flex w-full items-center gap-4 rounded-lg border px-5 py-4 text-left transition hover:bg-zinc-800/60 ${
+                className={`flex w-full items-center gap-4 rounded-lg border px-5 py-4 text-left transition-all duration-200 hover:bg-zinc-800/60 hover:shadow-md hover:shadow-black/10 ${
                   urgency === "critical"
                     ? "border-red-800/60 bg-red-950/20 hover:border-red-700/60"
                     : urgency === "warning"

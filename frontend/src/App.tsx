@@ -70,7 +70,12 @@ function BuyerShell() {
   return (
     <SidebarLayout
       sections={buyerNav}
-      header={<span className="text-sm font-bold tracking-tight text-zinc-100">AEROS</span>}
+      header={
+        <div className="flex flex-col">
+          <span className="text-sm font-bold tracking-tight text-zinc-100">AEROS</span>
+          <span className="text-[10px] font-medium text-zinc-600">Procurement</span>
+        </div>
+      }
       topBar={<TopBar title="Buyer Portal" />}
     >
       <Outlet />
@@ -82,7 +87,12 @@ function VendorShell() {
   return (
     <SidebarLayout
       sections={vendorNav}
-      header={<span className="text-sm font-bold tracking-tight text-zinc-100">AEROS</span>}
+      header={
+        <div className="flex flex-col">
+          <span className="text-sm font-bold tracking-tight text-zinc-100">AEROS</span>
+          <span className="text-[10px] font-medium text-zinc-600">Vendor</span>
+        </div>
+      }
       topBar={<TopBar title="Vendor Portal" />}
     >
       <Outlet />
@@ -94,7 +104,12 @@ function AdminShell() {
   return (
     <SidebarLayout
       sections={adminNav}
-      header={<span className="text-sm font-bold tracking-tight text-zinc-100">AEROS Admin</span>}
+      header={
+        <div className="flex flex-col">
+          <span className="text-sm font-bold tracking-tight text-zinc-100">AEROS</span>
+          <span className="text-[10px] font-medium text-zinc-600">Admin</span>
+        </div>
+      }
       topBar={<TopBar title="Admin" />}
     >
       <Outlet />

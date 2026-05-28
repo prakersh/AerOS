@@ -43,14 +43,14 @@ export default function Modal({
   return createPortal(
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in"
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
     >
       <div
         ref={contentRef}
-        className={`w-full ${SIZE_CLASSES[size]} rounded-xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl`}
+        className={`w-full ${SIZE_CLASSES[size]} animate-scale-in rounded-xl border border-zinc-700/50 bg-zinc-900 p-6 shadow-2xl shadow-black/40`}
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold text-zinc-100">{title}</h3>

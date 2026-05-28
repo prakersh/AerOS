@@ -19,15 +19,15 @@ export default function DetailView({ items, columns = 2 }: DetailViewProps) {
         : "grid-cols-1 sm:grid-cols-2";
 
   return (
-    <div className={`grid ${colClass} gap-4`}>
+    <div className={`grid ${colClass} gap-3`}>
       {items.map((item) => (
         <div key={item.label}>
-          <label className="block text-xs font-medium text-zinc-500">
+          <label className="block text-[11px] font-medium uppercase tracking-wider text-zinc-500">
             {item.label}
           </label>
-          <p className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200">
+          <div className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950/80 px-3 py-2 text-sm text-zinc-200">
             {item.value ?? "—"}
-          </p>
+          </div>
         </div>
       ))}
     </div>

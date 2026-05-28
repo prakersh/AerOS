@@ -28,13 +28,13 @@ export default function ConfirmDialog({
 
   return (
     <Modal open={open} onClose={onClose} title={title} size="sm">
-      <p className="text-sm text-zinc-400">{message}</p>
-      <div className="mt-6 flex justify-end gap-3">
+      <p className="text-sm leading-relaxed text-zinc-400">{message}</p>
+      <div className="mt-6 flex justify-end gap-2.5">
         <button
           type="button"
           onClick={onClose}
           disabled={isPending}
-          className="rounded-lg border border-zinc-700 bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-zinc-700 disabled:opacity-50"
+          className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-50"
         >
           Cancel
         </button>
@@ -42,7 +42,7 @@ export default function ConfirmDialog({
           type="button"
           onClick={onConfirm}
           disabled={isPending}
-          className={`rounded-lg px-4 py-2 text-sm font-medium text-white transition disabled:opacity-50 ${btnClass}`}
+          className={`rounded-lg px-4 py-2 text-sm font-medium text-white shadow-sm transition disabled:opacity-50 ${btnClass}`}
         >
           {isPending ? "Processing..." : confirmLabel}
         </button>

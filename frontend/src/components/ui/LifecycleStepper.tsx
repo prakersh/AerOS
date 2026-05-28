@@ -11,8 +11,8 @@ interface LifecycleStepperProps {
 }
 
 const STEP_COLORS: Record<string, string> = {
-  completed: "bg-green-600 text-white",
-  current: "bg-indigo-600 text-white ring-4 ring-indigo-600/30",
+  completed: "bg-green-600 text-white shadow-sm shadow-green-600/20",
+  current: "bg-indigo-600 text-white ring-4 ring-indigo-600/20 shadow-sm shadow-indigo-600/20",
   upcoming: "bg-zinc-800 text-zinc-500",
   skipped: "bg-zinc-700 text-zinc-400 line-through",
 };

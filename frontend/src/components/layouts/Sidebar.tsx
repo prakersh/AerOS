@@ -62,13 +62,16 @@ export function SidebarLayout({
       <div className="flex h-screen overflow-hidden bg-zinc-950">
         {/* Sidebar */}
         <aside
-          className={`flex flex-col border-r border-zinc-800 bg-zinc-900 transition-[width] duration-200 ${
+          className={`flex flex-col border-r border-zinc-800/80 bg-zinc-900 transition-[width] duration-200 ${
             collapsed ? "w-16" : "w-56"
           }`}
         >
           {/* Logo / header */}
-          <div className="flex h-14 shrink-0 items-center border-b border-zinc-800 px-4">
-            {header}
+          <div className="flex h-14 shrink-0 items-center gap-3 border-b border-zinc-800/80 px-4">
+            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-600 text-[11px] font-bold text-white">
+              A
+            </div>
+            {!collapsed && header}
           </div>
 
           {/* Navigation */}
