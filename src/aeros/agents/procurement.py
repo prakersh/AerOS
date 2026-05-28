@@ -480,6 +480,18 @@ class ProcurementAgent(BaseAgent):
             # Parse tool selections
             selected = _parse_tool_selections(selection_resp.content)
 
+            # A truncated selection response yields unparseable JSON, which
+            # _parse_tool_selections returns as []. Without this guard the agent
+            # would silently fall into the "no tools needed" path and drop the
+            # user's actual request. Surface it instead.
+            if not selected and selection_resp.finish_reason == "length":
+                logger.warning("agent.select.truncated", iteration=iteration)
+                final_response = (
+                    "That request was a bit too complex for me to plan in one step. "
+                    "Could you break it into smaller parts?"
+                )
+                break
+
             if not selected:
                 # No tools needed — generate conversational response
                 step = PipelineStep(name=f"converse_{iteration}", start_time=time.monotonic())

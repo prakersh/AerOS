@@ -30,6 +30,19 @@ load_env() {
     fi
 }
 
+# WeasyPrint (PO PDF rendering) loads pango/gobject via ctypes. On macOS with
+# Homebrew these live in $(brew --prefix)/lib, which is not on the dyld search
+# path, so PDF generation fails at runtime. Export the fallback path on Darwin.
+setup_native_libs() {
+    if [ "$(uname)" = "Darwin" ] && command -v brew &>/dev/null; then
+        local brew_lib
+        brew_lib="$(brew --prefix)/lib"
+        if [ -d "$brew_lib" ]; then
+            export DYLD_FALLBACK_LIBRARY_PATH="${brew_lib}:${DYLD_FALLBACK_LIBRARY_PATH:-}"
+        fi
+    fi
+}
+
 cmd_setup() {
     info "$APP_NAME — Setup"
 
@@ -191,6 +204,8 @@ cmd_help() {
     echo "  logs       Tail logs (backend|frontend|worker)"
     echo "  help       This message"
 }
+
+setup_native_libs
 
 case "${1:-help}" in
     setup)   cmd_setup ;;

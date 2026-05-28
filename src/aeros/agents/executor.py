@@ -73,6 +73,44 @@ def execute_tool(
         )
 
 
+def _assert_rfx_owner(session: Session, rfx_id: int, user_id: int) -> None:
+    """Buyer-side guard: the caller must own this RFx.
+
+    The rfx_id reaching a tool is supplied by the LLM, which echoes
+    user-controlled text — without this check a buyer could act on another
+    org's RFx. Mirrors the REST layer's _verify_rfx_ownership.
+    """
+    from aeros.models.rfx import RFxRun
+
+    rfx = session.get(RFxRun, rfx_id)
+    if not rfx:
+        raise ValueError(f"RFx #{rfx_id} not found")
+    if rfx.buyer_id != user_id:
+        raise PermissionError(f"Not authorized for RFx #{rfx_id}")
+
+
+def _assert_vendor_invited(session: Session, rfx_id: int, user_id: int) -> int:
+    """Vendor-side guard: the caller's vendor must be invited to this RFx.
+
+    Returns the vendor id for convenience.
+    """
+    from sqlmodel import select
+
+    from aeros.models.rfx import RFxVendor
+    from aeros.models.vendor import Vendor
+
+    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == user_id)).first()
+    if not vendor:
+        raise ValueError("No vendor profile found")
+    rv = session.exec(
+        select(RFxVendor).where(RFxVendor.rfx_id == rfx_id, RFxVendor.vendor_id == vendor.id)
+    ).first()
+    if not rv:
+        raise PermissionError(f"Not invited to RFx #{rfx_id}")
+    assert vendor.id is not None
+    return vendor.id
+
+
 def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthContext) -> Any:
     from aeros.services import (
         inventory_service,
@@ -120,6 +158,16 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
         return {"rfx_id": rfx.id, "title": rfx.title, "status": "drafting"}
 
     if name == "add_line_items":
+        from aeros.models.sku import SKU
+
+        _assert_rfx_owner(session, params["rfx_id"], user_id)
+        for item in params["items"]:
+            sku_id = item.get("sku_id")
+            if sku_id is None:
+                raise ValueError("Each line item requires a sku_id")
+            sku = session.get(SKU, sku_id)
+            if not sku or sku.org_id != org_id:
+                raise ValueError(f"SKU #{sku_id} is not in your inventory")
         items = rfx_service.add_line_items(session, params["rfx_id"], params["items"])
         return {"count": len(items), "rfx_id": params["rfx_id"]}
 
@@ -127,12 +175,14 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
         return rfx_service.list_rfx_for_buyer(session, user_id)
 
     if name == "get_rfx_details":
+        _assert_rfx_owner(session, params["rfx_id"], user_id)
         details = rfx_service.get_rfx_with_details(session, params["rfx_id"])
         if not details:
             raise ValueError(f"RFx #{params['rfx_id']} not found")
         return details
 
     if name == "cancel_rfx":
+        _assert_rfx_owner(session, params["rfx_id"], user_id)
         rfx = rfx_service.cancel_rfx(session, params["rfx_id"], user_id, params.get("reason", ""))
         return {"rfx_id": rfx.id, "status": "cancelled"}
 
@@ -153,22 +203,26 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
         ]
 
     if name == "get_vendor_suggestions":
+        _assert_rfx_owner(session, params["rfx_id"], user_id)
         return rfx_service.get_vendor_suggestions(session, params["rfx_id"], org_id)
 
     # ── Dispatch ──
     if name == "invite_vendor":
         from aeros.channels.correlation import generate_correlation_token
 
+        _assert_rfx_owner(session, params["rfx_id"], user_id)
         _, token_hash = generate_correlation_token(params["rfx_id"], params["vendor_id"])
         rv = rfx_service.invite_vendor(session, params["rfx_id"], params["vendor_id"], token_hash)
         return {"invited": True, "vendor_id": params["vendor_id"], "status": rv.status.value}
 
     if name == "dispatch_rfx":
+        _assert_rfx_owner(session, params["rfx_id"], user_id)
         rfx = rfx_service.dispatch_rfx(session, params["rfx_id"], user_id)
         return {"rfx_id": rfx.id, "status": rfx.status.value}
 
     # ── Evaluation ──
     if name == "evaluate_offers":
+        _assert_rfx_owner(session, params["rfx_id"], user_id)
         details = rfx_service.get_rfx_with_details(session, params["rfx_id"])
         if not details:
             raise ValueError(f"RFx #{params['rfx_id']} not found")
@@ -184,11 +238,13 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
 
     # ── Award ──
     if name == "award_rfx":
+        _assert_rfx_owner(session, params["rfx_id"], user_id)
         rfx = rfx_service.award_rfx(session, params["rfx_id"], user_id, params["decisions"])
         return {"rfx_id": rfx.id, "status": "awarded"}
 
     # ── Vendor-side ──
     if name == "view_rfx_thread":
+        _assert_vendor_invited(session, params["rfx_id"], user_id)
         details = rfx_service.get_rfx_with_details(session, params["rfx_id"])
         if not details:
             raise ValueError(f"RFx #{params['rfx_id']} not found")

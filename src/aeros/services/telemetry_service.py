@@ -112,6 +112,7 @@ def log_llm_call(
         user_id=user_id,
     )
     session.add(entry)
+    session.flush()
     session.commit()
     session.refresh(entry)
     return entry
@@ -148,6 +149,7 @@ def start_agent_run(
         status="running",
     )
     session.add(entry)
+    session.flush()
     session.commit()
     session.refresh(entry)
     return entry
@@ -188,6 +190,7 @@ def complete_agent_run(
     run.duration_ms = duration_ms
     run.completed_at = datetime.now(UTC).replace(tzinfo=None)
     session.add(run)
+    session.flush()
     session.commit()
     session.refresh(run)
     return run
@@ -235,6 +238,7 @@ def log_channel_event(
         metadata_json=json.dumps(metadata or {}),
     )
     session.add(entry)
+    session.flush()
     session.commit()
     session.refresh(entry)
     return entry
@@ -282,6 +286,7 @@ def create_pipeline_report(
         status=status,
     )
     session.add(entry)
+    session.flush()
     session.commit()
     session.refresh(entry)
     return entry

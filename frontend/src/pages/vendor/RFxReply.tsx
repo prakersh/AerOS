@@ -836,6 +836,7 @@ function UploadAnalyzeTab({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [analyzingFileId, setAnalyzingFileId] = useState<string | null>(null);
+  const [aiAnswer, setAiAnswer] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -899,16 +900,17 @@ function UploadAnalyzeTab({
 
   const handleAskAI = async (fileId: string, filename: string) => {
     setAnalyzingFileId(fileId);
+    setAiAnswer(null);
     try {
-      await api.post(`/api/vendor/rfx/${rfxId}/reply`, {
-        body_text: `[AI Analysis Request] Please analyze the uploaded document: "${filename}" and provide a summary of key terms, pricing, and any notable items.`,
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["vendor", "rfx", rfxId, "thread"],
-      });
-      showToast("AI analysis request sent", "success");
+      const res = await api.post<{ message?: string; suggestions?: string[] }>(
+        `/api/vendor/rfx/${rfxId}/copilot`,
+        {
+          message: `I uploaded "${filename}". Help me review my quote against this RFQ's requirements and flag anything I might be missing.`,
+        },
+      );
+      setAiAnswer(res.message || "No response from co-pilot.");
     } catch {
-      showToast("Failed to request AI analysis", "error");
+      showToast("Failed to get co-pilot response", "error");
     } finally {
       setAnalyzingFileId(null);
     }
@@ -1016,6 +1018,24 @@ function UploadAnalyzeTab({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {aiAnswer && (
+        <div className="rounded-xl border border-indigo-700/40 bg-indigo-600/10 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-indigo-300">
+              Vendor Co-pilot
+            </p>
+            <button
+              type="button"
+              onClick={() => setAiAnswer(null)}
+              className="text-xs text-zinc-500 hover:text-zinc-300"
+            >
+              Dismiss
+            </button>
+          </div>
+          <p className="whitespace-pre-wrap text-sm text-zinc-200">{aiAnswer}</p>
         </div>
       )}
     </div>

@@ -37,6 +37,16 @@ interface SuggestedVendor {
 /* ------------------------------------------------------------------ */
 
 const CHAT_STORAGE_KEY = "aeros-chat-messages";
+const DISPATCHED_STORAGE_KEY = "aeros-chat-dispatched";
+
+function loadDispatchedIds(): Set<number> {
+  try {
+    const raw = localStorage.getItem(DISPATCHED_STORAGE_KEY);
+    return raw ? new Set<number>(JSON.parse(raw)) : new Set<number>();
+  } catch {
+    return new Set<number>();
+  }
+}
 
 function loadPersistedMessages(): ChatMsg[] {
   try {
@@ -157,6 +167,19 @@ export default function ChatCopilot() {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [createdRfxId, setCreatedRfxId] = useState<number | null>(null);
+  const [dispatchedRfxIds, setDispatchedRfxIds] = useState<Set<number>>(loadDispatchedIds);
+
+  const markDispatched = useCallback((rfxId: number) => {
+    setDispatchedRfxIds((prev) => {
+      const next = new Set(prev).add(rfxId);
+      try {
+        localStorage.setItem(DISPATCHED_STORAGE_KEY, JSON.stringify([...next]));
+      } catch {
+        // storage full — silently drop
+      }
+      return next;
+    });
+  }, []);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -478,6 +501,7 @@ export default function ChatCopilot() {
         dispatch_plan: pendingDispatch.plan,
       });
 
+      markDispatched(pendingDispatch.rfxId);
       setMessages((prev) => [
         ...prev,
         {
@@ -528,7 +552,7 @@ export default function ChatCopilot() {
         {messages.length > 0 && (
           <button
             type="button"
-            onClick={() => { setMessages([]); localStorage.removeItem(CHAT_STORAGE_KEY); queueRef.current = []; setCreatedRfxId(null); }}
+            onClick={() => { setMessages([]); localStorage.removeItem(CHAT_STORAGE_KEY); localStorage.removeItem(DISPATCHED_STORAGE_KEY); queueRef.current = []; setCreatedRfxId(null); setDispatchedRfxIds(new Set()); }}
             className="text-xs text-zinc-500 hover:text-zinc-300 transition"
           >
             Clear chat
@@ -641,6 +665,9 @@ export default function ChatCopilot() {
                   rfxId={createdRfxId}
                   onConfirm={handleDispatchConfirmClick}
                   loading={actionLoading}
+                  alreadyDispatched={
+                    createdRfxId ? dispatchedRfxIds.has(createdRfxId) : false
+                  }
                 />
               )}
               {!!msg.data?.rfx_id && msg.data?.status === "created" && (
@@ -944,18 +971,21 @@ function DispatchPlanCard({
   rfxId,
   onConfirm,
   loading,
+  alreadyDispatched,
 }: {
   plan: Array<Record<string, unknown>>;
   rfxId: number | null;
   onConfirm: (rfxId: number, plan: Array<Record<string, unknown>>) => void;
   loading: boolean;
+  alreadyDispatched: boolean;
 }) {
-  const [dispatched, setDispatched] = useState(false);
+  // Derived from persisted parent state so a re-render/remount can't re-arm
+  // the button and trigger a duplicate dispatch.
+  const dispatched = alreadyDispatched;
 
   const handleClick = () => {
     if (!rfxId) return;
     onConfirm(rfxId, plan);
-    setDispatched(true);
   };
 
   return (
@@ -982,6 +1012,9 @@ function DispatchPlanCard({
       )}
       {!rfxId && !dispatched && (
         <p className="mt-2 text-[10px] text-zinc-500">Create the RFx first before dispatching</p>
+      )}
+      {dispatched && (
+        <p className="mt-3 text-center text-xs font-medium text-green-400">✓ Dispatched to vendors</p>
       )}
     </div>
   );

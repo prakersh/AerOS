@@ -56,7 +56,7 @@ export default function StatusBadge({
   className = "",
 }: StatusBadgeProps) {
   const styles =
-    BADGE_VARIANTS[variant]?.[status.toLowerCase()] ??
+    BADGE_VARIANTS[variant]?.[(status ?? "").toLowerCase()] ??
     "bg-zinc-700/50 text-zinc-300";
 
   return (

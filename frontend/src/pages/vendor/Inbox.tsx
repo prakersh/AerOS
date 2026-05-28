@@ -113,7 +113,7 @@ export default function VendorInbox() {
     if (debouncedSearch.trim()) {
       const query = debouncedSearch.toLowerCase();
       items = items.filter((item) =>
-        item.title.toLowerCase().includes(query),
+        (item.title ?? "").toLowerCase().includes(query),
       );
     }
 

@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+import re
 from typing import Any
 
 import structlog
@@ -79,12 +80,36 @@ async def telegram_webhook(
         )
         return {"ok": True}
 
-    # Find the most recent thread for this vendor
-    thread = session.exec(
+    # Resolve which RFx this reply belongs to. A vendor may have several open
+    # RFQs, so an unqualified message cannot be routed by recency alone — that
+    # silently attaches the quote to the wrong RFx. Accept a leading "#<id>"
+    # selector; if absent and multiple threads exist, ask the vendor to specify.
+    threads = session.exec(
         select(Thread).where(Thread.vendor_id == vendor.id).order_by(Thread.created_at.desc())  # type: ignore[attr-defined]
-    ).first()
-    if not thread:
+    ).all()
+    if not threads:
         await telegram_bot.send_message(chat_id, "No active RFQ thread found.")
+        return {"ok": True}
+
+    thread = None
+    rfx_match = re.match(r"^#(\d+)\b", text)
+    if rfx_match:
+        selected_rfx_id = int(rfx_match.group(1))
+        thread = next((t for t in threads if t.rfx_id == selected_rfx_id), None)
+        if not thread:
+            await telegram_bot.send_message(chat_id, f"You have no open RFQ #{selected_rfx_id}.")
+            return {"ok": True}
+        text = text[rfx_match.end() :].lstrip()
+    elif len(threads) == 1:
+        thread = threads[0]
+    else:
+        rfx_ids = ", ".join(f"#{t.rfx_id}" for t in threads)
+        await telegram_bot.send_message(
+            chat_id,
+            "You have multiple open RFQs. Start your message with the RFQ "
+            f"number to specify which one, e.g. '#{threads[0].rfx_id} ...'. "
+            f"Open RFQs: {rfx_ids}",
+        )
         return {"ok": True}
 
     # Persist the message
@@ -97,6 +122,7 @@ async def telegram_webhook(
         raw_payload_json=str(msg),
     )
     session.add(message)
+    session.flush()
     session.commit()
     session.refresh(message)
 
@@ -135,10 +161,21 @@ async def telegram_webhook(
             )
             session.add(att)
             session.commit()
+            session.refresh(att)
             logger.info(
                 "telegram.attachment_saved",
                 filename=filename,
                 vendor_id=vendor.id,
+            )
+
+            # Extract the offer so a Telegram quote actually lands in the
+            # comparison matrix (sets EXTRACTED/FAILED + flips lane to QUOTED).
+            from aeros.workers.extract_offer import extract_offer_from_attachment
+
+            assert att.id is not None and thread.rfx_id is not None
+            assert vendor.id is not None and message.id is not None
+            await extract_offer_from_attachment(
+                att.id, thread.rfx_id, vendor.id, message.id, session=session
             )
 
     return {"ok": True}
@@ -158,6 +195,8 @@ async def fake_telegram_update(
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     """Dev-only endpoint to simulate a Telegram update without a real bot."""
+    if not settings.debug:
+        raise HTTPException(404, "Not found")
     update = TelegramUpdate(
         update_id=0,
         message={

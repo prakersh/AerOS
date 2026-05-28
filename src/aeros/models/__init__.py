@@ -21,6 +21,7 @@ from aeros.models.rfx import (  # noqa: F401
     Thread,
 )
 from aeros.models.sku import SKU, Category  # noqa: F401
+from aeros.models.system_setting import SystemSetting  # noqa: F401
 from aeros.models.user import User  # noqa: F401
 from aeros.models.user_defaults import UserDefaults  # noqa: F401
 from aeros.models.vendor import Vendor  # noqa: F401

@@ -124,6 +124,32 @@ def me(
     )
 
 
+class UpdateProfileRequest(BaseModel):
+    display_name: str
+
+
+@router.put("/profile")
+def update_profile(
+    body: UpdateProfileRequest,
+    session: Session = Depends(get_session),
+    current_user: AuthContext = Depends(get_current_user),
+) -> UserResponse:
+    user = auth_service.get_user_by_id(session, current_user.user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.display_name = body.display_name
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return UserResponse(
+        id=user.id,  # type: ignore[arg-type]
+        email=user.email,
+        role=user.role.value,
+        display_name=user.display_name,
+        org_id=user.org_id,
+    )
+
+
 @router.get("/demo-accounts")
 def demo_accounts() -> list[dict[str, Any]]:
     if not settings.show_demo_credentials:

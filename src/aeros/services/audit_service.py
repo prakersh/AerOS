@@ -31,6 +31,7 @@ def log_action(
         user_agent=user_agent,
     )
     session.add(entry)
+    session.flush()
     session.commit()
     session.refresh(entry)
     return entry

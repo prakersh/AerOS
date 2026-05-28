@@ -33,6 +33,7 @@ def create_award(
         po_pdf_path=po_pdf_path,
     )
     session.add(award)
+    session.flush()
     session.commit()
     session.refresh(award)
     return award
@@ -76,6 +77,7 @@ def create_po(
         pdf_path=pdf_path,
     )
     session.add(po)
+    session.flush()
     session.commit()
     session.refresh(po)
     return po

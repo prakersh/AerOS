@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import {
   PageHeader,
@@ -37,6 +37,7 @@ interface SkuItem {
 /* ------------------------------------------------------------------ */
 
 export default function Inventory() {
+  const queryClient = useQueryClient();
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const debouncedSearch = useDebounce(search, 300);
@@ -101,10 +102,24 @@ export default function Inventory() {
     setEditModalOpen(true);
   }
 
+  const editMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: { reorder_point: number; last_price: number } }) =>
+      api.put(`/api/buyer/inventory/${id}`, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["buyer", "inventory"] });
+      setEditModalOpen(false);
+      setSelectedItem(null);
+      setToastMessage("Item updated successfully");
+    },
+    onError: () => setToastMessage("Failed to update item"),
+  });
+
   function handleEditSave() {
-    setEditModalOpen(false);
-    setSelectedItem(null);
-    setToastMessage("Item updates are saved to your draft");
+    if (!selectedItem) return;
+    editMutation.mutate({
+      id: selectedItem.id,
+      data: { reorder_point: editForm.qty, last_price: editForm.target_price },
+    });
   }
 
   return (

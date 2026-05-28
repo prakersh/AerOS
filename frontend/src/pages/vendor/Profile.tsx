@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { api } from "@/api/client";
 import { useAuthStore } from "@/stores/auth";
 import { Modal, PageHeader, Toast } from "@/components/ui";
 
@@ -100,9 +102,21 @@ export default function VendorProfile() {
     setEditProfileOpen(true);
   }
 
+  const profileMutation = useMutation({
+    mutationFn: (data: { vendor_name: string; phone: string }) =>
+      api.put("/api/vendor/profile", data),
+    onSuccess: () => {
+      setEditProfileOpen(false);
+      setToastMessage("Profile updated successfully");
+    },
+    onError: () => setToastMessage("Failed to update profile"),
+  });
+
   function handleProfileSave() {
-    setEditProfileOpen(false);
-    setToastMessage("Profile update submitted");
+    profileMutation.mutate({
+      vendor_name: editForm.vendor_name,
+      phone: editForm.phone,
+    });
   }
 
   return (

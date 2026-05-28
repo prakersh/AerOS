@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import {
   StatusBadge,
@@ -60,10 +60,20 @@ export default function Vendors() {
     setContactModalOpen(true);
   }
 
+  const contactMutation = useMutation({
+    mutationFn: ({ vendorId, message }: { vendorId: number; message: string }) =>
+      api.post(`/api/buyer/vendors/${vendorId}/contact`, { message }),
+    onSuccess: () => {
+      setContactModalOpen(false);
+      setSelectedVendor(null);
+      setToastMessage("Message sent");
+    },
+    onError: () => setToastMessage("Failed to send message"),
+  });
+
   function handleSendContact() {
-    setContactModalOpen(false);
-    setSelectedVendor(null);
-    setToastMessage("Message sent");
+    if (!selectedVendor || !contactMessage.trim()) return;
+    contactMutation.mutate({ vendorId: selectedVendor.id, message: contactMessage });
   }
 
   return (

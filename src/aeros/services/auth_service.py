@@ -49,6 +49,7 @@ def register_user(
         org_id=org_id,
     )
     session.add(user)
+    session.flush()
     session.commit()
     session.refresh(user)
 

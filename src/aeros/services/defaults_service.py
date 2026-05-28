@@ -38,6 +38,7 @@ def update_defaults(session: Session, user_id: int, **kwargs: object) -> UserDef
         if hasattr(defaults, key):
             setattr(defaults, key, value)
     session.add(defaults)
+    session.flush()
     session.commit()
     session.refresh(defaults)
     return defaults
@@ -57,6 +58,7 @@ def ensure_defaults(session: Session, user_id: int) -> UserDefaults:
     if not defaults:
         defaults = UserDefaults(user_id=user_id)
         session.add(defaults)
+        session.flush()
         session.commit()
         session.refresh(defaults)
     return defaults

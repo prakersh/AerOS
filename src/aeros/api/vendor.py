@@ -1,8 +1,6 @@
-import hashlib
 import json
 import os
 import re
-import traceback
 from typing import Any
 
 import structlog
@@ -206,6 +204,7 @@ def reply_to_rfx(
         body_text=body.body_text,
     )
     session.add(msg)
+    session.flush()
     session.commit()
     session.refresh(msg)
     return msg
@@ -228,14 +227,18 @@ async def upload_file(
         raise HTTPException(404, "Thread not found")
 
     content = await file.read()
-    if len(content) > settings.max_upload_size_mb * 1024 * 1024:
-        raise HTTPException(413, "File too large")
-
-    sha = hashlib.sha256(content).hexdigest()
-    upload_dir = os.path.join(settings.upload_dir, str(rfx_id), str(vendor.id))
-    os.makedirs(upload_dir, exist_ok=True)
     raw_name = os.path.basename(file.filename or "upload")
     filename = re.sub(r"[^\w.\-]", "_", raw_name)[:255]
+
+    from aeros.services.file_service import validate_file
+
+    validation = validate_file(content, filename)
+    if not validation.is_valid:
+        raise HTTPException(422, validation.error)
+
+    sha = validation.sha256
+    upload_dir = os.path.join(settings.upload_dir, str(rfx_id), str(vendor.id))
+    os.makedirs(upload_dir, exist_ok=True)
     storage_path = os.path.join(upload_dir, f"{sha[:8]}_{filename}")
     with open(storage_path, "wb") as f:
         f.write(content)
@@ -248,6 +251,7 @@ async def upload_file(
         body_text=f"Uploaded: {filename}",
     )
     session.add(msg)
+    session.flush()
     session.commit()
     session.refresh(msg)
 
@@ -261,47 +265,86 @@ async def upload_file(
         extraction_status=ExtractionStatus.PENDING,
     )
     session.add(attachment)
+    session.flush()
     session.commit()
     session.refresh(attachment)
 
-    # Trigger extraction inline (background worker later)
-    try:
-        from aeros.agents.base import AgentContext
-        from aeros.agents.evaluation import EvaluationAgent
-        from aeros.ai.factory import get_chat_provider, get_vision_provider
+    # Extract synchronously so the vendor gets immediate feedback. The worker
+    # helper owns the status transitions (EXTRACTED / FAILED) and flips the lane
+    # to QUOTED on success, so a failed extraction no longer reports success.
+    from aeros.workers.extract_offer import extract_offer_from_attachment
 
-        agent = EvaluationAgent()
-        ctx = AgentContext(
-            session=session,
-            caller=caller,
-            chat_provider=get_chat_provider(),
-            vision_provider=get_vision_provider(),
-        )
-        result = await agent.run(ctx, str(msg.id))
-        if result.success and result.data:
-            offer_service.create_offer_from_extraction(
-                session=session,
-                rfx_id=rfx_id,
-                vendor_id=vendor.id,  # type: ignore[arg-type]
-                extraction_data=result.data,
-                source_message_ids=[msg.id],  # type: ignore[list-item]
-            )
-            # Update vendor lane status to quoted
-            rv = session.exec(
-                select(RFxVendor).where(
-                    RFxVendor.rfx_id == rfx_id,
-                    RFxVendor.vendor_id == vendor.id,
-                )
-            ).first()
-            if rv:
-                rv.status = RFxVendorStatus.QUOTED
-                session.add(rv)
-                session.commit()
-            logger.info("extraction.success", rfx_id=rfx_id, vendor_id=vendor.id)
-    except Exception as e:
-        logger.error("extraction.failed", error=str(e), traceback=traceback.format_exc())
+    assert attachment.id is not None and msg.id is not None and vendor.id is not None
+    extracted = await extract_offer_from_attachment(
+        attachment.id, rfx_id, vendor.id, msg.id, session=session
+    )
 
-    return {"message_id": msg.id, "attachment_id": attachment.id, "filename": filename}
+    return {
+        "message_id": msg.id,
+        "attachment_id": attachment.id,
+        "filename": filename,
+        "extraction_status": "extracted" if extracted else "failed",
+    }
+
+
+class CopilotRequest(BaseModel):
+    message: str
+    history: list[dict[str, str]] = []
+
+
+@router.post("/rfx/{rfx_id}/copilot")
+async def vendor_copilot(
+    rfx_id: int,
+    body: CopilotRequest,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.VENDOR),
+) -> dict[str, Any]:
+    """Vendor co-pilot: real LLM guidance for composing an RFQ response."""
+    from aeros.agents.base import AgentContext
+    from aeros.agents.vendor_copilot import VendorCopilotAgent
+    from aeros.ai.factory import get_chat_provider
+    from aeros.models.rfx import RFxLineItem, RFxRun
+    from aeros.models.sku import SKU
+
+    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
+    if not vendor:
+        raise HTTPException(403, "No vendor profile")
+    rv = session.exec(
+        select(RFxVendor).where(RFxVendor.rfx_id == rfx_id, RFxVendor.vendor_id == vendor.id)
+    ).first()
+    if not rv:
+        raise HTTPException(403, "Not invited to this RFx")
+
+    rfx = session.get(RFxRun, rfx_id)
+    if not rfx:
+        raise HTTPException(404, "RFx not found")
+
+    line_items = session.exec(select(RFxLineItem).where(RFxLineItem.rfx_id == rfx_id)).all()
+    item_lines = []
+    for li in line_items:
+        sku = session.get(SKU, li.sku_id)
+        unit = li.unit_override or (sku.unit if sku else "")
+        item_lines.append(f"- {sku.name if sku else 'item'}: qty {li.qty} {unit}".rstrip())
+    rfx_context = (
+        f"Title: {rfx.title}\n"
+        f"Payment terms: {rfx.payment_terms_for_this_rfx}\n"
+        f"Delivery terms: {rfx.delivery_terms_for_this_rfx}\n"
+        f"Currency: {rfx.currency_for_this_rfx}\n"
+        f"Notes: {rfx.notes_for_vendors or '—'}\n"
+        "Requested items:\n" + ("\n".join(item_lines) or "—")
+    )
+
+    chat_provider = get_chat_provider()
+    chat_provider.user_id = caller.user_id
+    agent = VendorCopilotAgent()
+    ctx = AgentContext(
+        session=session,
+        caller=caller,
+        chat_provider=chat_provider,
+        metadata={"history": body.history, "rfx_context": rfx_context},
+    )
+    result = await agent.run(ctx, body.message)
+    return result.data or {"message": result.message, "status": "chatting"}
 
 
 @router.get("/rfx/{rfx_id}/uploads")
@@ -407,6 +450,7 @@ def submit_quote(
         body_text=f"Structured quote submitted: {items_text}",
     )
     session.add(msg)
+    session.flush()
     session.commit()
     session.refresh(msg)
 
@@ -455,3 +499,37 @@ def decline_rfx(
         return rfx_service.decline_rfx_vendor(session, rfx_id, vendor.id, body.reason)  # type: ignore[arg-type]
     except ValueError as e:
         raise HTTPException(404, str(e)) from None
+
+
+class UpdateVendorProfileRequest(BaseModel):
+    vendor_name: str | None = None
+    phone: str | None = None
+
+
+@router.put("/profile")
+def update_vendor_profile(
+    body: UpdateVendorProfileRequest,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.VENDOR),
+) -> dict[str, Any]:
+    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
+    if not vendor:
+        raise HTTPException(403, "No vendor profile")
+    if body.vendor_name is not None:
+        vendor.name = body.vendor_name
+        from aeros.models.user import User
+
+        user = session.get(User, caller.user_id)
+        if user:
+            user.display_name = body.vendor_name
+            session.add(user)
+    if body.phone is not None:
+        vendor.phone = body.phone
+    session.add(vendor)
+    session.commit()
+    session.refresh(vendor)
+    return {
+        "vendor_name": vendor.name,
+        "email": vendor.primary_email,
+        "phone": vendor.phone or "",
+    }

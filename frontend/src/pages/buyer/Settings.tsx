@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
 import { PageHeader, LoadingSpinner, ErrorState, Modal, Toast } from "@/components/ui";
 
@@ -29,6 +29,7 @@ interface BuyerDefaults {
 /* ------------------------------------------------------------------ */
 
 export default function BuyerSettings() {
+  const queryClient = useQueryClient();
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState<BuyerDefaults>({
     payment_terms: "",
@@ -57,6 +58,26 @@ export default function BuyerSettings() {
     queryFn: () => api.get<BuyerDefaults>("/api/buyer/defaults"),
   });
 
+  const updateDefaultsMutation = useMutation({
+    mutationFn: (data: BuyerDefaults) => api.put("/api/buyer/defaults", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["buyer", "defaults"] });
+      setEditModalOpen(false);
+      setToastMessage("Default terms updated");
+    },
+    onError: () => setToastMessage("Failed to update default terms"),
+  });
+
+  const updateProfileMutation = useMutation({
+    mutationFn: (data: { display_name: string }) => api.put("/api/auth/profile", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
+      setEditProfileOpen(false);
+      setToastMessage("Profile updated");
+    },
+    onError: () => setToastMessage("Failed to update profile"),
+  });
+
   function openEditModal() {
     if (defaults) {
       setEditForm({ ...defaults });
@@ -65,8 +86,7 @@ export default function BuyerSettings() {
   }
 
   function handleSave() {
-    // No PUT endpoint for buyer defaults yet; just close the modal.
-    setEditModalOpen(false);
+    updateDefaultsMutation.mutate(editForm);
   }
 
   function openEditProfileModal() {
@@ -77,8 +97,7 @@ export default function BuyerSettings() {
   }
 
   function handleProfileSave() {
-    setEditProfileOpen(false);
-    setToastMessage("Profile updated");
+    updateProfileMutation.mutate(profileForm);
   }
 
   return (

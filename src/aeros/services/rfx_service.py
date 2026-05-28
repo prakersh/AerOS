@@ -19,6 +19,7 @@ from aeros.services.audit_service import log_action
 def create_rfx(session: Session, buyer_id: int, title: str, **kwargs: Any) -> RFxRun:
     rfx = RFxRun(buyer_id=buyer_id, title=title, **kwargs)
     session.add(rfx)
+    session.flush()
     session.commit()
     session.refresh(rfx)
     log_action(
@@ -40,6 +41,7 @@ def add_line_items(session: Session, rfx_id: int, items: list[dict[str, Any]]) -
         li = RFxLineItem(rfx_id=rfx_id, **item)
         session.add(li)
         line_items.append(li)
+    session.flush()
     session.commit()
     for li in line_items:
         session.refresh(li)
@@ -72,6 +74,7 @@ def invite_vendor(
     if not existing_thread:
         thread = Thread(rfx_id=rfx_id, vendor_id=vendor_id)
         session.add(thread)
+    session.flush()
     session.commit()
     session.refresh(rv)
     return rv
@@ -266,16 +269,35 @@ def get_rfx_with_details(session: Session, rfx_id: int) -> dict[str, Any] | None
             vo["payment_terms"] = offer.payment_terms
             try:
                 offer_items = json.loads(offer.line_items_json)
-                vo["line_items"] = [
-                    {
-                        "line_item_id": oi.get("line_item_id"),
-                        "unit_price": oi.get("unit_price", 0),
-                        "confidence": oi.get("confidence"),
-                    }
-                    for oi in offer_items
-                ]
+                mapped = []
+                unmapped = []
+                for oi in offer_items:
+                    if oi.get("line_item_id"):
+                        mapped.append(
+                            {
+                                "line_item_id": oi.get("line_item_id"),
+                                "unit_price": oi.get("unit_price", 0),
+                                "confidence": oi.get("confidence"),
+                            }
+                        )
+                    else:
+                        # Extraction couldn't match this quoted item to an RFx
+                        # line. Surface it so the buyer sees it instead of a
+                        # silently blank matrix cell.
+                        unmapped.append(
+                            {
+                                "name": oi.get("sku_name")
+                                or oi.get("description")
+                                or "Unspecified item",
+                                "unit_price": oi.get("unit_price"),
+                                "qty": oi.get("qty") or oi.get("quantity"),
+                            }
+                        )
+                vo["line_items"] = mapped
+                vo["unmapped_items"] = unmapped
             except (json.JSONDecodeError, TypeError):
                 vo["line_items"] = []
+                vo["unmapped_items"] = []
         vendor_offers.append(vo)
 
         # Build dispatch plan entry
@@ -351,9 +373,7 @@ def award_rfx(
         decisions_json=json.dumps(decisions),
     )
     session.add(award)
-    session.commit()
-    session.refresh(rfx)
-    session.refresh(award)
+    session.flush()
     log_action(
         session,
         actor_user_id=buyer_id,
@@ -363,6 +383,7 @@ def award_rfx(
         entity_id=str(rfx_id),
         after={"status": "awarded", "decisions_count": len(decisions)},
     )
+    session.commit()
     session.refresh(rfx)
     return rfx
 

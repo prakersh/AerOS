@@ -65,28 +65,39 @@ def create_offer_from_extraction(
             }
         )
 
+    # INR-only for now: no FX conversion exists, so a non-INR amount must not
+    # masquerade as INR in the comparison matrix. Keep the original currency +
+    # amount, but leave total_quote_inr empty and flag the mismatch in remarks.
+    currency = (extraction_data.get("currency") or "INR").upper()
+    total_quote = extraction_data.get("total_quote")
+    total_quote_inr = total_quote if currency == "INR" else None
+    vendor_remarks = extraction_data.get("vendor_remarks")
+    if currency != "INR":
+        note = f"[Quote in {currency} — INR comparison unavailable]"
+        vendor_remarks = f"{note} {vendor_remarks}".strip() if vendor_remarks else note
+
     offer = Offer(
         rfx_id=rfx_id,
         vendor_id=vendor_id,
         line_items_json=json.dumps(mapped_items),
-        total_quote=extraction_data.get("total_quote"),
-        currency=extraction_data.get("currency", "INR"),
+        total_quote=total_quote,
+        currency=currency,
         lead_time_hours=extraction_data.get("lead_time_hours"),
         payment_terms=extraction_data.get("payment_terms"),
         delivery_terms=extraction_data.get("delivery_terms"),
         tax_treatment=extraction_data.get("tax_treatment"),
         gst_pct=extraction_data.get("gst_pct"),
         additional_charges_json=json.dumps(extraction_data.get("additional_charges", [])),
-        vendor_remarks=extraction_data.get("vendor_remarks"),
+        vendor_remarks=vendor_remarks,
         extraction_confidence_overall=extraction_data.get("confidence_overall", 0.0),
         source_message_ids_csv=",".join(str(mid) for mid in source_message_ids),
         raw_extraction_json=json.dumps(extraction_data),
         revision_no=revision_no,
         is_late=is_late,
-        total_quote_inr=extraction_data.get("total_quote"),
+        total_quote_inr=total_quote_inr,
     )
     session.add(offer)
-
+    session.flush()
     session.commit()
     session.refresh(offer)
 

@@ -22,6 +22,7 @@ def get_or_create_thread(session: Session, rfx_id: int, vendor_id: int) -> Threa
     if not thread:
         thread = Thread(rfx_id=rfx_id, vendor_id=vendor_id)
         session.add(thread)
+        session.flush()
         session.commit()
         session.refresh(thread)
     return thread
@@ -63,6 +64,7 @@ def add_message(
         parent_message_id=parent_message_id,
     )
     session.add(msg)
+    session.flush()
     session.commit()
     session.refresh(msg)
     return msg

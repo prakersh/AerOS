@@ -304,14 +304,18 @@ async def chat_upload(
         raise HTTPException(403, "Only buyers can upload via chat")
 
     content = await file.read()
-    if len(content) > settings.max_upload_size_mb * 1024 * 1024:
-        raise HTTPException(413, "File too large")
+    raw_name = os.path.basename(file.filename or "upload")
+    filename = re.sub(r"[^\w.\-]", "_", raw_name)[:255]
+
+    from aeros.services.file_service import validate_file
+
+    validation = validate_file(content, filename)
+    if not validation.is_valid:
+        raise HTTPException(422, validation.error)
 
     sha = hashlib.sha256(content).hexdigest()[:12]
     upload_dir = os.path.join(settings.upload_dir, "chat", str(caller.user_id))
     os.makedirs(upload_dir, exist_ok=True)
-    raw_name = os.path.basename(file.filename or "upload")
-    filename = re.sub(r"[^\w.\-]", "_", raw_name)[:255]
     storage_path = os.path.join(upload_dir, f"{sha}_{filename}")
     with open(storage_path, "wb") as f:
         f.write(content)

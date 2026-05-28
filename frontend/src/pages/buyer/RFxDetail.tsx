@@ -37,6 +37,12 @@ interface OfferLineItem {
   confidence?: number;
 }
 
+interface UnmappedItem {
+  name: string;
+  unit_price?: number | null;
+  qty?: number | null;
+}
+
 interface VendorOffer {
   vendor_id: number;
   vendor_name: string;
@@ -46,6 +52,7 @@ interface VendorOffer {
   payment_terms?: string;
   decline_reason?: string;
   line_items?: OfferLineItem[];
+  unmapped_items?: UnmappedItem[];
   assigned_line_item_ids?: number[] | null;
 }
 
@@ -469,7 +476,12 @@ function ComparisonMatrix({
     ? quotedVendors.filter((v) => assignments.some((a) => a.vendor_id === v.vendor_id))
     : quotedVendors;
 
+  const vendorsWithUnmapped = visibleVendors.filter(
+    (v) => (v.unmapped_items?.length ?? 0) > 0
+  );
+
   return (
+    <div className="space-y-3">
     <div className="overflow-x-auto rounded-xl border border-zinc-800">
       <table className="w-full text-sm">
         <thead>
@@ -551,6 +563,38 @@ function ComparisonMatrix({
           })}
         </tbody>
       </table>
+    </div>
+
+      {vendorsWithUnmapped.length > 0 && (
+        <div className="rounded-xl border border-amber-700/40 bg-amber-600/10 p-4">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-amber-300">
+            Quoted items that couldn't be auto-matched
+          </p>
+          <p className="mb-3 text-xs text-zinc-400">
+            These vendors quoted items the system couldn't map to a line above —
+            review them manually so nothing is missed.
+          </p>
+          <div className="space-y-2">
+            {vendorsWithUnmapped.map((v) => (
+              <div key={v.vendor_id} className="text-sm">
+                <span className="font-medium text-zinc-200">{v.vendor_name}:</span>{" "}
+                <span className="text-zinc-400">
+                  {(v.unmapped_items ?? [])
+                    .map(
+                      (it) =>
+                        `${it.name}${
+                          it.unit_price != null
+                            ? ` @ ${formatCurrency(it.unit_price)}`
+                            : ""
+                        }`
+                    )
+                    .join(", ")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

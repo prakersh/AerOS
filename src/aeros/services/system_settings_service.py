@@ -126,6 +126,7 @@ def update_setting(session: Session, key: str, value: str, user_id: int) -> dict
                 updated_by_user_id=user_id,
             )
         session.add(setting)
+        session.flush()
         session.commit()
         session.refresh(setting)
         return {"key": key, "value": value, "source": "database"}

@@ -68,6 +68,39 @@ def search_inventory(
     return inventory_service.search_skus(session, caller.org_id or 0, q)
 
 
+class UpdateSKURequest(BaseModel):
+    reorder_point: float | None = None
+    last_price: float | None = None
+
+
+@router.put("/inventory/{sku_id}")
+def update_sku(
+    sku_id: int,
+    body: UpdateSKURequest,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
+) -> Any:
+    from aeros.models.sku import SKU
+
+    sku = session.get(SKU, sku_id)
+    if not sku or sku.org_id != (caller.org_id or 0):
+        raise HTTPException(404, "SKU not found")
+    if body.reorder_point is not None:
+        sku.reorder_point = body.reorder_point
+    if body.last_price is not None:
+        sku.last_price = body.last_price
+    session.add(sku)
+    session.commit()
+    session.refresh(sku)
+    return {
+        "id": sku.id,
+        "code": sku.code,
+        "name": sku.name,
+        "reorder_point": sku.reorder_point,
+        "last_price": sku.last_price,
+    }
+
+
 # --- Vendors ---
 
 
@@ -89,6 +122,36 @@ def get_vendor(
     if not v:
         raise HTTPException(404, "Vendor not found")
     return v
+
+
+class ContactVendorRequest(BaseModel):
+    message: str
+
+
+@router.post("/vendors/{vendor_id}/contact")
+def contact_vendor(
+    vendor_id: int,
+    body: ContactVendorRequest,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
+) -> dict[str, Any]:
+    from aeros.models.vendor import Vendor
+
+    vendor = session.get(Vendor, vendor_id)
+    if not vendor:
+        raise HTTPException(404, "Vendor not found")
+    from aeros.models.audit import AuditLog
+
+    log = AuditLog(
+        user_id=caller.user_id,
+        action="contact_vendor",
+        entity_type="vendor",
+        entity_id=vendor_id,
+        details_json=json.dumps({"message": body.message[:500], "vendor_name": vendor.name}),
+    )
+    session.add(log)
+    session.commit()
+    return {"ok": True, "vendor_name": vendor.name}
 
 
 # --- RFx ---
@@ -288,4 +351,36 @@ def get_defaults(
     if d:
         return _defaults_to_dict(d)
     d = defaults_service.ensure_defaults(session, caller.user_id)
+    return _defaults_to_dict(d)
+
+
+class UpdateDefaultsBody(BaseModel):
+    payment_terms: str | None = None
+    delivery_terms: str | None = None
+    quote_validity_days: int | None = None
+    currency: str | None = None
+    tax_treatment: str | None = None
+    delivery_window: str | None = None
+
+
+@router.put("/defaults")
+def update_defaults(
+    body: UpdateDefaultsBody,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
+) -> dict[str, Any]:
+    field_map = {
+        "payment_terms": "payment_terms_default",
+        "delivery_terms": "delivery_terms_default",
+        "quote_validity_days": "quote_validity_days_default",
+        "currency": "currency_default",
+        "tax_treatment": "tax_treatment_default",
+        "delivery_window": "delivery_window_default",
+    }
+    updates = {}
+    for api_field, model_field in field_map.items():
+        val = getattr(body, api_field)
+        if val is not None:
+            updates[model_field] = val
+    d = defaults_service.update_defaults(session, caller.user_id, **updates)
     return _defaults_to_dict(d)

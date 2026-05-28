@@ -4,6 +4,7 @@ dispatches on confirmation."""
 import json
 from typing import Any
 
+import structlog
 from sqlmodel import select
 
 from aeros.agents.base import AgentContext, AgentResult, BaseAgent
@@ -14,6 +15,8 @@ from aeros.config import settings
 from aeros.models.rfx import Message, RFxLineItem, RFxRun, RFxVendor, Thread
 from aeros.models.vendor import Vendor
 from aeros.services import rfx_service
+
+logger = structlog.get_logger()
 
 SOURCING_SYSTEM_PROMPT = (
     "You are the AEROS Sourcing Agent. Your job is to compose "
@@ -153,6 +156,7 @@ Currency: {rfx.currency_for_this_rfx}
 
         base_summary = composed.get("summary", rfx.title)
         dispatched_count = 0
+        delivery_errors: list[str] = []
 
         for entry in dispatch_plan:
             vendor_id = entry["vendor_id"]
@@ -181,26 +185,38 @@ Currency: {rfx.currency_for_this_rfx}
 
             portal_url = f"{settings.frontend_url}/vendor/rfx/{rfx.id}"
 
-            # Dispatch based on channel
-            if channel == "email" and vendor.primary_email:
-                await send_rfx_invitation(
-                    to_email=vendor.primary_email,
-                    vendor_name=vendor.name,
-                    rfx_title=rfx.title,
-                    rfx_summary=summary,
-                    correlation_token=token,
-                    portal_url=portal_url,
-                )
-            elif channel == "telegram" and vendor.telegram_chat_id:
-                from aeros.channels.telegram_bot import send_rfx_invitation as tg_send
+            # Dispatch based on channel. Isolate each send: a single failed
+            # email/telegram must not abort the loop and leave the RFx stuck in
+            # DRAFTING with some vendors already invited. The vendor is invited
+            # regardless (above) and can always use the portal link.
+            try:
+                if channel == "email" and vendor.primary_email:
+                    await send_rfx_invitation(
+                        to_email=vendor.primary_email,
+                        vendor_name=vendor.name,
+                        rfx_title=rfx.title,
+                        rfx_summary=summary,
+                        correlation_token=token,
+                        portal_url=portal_url,
+                    )
+                elif channel == "telegram" and vendor.telegram_chat_id:
+                    from aeros.channels.telegram_bot import send_rfx_invitation as tg_send
 
-                await tg_send(
-                    chat_id=vendor.telegram_chat_id,
-                    vendor_name=vendor.name,
-                    rfx_title=rfx.title,
-                    rfx_summary=summary,
-                    portal_url=portal_url,
+                    await tg_send(
+                        chat_id=vendor.telegram_chat_id,
+                        vendor_name=vendor.name,
+                        rfx_title=rfx.title,
+                        rfx_summary=summary,
+                        portal_url=portal_url,
+                    )
+            except Exception as e:
+                logger.error(
+                    "sourcing.dispatch.channel_failed",
+                    vendor_id=vendor_id,
+                    channel=channel,
+                    error=str(e),
                 )
+                delivery_errors.append(vendor.name)
             # in_app: create a system message in the thread
             thread = ctx.session.exec(
                 select(Thread).where(Thread.rfx_id == rfx.id, Thread.vendor_id == vendor_id)
@@ -216,12 +232,23 @@ Currency: {rfx.currency_for_this_rfx}
 
             dispatched_count += 1
 
-        # Update RFx status
+        # Update RFx status — always runs now that per-vendor sends are isolated.
         rfx_service.dispatch_rfx(ctx.session, rfx.id, ctx.caller.user_id)  # type: ignore[arg-type]
         ctx.session.commit()
 
+        message = f"RFQ dispatched to {dispatched_count} vendors!"
+        if delivery_errors:
+            failed = ", ".join(delivery_errors)
+            message += (
+                f" Note: delivery failed for {failed} — they can still respond via the portal link."
+            )
+
         return AgentResult(
-            message=f"RFQ dispatched to {dispatched_count} vendors!",
-            data={"dispatched_count": dispatched_count, "status": "dispatched"},
+            message=message,
+            data={
+                "dispatched_count": dispatched_count,
+                "status": "dispatched",
+                "delivery_errors": delivery_errors,
+            },
             success=True,
         )

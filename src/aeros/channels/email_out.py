@@ -15,7 +15,6 @@ async def send_rfx_invitation(
     correlation_token: str,
     portal_url: str,
 ) -> bool:
-    correlation_token[:20] + "..."
     reply_to = f"procurement+{correlation_token}@{settings.smtp_from_address.split('@')[1]}"
 
     msg = EmailMessage()
@@ -96,12 +95,19 @@ Best regards,
 AEROS Procurement System
 """)
 
+    # The PO renderer falls back to .html when WeasyPrint's native libs are
+    # unavailable; label the attachment by its real extension so the recipient
+    # gets a file that opens, not a .pdf that is actually HTML.
+    is_html = pdf_path.lower().endswith((".html", ".htm"))
+    subtype = "html" if is_html else "pdf"
+    maintype = "text" if is_html else "application"
+    ext = "html" if is_html else "pdf"
     with open(pdf_path, "rb") as f:
         msg.add_attachment(
             f.read(),
-            maintype="application",
-            subtype="pdf",
-            filename=f"PO_{po_number}.pdf",
+            maintype=maintype,
+            subtype=subtype,
+            filename=f"PO_{po_number}.{ext}",
         )
 
     try:

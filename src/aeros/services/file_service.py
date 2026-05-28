@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from aeros.config import settings
 
+# Kept in sync with MIME_ROUTER in aeros.ai.extractors.router — every allowed
+# type must have an extractor, or uploads silently degrade to a stub string.
 ALLOWED_MIME_TYPES = {
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -16,10 +18,10 @@ ALLOWED_MIME_TYPES = {
     "text/csv",
     "text/tab-separated-values",
     "text/plain",
+    "text/html",
     "image/jpeg",
     "image/png",
     "image/webp",
-    "image/tiff",
 }
 
 BLOCKED_EXTENSIONS = {".exe", ".bat", ".cmd", ".sh", ".ps1", ".vbs", ".js", ".msi"}
@@ -36,16 +38,50 @@ class FileValidation:
     error: str = ""
 
 
+def _sniff_magic_bytes(content: bytes) -> str | None:
+    """Best-effort MIME detection from leading bytes, no native libs required."""
+    head = content[:16]
+    if head.startswith(b"%PDF"):
+        return "application/pdf"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if head.startswith(b"RIFF") and content[8:12] == b"WEBP":
+        return "image/webp"
+    if head.startswith(b"PK\x03\x04"):
+        # OOXML zip container — can't distinguish docx/xlsx from bytes alone;
+        # defer to the extension-based guess for the precise subtype.
+        return None
+    stripped = content[:512].lstrip().lower()
+    if stripped.startswith((b"<!doctype html", b"<html")):
+        return "text/html"
+    try:
+        text = content[:4096].decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+    if text and all(ch.isprintable() or ch in "\r\n\t" for ch in text):
+        return "text/plain"
+    return None
+
+
 def _detect_mime(content: bytes, filename: str) -> str:
-    """Detect MIME type, preferring python-magic if available, else mimetypes fallback."""
+    """Detect MIME type: python-magic if available, then extension, then content sniff."""
     try:
         import magic
 
         result: str = magic.from_buffer(content[:8192], mime=True)
-        return result
-    except Exception:
-        mime, _ = mimetypes.guess_type(filename)
-        return mime or "application/octet-stream"
+        if result and result != "application/octet-stream":
+            return result
+    except Exception:  # noqa: S110 — python-magic is optional; fall back silently
+        pass
+
+    mime, _ = mimetypes.guess_type(filename)
+    if mime:
+        return mime
+
+    sniffed = _sniff_magic_bytes(content)
+    return sniffed or "application/octet-stream"
 
 
 def validate_file(content: bytes, filename: str) -> FileValidation:
