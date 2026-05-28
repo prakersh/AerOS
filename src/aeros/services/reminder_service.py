@@ -58,17 +58,15 @@ def get_pending_reminders(
     Returns:
         List of dicts with vendor_id, status, and reminders_sent.
     """
-    vendors = list(
-        session.exec(
-            select(RFxVendor).where(RFxVendor.rfx_id == rfx_id)
-        ).all()
-    )
+    vendors = list(session.exec(select(RFxVendor).where(RFxVendor.rfx_id == rfx_id)).all())
     result: list[dict] = []
     for rv in vendors:
         sent = get_reminders_sent(rv)
-        result.append({
-            "vendor_id": rv.vendor_id,
-            "status": rv.status.value if rv.status else "unknown",
-            "reminders_sent": sent,
-        })
+        result.append(
+            {
+                "vendor_id": rv.vendor_id,
+                "status": rv.status.value if rv.status else "unknown",
+                "reminders_sent": sent,
+            }
+        )
     return result

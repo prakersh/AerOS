@@ -75,7 +75,7 @@ def register(body: RegisterRequest, response: Response, session: Session = Depen
             session, body.email, body.password, body.display_name, body.role
         )
     except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+        raise HTTPException(status_code=409, detail=str(e)) from e
 
     access = create_access_token(user.id, user.role.value)  # type: ignore[arg-type]
     refresh = create_refresh_token(user.id)  # type: ignore[arg-type]
@@ -98,7 +98,10 @@ def logout(response: Response):
 
 
 @router.get("/me")
-def me(current_user: AuthContext = Depends(get_current_user), session: Session = Depends(get_session)):
+def me(
+    current_user: AuthContext = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
     user = auth_service.get_user_by_id(session, current_user.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -109,6 +112,28 @@ def me(current_user: AuthContext = Depends(get_current_user), session: Session =
         display_name=user.display_name,
         org_id=user.org_id,
     )
+
+
+@router.get("/demo-accounts")
+def demo_accounts():
+    if not settings.show_demo_credentials:
+        raise HTTPException(status_code=404, detail="Demo credentials disabled")
+
+    def _acct(role, email, pw, label):
+        return {"role": role, "email": email, "password": pw, "label": label}
+
+    return [
+        _acct("Buyer", "buyer@aeros.demo", "buyer123", "Buyer"),
+        _acct("Vendor", "freshfarm@vendor.demo", "vendor123", "FreshFarm Dairy"),
+        _acct("Vendor", "sabzi@vendor.demo", "vendor123", "Sabzi Mandi Co"),
+        _acct("Vendor", "bakery@vendor.demo", "vendor123", "Bakery Bros"),
+        _acct("Vendor", "metro@vendor.demo", "vendor123", "Metro FMCG Supply"),
+        _acct("Vendor", "kirana@vendor.demo", "vendor123", "Kirana King"),
+        _acct("Vendor", "greenvalley@vendor.demo", "vendor123", "Green Valley Produce"),
+        _acct("Vendor", "daily@vendor.demo", "vendor123", "Daily Beverages"),
+        _acct("Vendor", "annapurna@vendor.demo", "vendor123", "Annapurna Foods"),
+        _acct("Admin", "admin@aeros.demo", "admin123", "Admin"),
+    ]
 
 
 @router.post("/refresh")
@@ -122,7 +147,7 @@ def refresh(
     try:
         payload = decode_token(refresh_token)
     except Exception:
-        raise HTTPException(status_code=401, detail="Invalid refresh token")
+        raise HTTPException(status_code=401, detail="Invalid refresh token") from None
     if payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid token type")
 

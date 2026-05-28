@@ -5,7 +5,8 @@ import json
 from aeros.agents.base import AgentContext, AgentResult, BaseAgent
 from aeros.ai.base import ChatMessage
 
-VENDOR_SYSTEM_PROMPT = """You are the AEROS Vendor Co-pilot. You help vendors respond to procurement requests (RFQs).
+VENDOR_SYSTEM_PROMPT = """You are the AEROS Vendor Co-pilot. \
+You help vendors respond to procurement requests (RFQs).
 
 Your capabilities:
 - Help vendors understand RFQ requirements
@@ -46,9 +47,7 @@ class VendorCopilotAgent(BaseAgent):
             ChatMessage(role="system", content=VENDOR_SYSTEM_PROMPT),
         ]
         if rfx_context:
-            messages.append(
-                ChatMessage(role="system", content=f"RFQ DETAILS:\n{rfx_context}")
-            )
+            messages.append(ChatMessage(role="system", content=f"RFQ DETAILS:\n{rfx_context}"))
 
         for h in history:
             messages.append(ChatMessage(role=h["role"], content=h["content"]))

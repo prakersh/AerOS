@@ -9,9 +9,7 @@ from aeros.models.user import User, UserStatus
 from aeros.services.audit_service import log_action
 
 
-def suspend_user(
-    session: Session, user_id: int, admin_id: int, reason: str = ""
-) -> User:
+def suspend_user(session: Session, user_id: int, admin_id: int, reason: str = "") -> User:
     """Suspend a user account.
 
     Args:

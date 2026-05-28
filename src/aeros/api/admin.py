@@ -1,3 +1,4 @@
+import contextlib
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -73,20 +74,20 @@ def list_audit(
         actor = session.get(User, log.actor_user_id) if log.actor_user_id else None
         after = {}
         if log.after_json:
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 after = json.loads(log.after_json)
-            except json.JSONDecodeError:
-                pass
-        results.append({
-            "id": log.id,
-            "actor_name": actor.display_name if actor else "System",
-            "actor_role": log.actor_role,
-            "action": log.action,
-            "entity_type": log.entity_type,
-            "entity_id": log.entity_id,
-            "details": after,
-            "created_at": log.created_at.isoformat() if log.created_at else "",
-        })
+        results.append(
+            {
+                "id": log.id,
+                "actor_name": actor.display_name if actor else "System",
+                "actor_role": log.actor_role,
+                "action": log.action,
+                "entity_type": log.entity_type,
+                "entity_id": log.entity_id,
+                "details": after,
+                "created_at": log.created_at.isoformat() if log.created_at else "",
+            }
+        )
     return results
 
 
@@ -108,11 +109,9 @@ def suspend_user(
 ) -> dict:
     """Suspend a user account."""
     try:
-        user = admin_service.suspend_user(
-            session, user_id, caller.user_id, reason=body.reason
-        )
+        user = admin_service.suspend_user(session, user_id, caller.user_id, reason=body.reason)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from None
     return {
         "id": user.id,
         "email": user.email,
@@ -131,7 +130,7 @@ def reactivate_user(
     try:
         user = admin_service.reactivate_user(session, user_id, caller.user_id)
     except ValueError as e:
-        raise HTTPException(400, str(e))
+        raise HTTPException(400, str(e)) from None
     return {
         "id": user.id,
         "email": user.email,

@@ -19,7 +19,6 @@ def generate_csv() -> None:
         writer.writerow(["Paneer (Fresh)", 50, "kg", 320.00, 16000.00])
         writer.writerow(["Curd (Set)", 100, "kg", 45.00, 4500.00])
         writer.writerow(["Butter (Unsalted)", 30, "kg", 480.00, 14400.00])
-    print(f"  Created: {path}")
 
 
 def generate_xlsx() -> None:
@@ -42,7 +41,6 @@ def generate_xlsx() -> None:
     ws.append(["", "", "", "Grand Total", 27610.00])
 
     wb.save(path)
-    print(f"  Created: {path}")
 
 
 def generate_pdf() -> None:
@@ -89,7 +87,6 @@ def generate_pdf() -> None:
 
     doc.save(path)
     doc.close()
-    print(f"  Created: {path}")
 
 
 def generate_docx() -> None:
@@ -130,7 +127,6 @@ def generate_docx() -> None:
     doc.add_paragraph("Delivery: Same day for orders before 10 AM")
 
     doc.save(path)
-    print(f"  Created: {path}")
 
 
 def generate_png() -> None:
@@ -181,7 +177,6 @@ def generate_png() -> None:
     draw.text((20, y), "Payment: NET15 | Delivery: Next day", fill=(0, 0, 0), font=font_normal)
 
     img.save(path)
-    print(f"  Created: {path}")
 
 
 def generate_txt() -> None:
@@ -210,7 +205,6 @@ Contact: +91-98765-43210
 """
     with open(path, "w") as f:
         f.write(content)
-    print(f"  Created: {path}")
 
 
 def generate_html() -> None:
@@ -261,11 +255,9 @@ def generate_html() -> None:
 """
     with open(path, "w") as f:
         f.write(content)
-    print(f"  Created: {path}")
 
 
 if __name__ == "__main__":
-    print("Generating vendor quote fixtures...")
     generate_csv()
     generate_xlsx()
     generate_pdf()
@@ -273,4 +265,3 @@ if __name__ == "__main__":
     generate_png()
     generate_txt()
     generate_html()
-    print("Done!")

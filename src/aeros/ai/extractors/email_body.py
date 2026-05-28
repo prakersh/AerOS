@@ -15,6 +15,7 @@ async def extract_email_body(file_path: str, **kwargs) -> str:
 def _extract_html(html: str) -> str:
     try:
         import bleach
+
         text = bleach.clean(html, tags=[], strip=True)
     except ImportError:
         text = re.sub(r"<[^>]+>", "", html)

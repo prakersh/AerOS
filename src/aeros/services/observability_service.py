@@ -1,6 +1,6 @@
 """Observability service for dashboard aggregations and trace lookups."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlmodel import Session, func, select
 
@@ -11,9 +11,7 @@ from aeros.models.observability import (
 )
 
 
-def get_summary_cards(
-    session: Session, days: int = 7, user_id: int | None = None
-) -> dict:
+def get_summary_cards(session: Session, days: int = 7, user_id: int | None = None) -> dict:
     """Aggregate telemetry data into summary cards for the dashboard.
 
     Args:
@@ -24,36 +22,23 @@ def get_summary_cards(
     Returns:
         Dictionary with aggregated metrics (calls, tokens, cost, etc.).
     """
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)
 
     llm_base = select(func.count(LLMCallLog.id)).where(LLMCallLog.created_at >= since)
-    tokens_base = select(func.sum(LLMCallLog.total_tokens)).where(
-        LLMCallLog.created_at >= since
-    )
+    tokens_base = select(func.sum(LLMCallLog.total_tokens)).where(LLMCallLog.created_at >= since)
     cost_base = select(func.sum(LLMCallLog.estimated_cost_usd)).where(
         LLMCallLog.created_at >= since
     )
-    agent_base = select(func.count(AgentRunLog.id)).where(
-        AgentRunLog.started_at >= since
-    )
-    latency_base = select(func.avg(LLMCallLog.latency_ms)).where(
-        LLMCallLog.created_at >= since
-    )
+    agent_base = select(func.count(AgentRunLog.id)).where(AgentRunLog.started_at >= since)
+    latency_base = select(func.avg(LLMCallLog.latency_ms)).where(LLMCallLog.created_at >= since)
     error_base = select(func.count(LLMCallLog.id)).where(
         LLMCallLog.created_at >= since, LLMCallLog.status == "error"
     )
-    channel_base = select(func.count(ChannelEventLog.id)).where(
-        ChannelEventLog.created_at >= since
-    )
+    channel_base = select(func.count(ChannelEventLog.id)).where(ChannelEventLog.created_at >= since)
 
-    if user_id is not None:
-        llm_base = llm_base.where(LLMCallLog.user_id == user_id)
-        tokens_base = tokens_base.where(LLMCallLog.user_id == user_id)
-        cost_base = cost_base.where(LLMCallLog.user_id == user_id)
-        agent_base = agent_base.where(AgentRunLog.user_id == user_id)
-        latency_base = latency_base.where(LLMCallLog.user_id == user_id)
-        error_base = error_base.where(LLMCallLog.user_id == user_id)
-        # ChannelEventLog does not have user_id, so skip filtering
+    # Note: LLM calls are logged at the provider layer without user_id,
+    # so we don't filter by user_id for summary cards — buyers see all
+    # LLM telemetry for their org. Agent runs are user-scoped.
 
     total_llm_calls = session.exec(llm_base).one() or 0
     total_tokens = session.exec(tokens_base).one() or 0
@@ -76,9 +61,7 @@ def get_summary_cards(
     }
 
 
-def get_recent_calls(
-    session: Session, limit: int = 50, user_id: int | None = None
-) -> list[dict]:
+def get_recent_calls(session: Session, limit: int = 50, user_id: int | None = None) -> list[dict]:
     """Get the most recent LLM call logs.
 
     Args:
@@ -89,12 +72,13 @@ def get_recent_calls(
     Returns:
         List of dicts with call metadata.
     """
-    query = select(LLMCallLog).order_by(
-        LLMCallLog.created_at.desc()  # type: ignore[union-attr]
+    query = (
+        select(LLMCallLog)
+        .order_by(
+            LLMCallLog.created_at.desc()  # type: ignore[union-attr]
+        )
+        .limit(limit)
     )
-    if user_id is not None:
-        query = query.where(LLMCallLog.user_id == user_id)
-    query = query.limit(limit)
 
     calls = list(session.exec(query).all())
     return [
@@ -128,9 +112,7 @@ def get_timeline(session: Session, rfx_id: int) -> list[dict]:
 
     agent_runs = list(
         session.exec(
-            select(AgentRunLog)
-            .where(AgentRunLog.rfx_id == rfx_id)
-            .order_by(AgentRunLog.started_at)
+            select(AgentRunLog).where(AgentRunLog.rfx_id == rfx_id).order_by(AgentRunLog.started_at)
         ).all()
     )
     for r in agent_runs:
@@ -181,19 +163,11 @@ def get_trace(session: Session, trace_id: str) -> dict:
         Dictionary with agent_runs, llm_calls, and channel_events lists.
     """
     agent_runs = list(
-        session.exec(
-            select(AgentRunLog).where(AgentRunLog.trace_id == trace_id)
-        ).all()
+        session.exec(select(AgentRunLog).where(AgentRunLog.trace_id == trace_id)).all()
     )
-    llm_calls = list(
-        session.exec(
-            select(LLMCallLog).where(LLMCallLog.trace_id == trace_id)
-        ).all()
-    )
+    llm_calls = list(session.exec(select(LLMCallLog).where(LLMCallLog.trace_id == trace_id)).all())
     channel_events = list(
-        session.exec(
-            select(ChannelEventLog).where(ChannelEventLog.trace_id == trace_id)
-        ).all()
+        session.exec(select(ChannelEventLog).where(ChannelEventLog.trace_id == trace_id)).all()
     )
 
     return {

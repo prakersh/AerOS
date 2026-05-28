@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlmodel import Field, SQLModel
 
 
-class KYCStatus(str, enum.Enum):
+class KYCStatus(enum.StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"

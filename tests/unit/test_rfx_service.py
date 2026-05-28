@@ -130,7 +130,7 @@ def test_list_rfx_for_buyer(session, buyer, skus, vendor_record):
         rfx.id,
         [{"sku_id": skus[0].id, "qty": 10}],
     )
-    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="abc123")
+    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="abc123")  # noqa: S106
 
     results = rfx_service.list_rfx_for_buyer(session, buyer.id)
 
@@ -148,7 +148,7 @@ def test_list_rfx_for_buyer(session, buyer, skus, vendor_record):
 def test_invite_vendor(session, buyer, vendor_record):
     """invite_vendor should create an RFxVendor record and a Thread."""
     rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Invite Test")
-    rv = rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="hash123")
+    rv = rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="hash123")  # noqa: S106
 
     assert rv.id is not None
     assert rv.rfx_id == rfx.id
@@ -157,6 +157,7 @@ def test_invite_vendor(session, buyer, vendor_record):
 
     # Thread should also have been created
     from sqlmodel import select
+
     thread = session.exec(
         select(Thread).where(Thread.rfx_id == rfx.id, Thread.vendor_id == vendor_record.id)
     ).first()
@@ -166,7 +167,7 @@ def test_invite_vendor(session, buyer, vendor_record):
 def test_dispatch_rfx(session, buyer, vendor_record):
     """dispatch_rfx should update RFx status to DISPATCHED."""
     rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Dispatch Test")
-    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="d_hash")
+    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="d_hash")  # noqa: S106
 
     updated = rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
 
@@ -193,7 +194,7 @@ def test_get_rfx_with_details(session, buyer, skus, vendor_record):
         rfx.id,
         [{"sku_id": skus[0].id, "qty": 200, "target_price": 30.0}],
     )
-    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="det_hash")
+    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="det_hash")  # noqa: S106
 
     details = rfx_service.get_rfx_with_details(session, rfx.id)
 
@@ -212,7 +213,7 @@ def test_get_rfx_with_details(session, buyer, skus, vendor_record):
 def test_decline_rfx_vendor(session, buyer, vendor_record):
     """decline_rfx_vendor should set status to DECLINED with reason."""
     rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Decline Test")
-    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="dec_hash")
+    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="dec_hash")  # noqa: S106
 
     rv = rfx_service.decline_rfx_vendor(session, rfx.id, vendor_record.id, reason="No stock")
     assert rv.status == RFxVendorStatus.DECLINED
@@ -224,6 +225,7 @@ def test_decline_rfx_vendor_not_invited(session, buyer, vendor_record):
     """decline_rfx_vendor should raise ValueError when vendor not invited."""
     rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="No Invite Test")
     import pytest
+
     with pytest.raises(ValueError, match="not invited"):
         rfx_service.decline_rfx_vendor(session, rfx.id, vendor_record.id, reason="test")
 
@@ -231,7 +233,7 @@ def test_decline_rfx_vendor_not_invited(session, buyer, vendor_record):
 def test_award_rfx(session, buyer, vendor_record):
     """award_rfx should create an Award and set RFx status to AWARDED."""
     rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Award Test")
-    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="award_hash")
+    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="award_hash")  # noqa: S106
 
     decisions = [{"vendor_id": vendor_record.id, "items": [1, 2]}]
     result = rfx_service.award_rfx(session, rfx.id, buyer.id, decisions)
@@ -241,6 +243,7 @@ def test_award_rfx(session, buyer, vendor_record):
     from sqlmodel import select
 
     from aeros.models.award import Award
+
     award = session.exec(select(Award).where(Award.rfx_id == rfx.id)).first()
     assert award is not None
     assert award.awarded_by_user_id == buyer.id

@@ -42,15 +42,6 @@ const buyerNav: NavSection[] = [
       { label: "Settings", to: "/buyer/settings", icon: <SettingsIcon /> },
     ],
   },
-  {
-    title: "Coming Soon",
-    items: [
-      { label: "Negotiation", to: "#", icon: <NegotiationIcon />, disabled: true },
-      { label: "Contract", to: "#", icon: <ContractIcon />, disabled: true },
-      { label: "Invoice", to: "#", icon: <InvoiceIcon />, disabled: true },
-      { label: "Analytics", to: "#", icon: <AnalyticsIcon />, disabled: true },
-    ],
-  },
 ];
 
 const vendorNav: NavSection[] = [

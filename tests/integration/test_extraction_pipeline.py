@@ -35,7 +35,10 @@ class TestExtractPdf:
 
         doc = pymupdf.open()
         page = doc.new_page()
-        page.insert_text((72, 72), "Vendor Rate Card\nItem: Basmati Rice\nPrice: 80 INR/kg\nQty: 100 kg")
+        page.insert_text(
+            (72, 72),
+            "Vendor Rate Card\nItem: Basmati Rice\nPrice: 80 INR/kg\nQty: 100 kg",
+        )
         page.insert_text((72, 200), "Total: 8000 INR\nPayment: NET30\nDelivery: Doorstep")
 
         pdf_path = tmp_path / "rate_card.pdf"
@@ -86,7 +89,7 @@ class TestExtractPdf:
 
         # Create a PDF with only an image (no text layer)
         doc = pymupdf.open()
-        page = doc.new_page()
+        doc.new_page()
         # No text inserted — simulates a scanned image-only PDF
 
         pdf_path = tmp_path / "scanned.pdf"
@@ -111,7 +114,7 @@ class TestExtractPdf:
             pytest.skip("pymupdf not installed")
 
         doc = pymupdf.open()
-        page = doc.new_page()
+        doc.new_page()
         pdf_path = tmp_path / "no_vision.pdf"
         doc.save(str(pdf_path))
         doc.close()

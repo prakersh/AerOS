@@ -15,7 +15,7 @@ async def send_rfx_invitation(
     correlation_token: str,
     portal_url: str,
 ) -> bool:
-    short_token = correlation_token[:20] + "..."
+    correlation_token[:20] + "..."
     reply_to = f"procurement+{correlation_token}@{settings.smtp_from_address.split('@')[1]}"
 
     msg = EmailMessage()
@@ -32,7 +32,9 @@ You have received a new Request for Quotation (RFQ):
 
 {rfx_summary}
 
-Please submit your quote by replying to this email with your price list attached (PDF, Word, Excel, or image of your rate card), or log in to submit directly:
+Please submit your quote by replying to this email with your \
+price list attached (PDF, Word, Excel, or image of your rate \
+card), or log in to submit directly:
 
 {portal_url}
 
@@ -51,7 +53,8 @@ AEROS Procurement System
     </div>
     <p>Please submit your quote by:</p>
     <ul>
-        <li><strong>Replying to this email</strong> with your price list attached (PDF, Word, Excel, or image)</li>
+        <li><strong>Replying to this email</strong> with your \
+price list attached (PDF, Word, Excel, or image)</li>
         <li>Or <a href="{portal_url}" style="color: #4f46e5;">log in to the portal</a></li>
     </ul>
     <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 24px 0;">

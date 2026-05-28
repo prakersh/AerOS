@@ -1,23 +1,20 @@
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import {
+  PageHeader,
+  LoadingSpinner,
+  ErrorState,
+  EmptyState,
+  Modal,
+  DetailView,
+  FilterChips,
+} from "@/components/ui";
+import { formatTimestamp } from "@/lib/format";
+import type { AuditEntry } from "@/types";
 
 /* ------------------------------------------------------------------ */
-/* Types                                                               */
-/* ------------------------------------------------------------------ */
-
-interface AuditEntry {
-  id: number;
-  created_at: string;
-  actor_name: string;
-  actor_role: string | null;
-  action: string;
-  entity_type: string;
-  entity_id: string;
-  details: Record<string, unknown>;
-}
-
-/* ------------------------------------------------------------------ */
-/* Badge styles                                                        */
+/* Action badge styles (page-specific)                                 */
 /* ------------------------------------------------------------------ */
 
 const ACTION_COLORS: Record<string, string> = {
@@ -27,18 +24,6 @@ const ACTION_COLORS: Record<string, string> = {
   cancel_rfx: "bg-red-900/40 text-red-400",
   override_offer_field: "bg-amber-900/40 text-amber-400",
 };
-
-function formatTimestamp(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 function detailsSummary(details: Record<string, unknown>): string {
   const parts: string[] = [];
@@ -55,67 +40,73 @@ function detailsSummary(details: Record<string, unknown>): string {
 /* ------------------------------------------------------------------ */
 
 export default function AdminAudit() {
-  const { data: logs = [], isLoading, error } = useQuery<AuditEntry[]>({
+  const { data: logs = [], isLoading, error, refetch } = useQuery<AuditEntry[]>({
     queryKey: ["admin", "audit"],
     queryFn: () => api.get<AuditEntry[]>("/api/admin/audit"),
   });
 
+  const [actionFilter, setActionFilter] = useState("all");
+  const [selectedEntry, setSelectedEntry] = useState<AuditEntry | null>(null);
+
+  /* Derive unique action types for filter chips */
+  const actionFilterOptions = useMemo(() => {
+    const actions = Array.from(new Set(logs.map((l) => l.action)));
+    return [
+      { label: "All", value: "all" },
+      ...actions.map((a) => ({ label: a.replace(/_/g, " "), value: a })),
+    ];
+  }, [logs]);
+
+  const filtered = useMemo(() => {
+    if (actionFilter === "all") return logs;
+    return logs.filter((l) => l.action === actionFilter);
+  }, [logs, actionFilter]);
+
+  if (isLoading) return <LoadingSpinner message="Loading audit log..." />;
+  if (error) return <ErrorState message="Failed to load audit log." onRetry={refetch} />;
+
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">Audit Log</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Complete record of all system actions.
-        </p>
-      </div>
+      <PageHeader
+        title="Audit Log"
+        subtitle="Complete record of all system actions."
+      />
 
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-indigo-500" />
-          <span className="ml-3 text-sm text-zinc-500">Loading audit log...</span>
-        </div>
+      {logs.length > 0 && (
+        <FilterChips
+          options={actionFilterOptions}
+          active={actionFilter}
+          onChange={setActionFilter}
+        />
       )}
 
-      {error && !isLoading && (
-        <div className="rounded-xl border border-red-800/50 bg-red-900/20 p-4">
-          <p className="text-sm text-red-400">Failed to load audit log.</p>
-        </div>
-      )}
-
-      {!isLoading && !error && (
+      {filtered.length === 0 ? (
+        <EmptyState
+          title="No audit entries"
+          description={
+            actionFilter !== "all"
+              ? "No entries match the selected action filter."
+              : "No audit entries have been recorded yet."
+          }
+        />
+      ) : (
         <div className="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900">
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-zinc-800">
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                  Timestamp
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                  Actor
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                  Action
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                  Entity
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                  Details
-                </th>
+                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Timestamp</th>
+                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Actor</th>
+                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Action</th>
+                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Entity</th>
+                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">Details</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-800/60">
-              {logs.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-sm text-zinc-600">
-                    No audit entries yet.
-                  </td>
-                </tr>
-              )}
-              {logs.map((entry) => (
+              {filtered.map((entry) => (
                 <tr
                   key={entry.id}
-                  className="transition hover:bg-zinc-800/40"
+                  className="cursor-pointer transition hover:bg-zinc-800/40"
+                  onClick={() => setSelectedEntry(entry)}
                 >
                   <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-500">
                     {formatTimestamp(entry.created_at)}
@@ -144,8 +135,28 @@ export default function AdminAudit() {
       )}
 
       <p className="text-xs text-zinc-600">
-        {logs.length} {logs.length === 1 ? "entry" : "entries"} recorded.
+        {filtered.length} of {logs.length} {logs.length === 1 ? "entry" : "entries"} shown.
       </p>
+
+      {/* Detail modal */}
+      <Modal
+        open={!!selectedEntry}
+        onClose={() => setSelectedEntry(null)}
+        title="Audit Entry Details"
+      >
+        {selectedEntry && (
+          <DetailView
+            columns={1}
+            items={[
+              { label: "Action", value: selectedEntry.action.replace(/_/g, " ") },
+              { label: "Actor", value: `${selectedEntry.actor_name}${selectedEntry.actor_role ? ` (${selectedEntry.actor_role})` : ""}` },
+              { label: "Entity", value: `${selectedEntry.entity_type} #${selectedEntry.entity_id}` },
+              { label: "Details", value: detailsSummary(selectedEntry.details) },
+              { label: "Timestamp", value: formatTimestamp(selectedEntry.created_at) },
+            ]}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

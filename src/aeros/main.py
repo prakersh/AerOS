@@ -23,7 +23,11 @@ logger = structlog.get_logger()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    if not settings.debug and (settings.jwt_secret == "change-me" or settings.hmac_secret == "change-me"):
+    secrets_default = (
+        settings.jwt_secret == "change-me"  # noqa: S105
+        or settings.hmac_secret == "change-me"  # noqa: S105
+    )
+    if not settings.debug and secrets_default:
         raise RuntimeError(
             "AEROS_JWT_SECRET and AEROS_HMAC_SECRET must be set — "
             "refusing to start with default secrets."

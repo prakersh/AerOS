@@ -11,7 +11,8 @@ class TestListProviders:
         assert len(providers) >= 1
 
     def test_providers_have_required_fields(self, session):
-        """Each provider should have id, provider_name, model_id, display_name, capability, status."""
+        """Each provider should have id, provider_name, model_id,
+        display_name, capability, status."""
         providers = ai_config_service.list_providers(session)
         for p in providers:
             assert "id" in p
@@ -21,10 +22,11 @@ class TestListProviders:
             assert "capability" in p
             assert "status" in p
 
-    def test_fallback_includes_nvidia_and_groq(self, session):
-        """Env fallback should include nvidia_nim and groq providers."""
+    def test_fallback_includes_mimo_and_groq(self, session):
+        """Env fallback should include mimo, nvidia_nim, and groq providers."""
         providers = ai_config_service.list_providers(session)
         provider_names = {p["provider_name"] for p in providers}
+        assert "mimo" in provider_names
         assert "nvidia_nim" in provider_names
         assert "groq" in provider_names
 
@@ -45,6 +47,13 @@ class TestTestProviderConnection:
         assert result["ok"] is False
         assert "Unknown provider" in result["error"]
 
+    def test_mimo_without_key(self, monkeypatch):
+        """mimo without API key should report not set."""
+        monkeypatch.setattr("aeros.services.ai_config_service.settings.mimo_api_key", "")
+        result = ai_config_service.test_provider_connection("mimo")
+        assert result["ok"] is False
+        assert "not set" in result["error"]
+
     def test_nvidia_without_key(self, monkeypatch):
         """nvidia_nim without API key should report not set."""
         monkeypatch.setattr("aeros.services.ai_config_service.settings.nvidia_api_key", "")
@@ -58,6 +67,14 @@ class TestTestProviderConnection:
         result = ai_config_service.test_provider_connection("groq")
         assert result["ok"] is False
         assert "not set" in result["error"]
+
+    def test_mimo_with_key(self, monkeypatch):
+        """mimo with API key should return ok=True."""
+        monkeypatch.setattr(
+            "aeros.services.ai_config_service.settings.mimo_api_key", "test-mimo-key"
+        )
+        result = ai_config_service.test_provider_connection("mimo")
+        assert result["ok"] is True
 
     def test_nvidia_with_key(self, monkeypatch):
         """nvidia_nim with API key should return ok=True."""

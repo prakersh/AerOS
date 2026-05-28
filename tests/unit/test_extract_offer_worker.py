@@ -94,7 +94,7 @@ def attachment(session, message):
         message_id=message.id,
         filename="quote.pdf",
         mime_type="application/pdf",
-        storage_path="/tmp/quote.pdf",
+        storage_path="/tmp/quote.pdf",  # noqa: S108
         size_bytes=1024,
     )
     session.add(att)

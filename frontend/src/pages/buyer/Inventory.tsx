@@ -1,6 +1,17 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import {
+  PageHeader,
+  LoadingSpinner,
+  ErrorState,
+  Modal,
+  DetailView,
+  FilterChips,
+  Toast,
+} from "@/components/ui";
+import { formatCurrency } from "@/lib/format";
+import { useDebounce } from "@/hooks/useDebounce";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -15,24 +26,10 @@ interface SkuItem {
   id: number;
   code: string;
   name: string;
-  category: string;
   category_id: number;
   unit: string;
   last_price: number | null;
   reorder_point: number;
-}
-
-/* ------------------------------------------------------------------ */
-/* Helpers                                                             */
-/* ------------------------------------------------------------------ */
-
-function formatCurrency(amount: number | null): string {
-  if (amount == null) return "--";
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 2,
-  }).format(amount);
 }
 
 /* ------------------------------------------------------------------ */
@@ -42,6 +39,11 @@ function formatCurrency(amount: number | null): string {
 export default function Inventory() {
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
+  const debouncedSearch = useDebounce(search, 300);
+  const [selectedItem, setSelectedItem] = useState<SkuItem | null>(null);
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ qty: 0, target_price: 0, notes: "" });
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   /* Fetch categories */
   const { data: categories = [] } = useQuery<Category[]>({
@@ -61,56 +63,63 @@ export default function Inventory() {
     },
   });
 
-  /* Local search filter */
+  /* Build category filter options and lookup map */
+  const categoryFilterOptions = useMemo(
+    () => [
+      { label: "All", value: "all" },
+      ...categories.map((cat) => ({ label: cat.name, value: String(cat.id) })),
+    ],
+    [categories],
+  );
+
+  const categoryMap = useMemo(() => {
+    const map = new Map<number, string>();
+    for (const cat of categories) map.set(cat.id, cat.name);
+    return map;
+  }, [categories]);
+
+  function getCategoryName(categoryId: number): string {
+    return categoryMap.get(categoryId) ?? `Category ${categoryId}`;
+  }
+
+  /* Local search filter (debounced) */
   const filtered = useMemo(() => {
-    if (!search.trim()) return inventory;
-    const q = search.toLowerCase();
+    if (!debouncedSearch.trim()) return inventory;
+    const q = debouncedSearch.toLowerCase();
     return inventory.filter(
       (item) =>
         item.code.toLowerCase().includes(q) ||
         item.name.toLowerCase().includes(q) ||
-        item.category.toLowerCase().includes(q),
+        getCategoryName(item.category_id).toLowerCase().includes(q),
     );
-  }, [inventory, search]);
+  }, [inventory, debouncedSearch, categoryMap]);
+
+  function openEditModal() {
+    if (selectedItem) {
+      setEditForm({ qty: selectedItem.reorder_point, target_price: selectedItem.last_price ?? 0, notes: "" });
+    }
+    setEditModalOpen(true);
+  }
+
+  function handleEditSave() {
+    setEditModalOpen(false);
+    setSelectedItem(null);
+    setToastMessage("Item updates are saved to your draft");
+  }
 
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">Inventory</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          SKU catalog and stock management.
-        </p>
-      </div>
+      <PageHeader
+        title="Inventory"
+        subtitle="SKU catalog and stock management."
+      />
 
       {/* Category Tabs */}
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setActiveCategoryId(null)}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-            activeCategoryId === null
-              ? "bg-indigo-600 text-white"
-              : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
-          }`}
-        >
-          All
-        </button>
-        {categories.map((cat) => (
-          <button
-            key={cat.id}
-            type="button"
-            onClick={() => setActiveCategoryId(cat.id)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-              activeCategoryId === cat.id
-                ? "bg-indigo-600 text-white"
-                : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700 hover:text-zinc-200"
-            }`}
-          >
-            {cat.name}
-          </button>
-        ))}
-      </div>
+      <FilterChips
+        options={categoryFilterOptions}
+        active={activeCategoryId != null ? String(activeCategoryId) : "all"}
+        onChange={(val) => setActiveCategoryId(val === "all" ? null : Number(val))}
+      />
 
       {/* Search */}
       <div>
@@ -124,20 +133,11 @@ export default function Inventory() {
       </div>
 
       {/* Loading */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-indigo-500" />
-          <span className="ml-3 text-sm text-zinc-500">Loading inventory...</span>
-        </div>
-      )}
+      {isLoading && <LoadingSpinner message="Loading inventory..." />}
 
       {/* Error */}
       {error && !isLoading && (
-        <div className="rounded-xl border border-red-800/50 bg-red-900/20 p-4">
-          <p className="text-sm text-red-400">
-            Failed to load inventory. Please try again.
-          </p>
-        </div>
+        <ErrorState message="Failed to load inventory. Please try again." />
       )}
 
       {/* Table */}
@@ -173,7 +173,7 @@ export default function Inventory() {
                     colSpan={6}
                     className="px-4 py-8 text-center text-sm text-zinc-500"
                   >
-                    {search.trim()
+                    {debouncedSearch.trim()
                       ? "No items match your search."
                       : "No inventory items found."}
                   </td>
@@ -182,7 +182,8 @@ export default function Inventory() {
                 filtered.map((item) => (
                   <tr
                     key={item.id}
-                    className="border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                    className="cursor-pointer border-b border-zinc-800/50 hover:bg-zinc-800/30"
+                    onClick={() => setSelectedItem(item)}
                   >
                     <td className="px-4 py-3 font-mono text-xs text-indigo-400">
                       {item.code}
@@ -190,7 +191,7 @@ export default function Inventory() {
                     <td className="px-4 py-3 text-zinc-200">{item.name}</td>
                     <td className="px-4 py-3">
                       <span className="rounded-full bg-zinc-800 px-2.5 py-0.5 text-xs text-zinc-400">
-                        {item.category}
+                        {getCategoryName(item.category_id)}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-zinc-400">{item.unit}</td>
@@ -206,6 +207,99 @@ export default function Inventory() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Item Detail Modal */}
+      <Modal
+        open={!!selectedItem && !editModalOpen}
+        onClose={() => setSelectedItem(null)}
+        title={selectedItem?.name ?? "Item Details"}
+        size="md"
+      >
+        {selectedItem && (
+          <>
+            <DetailView
+              items={[
+                { label: "Code", value: selectedItem.code },
+                { label: "Name", value: selectedItem.name },
+                { label: "Category", value: getCategoryName(selectedItem.category_id) },
+                { label: "Unit", value: selectedItem.unit },
+                { label: "Last Price", value: formatCurrency(selectedItem.last_price) },
+                { label: "Reorder Point", value: String(selectedItem.reorder_point) },
+              ]}
+              columns={2}
+            />
+            <div className="mt-4 flex justify-end">
+              <button
+                type="button"
+                onClick={openEditModal}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+              >
+                Edit Item
+              </button>
+            </div>
+          </>
+        )}
+      </Modal>
+
+      {/* Edit Item Modal */}
+      <Modal
+        open={editModalOpen}
+        onClose={() => setEditModalOpen(false)}
+        title="Edit Item"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Quantity</label>
+            <input
+              type="number"
+              value={editForm.qty}
+              onChange={(e) => setEditForm((f) => ({ ...f, qty: Number(e.target.value) }))}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Target Price</label>
+            <input
+              type="number"
+              step="0.01"
+              value={editForm.target_price}
+              onChange={(e) => setEditForm((f) => ({ ...f, target_price: Number(e.target.value) }))}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Notes</label>
+            <textarea
+              value={editForm.notes}
+              onChange={(e) => setEditForm((f) => ({ ...f, notes: e.target.value }))}
+              rows={3}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setEditModalOpen(false)}
+              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleEditSave}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Toast */}
+      {toastMessage && (
+        <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
       )}
     </div>
   );

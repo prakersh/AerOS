@@ -17,17 +17,32 @@ PO_HTML_TEMPLATE = """
 <head>
 <style>
 body {{ font-family: 'Helvetica', sans-serif; margin: 40px; color: #18181b; }}
-.header {{ display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }}
+.header {{
+  display: flex; justify-content: space-between;
+  align-items: flex-start; margin-bottom: 30px;
+}}
 .logo {{ font-size: 28px; font-weight: bold; color: #4f46e5; }}
 .po-info {{ text-align: right; }}
 .po-number {{ font-size: 20px; font-weight: bold; }}
 .section {{ margin: 20px 0; }}
-.section-title {{ font-size: 14px; font-weight: 600; color: #71717a; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }}
+.section-title {{
+  font-size: 14px; font-weight: 600; color: #71717a;
+  text-transform: uppercase; letter-spacing: 1px;
+  margin-bottom: 8px;
+}}
 table {{ width: 100%; border-collapse: collapse; margin-top: 8px; }}
-th {{ background: #f4f4f5; padding: 10px 12px; text-align: left; font-size: 12px; color: #52525b; border-bottom: 2px solid #e4e4e7; }}
+th {{
+  background: #f4f4f5; padding: 10px 12px;
+  text-align: left; font-size: 12px; color: #52525b;
+  border-bottom: 2px solid #e4e4e7;
+}}
 td {{ padding: 10px 12px; border-bottom: 1px solid #e4e4e7; font-size: 13px; }}
 .total-row {{ font-weight: bold; background: #fafafa; }}
-.footer {{ margin-top: 40px; padding-top: 20px; border-top: 1px solid #e4e4e7; font-size: 11px; color: #a1a1aa; }}
+.footer {{
+  margin-top: 40px; padding-top: 20px;
+  border-top: 1px solid #e4e4e7;
+  font-size: 11px; color: #a1a1aa;
+}}
 </style>
 </head>
 <body>
@@ -151,6 +166,7 @@ class POAgent(BaseAgent):
 
             try:
                 from weasyprint import HTML
+
                 HTML(string=html).write_pdf(pdf_path)
             except Exception:
                 # Fallback: save HTML
@@ -165,10 +181,12 @@ class POAgent(BaseAgent):
                 po_number=po_number,
                 total_amount=total,
                 currency=rfx.currency_for_this_rfx,
-                terms_json=json.dumps({
-                    "payment": rfx.payment_terms_for_this_rfx,
-                    "delivery": rfx.delivery_terms_for_this_rfx,
-                }),
+                terms_json=json.dumps(
+                    {
+                        "payment": rfx.payment_terms_for_this_rfx,
+                        "delivery": rfx.delivery_terms_for_this_rfx,
+                    }
+                ),
                 line_items_json=json.dumps(items),
                 pdf_path=pdf_path,
             )

@@ -82,12 +82,15 @@ class TestAuthLifecycle:
     def test_full_auth_lifecycle(self, client):
         """Complete auth lifecycle: register, access, logout, denied."""
         # Step 1: Register
-        reg_resp = client.post("/api/auth/register", json={
-            "email": "lifecycle@test.com",
-            "password": "lifecycle123",
-            "display_name": "Lifecycle User",
-            "role": "buyer",
-        })
+        reg_resp = client.post(
+            "/api/auth/register",
+            json={
+                "email": "lifecycle@test.com",
+                "password": "lifecycle123",
+                "display_name": "Lifecycle User",
+                "role": "buyer",
+            },
+        )
         assert reg_resp.status_code == 200
         reg_data = reg_resp.json()
         assert reg_data["email"] == "lifecycle@test.com"
@@ -113,69 +116,90 @@ class TestAuthLifecycle:
     def test_login_after_register(self, client):
         """User should be able to login with credentials after registration."""
         # Register
-        client.post("/api/auth/register", json={
-            "email": "login-after@test.com",
-            "password": "mypassword1",
-            "display_name": "Login After",
-            "role": "buyer",
-        })
+        client.post(
+            "/api/auth/register",
+            json={
+                "email": "login-after@test.com",
+                "password": "mypassword1",
+                "display_name": "Login After",
+                "role": "buyer",
+            },
+        )
 
         # Logout
         client.post("/api/auth/logout")
 
         # Login
-        login_resp = client.post("/api/auth/login", json={
-            "email": "login-after@test.com",
-            "password": "mypassword1",
-        })
+        login_resp = client.post(
+            "/api/auth/login",
+            json={
+                "email": "login-after@test.com",
+                "password": "mypassword1",
+            },
+        )
         assert login_resp.status_code == 200
         assert login_resp.json()["email"] == "login-after@test.com"
         assert "access_token" in login_resp.cookies
 
     def test_register_duplicate_email(self, client, buyer_user):
         """Registering with an existing email should return 409."""
-        resp = client.post("/api/auth/register", json={
-            "email": "buyer@test.com",
-            "password": "some-password1",
-            "display_name": "Dup User",
-            "role": "buyer",
-        })
+        resp = client.post(
+            "/api/auth/register",
+            json={
+                "email": "buyer@test.com",
+                "password": "some-password1",
+                "display_name": "Dup User",
+                "role": "buyer",
+            },
+        )
         assert resp.status_code == 409
 
     def test_register_invalid_role(self, client):
         """Registering with an invalid role should return 400."""
-        resp = client.post("/api/auth/register", json={
-            "email": "bad-role@test.com",
-            "password": "password123",
-            "display_name": "Bad Role",
-            "role": "superadmin",
-        })
+        resp = client.post(
+            "/api/auth/register",
+            json={
+                "email": "bad-role@test.com",
+                "password": "password123",
+                "display_name": "Bad Role",
+                "role": "superadmin",
+            },
+        )
         assert resp.status_code == 400
 
     def test_register_short_password(self, client):
         """Registering with a too-short password should return 422."""
-        resp = client.post("/api/auth/register", json={
-            "email": "short-pw@test.com",
-            "password": "short",
-            "display_name": "Short PW",
-            "role": "buyer",
-        })
+        resp = client.post(
+            "/api/auth/register",
+            json={
+                "email": "short-pw@test.com",
+                "password": "short",
+                "display_name": "Short PW",
+                "role": "buyer",
+            },
+        )
         assert resp.status_code == 422
 
     def test_login_wrong_password(self, client, buyer_user):
         """Login with wrong password should return 401."""
-        resp = client.post("/api/auth/login", json={
-            "email": "buyer@test.com",
-            "password": "wrong-password",
-        })
+        resp = client.post(
+            "/api/auth/login",
+            json={
+                "email": "buyer@test.com",
+                "password": "wrong-password",
+            },
+        )
         assert resp.status_code == 401
 
     def test_login_nonexistent_user(self, client):
         """Login with nonexistent email should return 401."""
-        resp = client.post("/api/auth/login", json={
-            "email": "nobody@test.com",
-            "password": "password123",
-        })
+        resp = client.post(
+            "/api/auth/login",
+            json={
+                "email": "nobody@test.com",
+                "password": "password123",
+            },
+        )
         assert resp.status_code == 401
 
     def test_access_protected_route_without_auth(self, client):
@@ -185,10 +209,13 @@ class TestAuthLifecycle:
 
     def test_login_sets_both_cookies(self, client, buyer_user):
         """Login should set both access_token and refresh_token cookies."""
-        resp = client.post("/api/auth/login", json={
-            "email": "buyer@test.com",
-            "password": "test123",
-        })
+        resp = client.post(
+            "/api/auth/login",
+            json={
+                "email": "buyer@test.com",
+                "password": "test123",
+            },
+        )
         assert resp.status_code == 200
         assert "access_token" in resp.cookies
         assert "refresh_token" in resp.cookies
@@ -223,6 +250,7 @@ class TestCSRF:
         settings.debug = False
 
         try:
+
             def override_get_session():
                 with Session(engine) as session:
                     yield session
@@ -231,10 +259,13 @@ class TestCSRF:
 
             with TestClient(app) as c:
                 # POST without CSRF should fail
-                resp = c.post("/api/auth/login", json={
-                    "email": "test@test.com",
-                    "password": "test",
-                })
+                resp = c.post(
+                    "/api/auth/login",
+                    json={
+                        "email": "test@test.com",
+                        "password": "test",
+                    },
+                )
                 assert resp.status_code == 403
                 assert "CSRF" in resp.json().get("detail", "")
         finally:
@@ -254,6 +285,7 @@ class TestCSRF:
         settings.debug = False
 
         try:
+
             def override_get_session():
                 with SQLSession(engine) as s:
                     yield s
@@ -287,6 +319,7 @@ class TestCSRF:
         settings.debug = False
 
         try:
+
             def override_get_session():
                 with Session(engine) as session:
                     yield session
@@ -334,58 +367,76 @@ class TestRBAC:
 
     def test_vendor_can_access_vendor_routes(self, client, vendor_with_profile):
         """Vendor should access /api/vendor/* routes."""
-        user, _ = vendor_with_profile
-        client.post("/api/auth/login", json={
-            "email": "vendor-auth@test.com",
-            "password": "vendor123!",
-        })
+        _user, _ = vendor_with_profile
+        client.post(
+            "/api/auth/login",
+            json={
+                "email": "vendor-auth@test.com",
+                "password": "vendor123!",
+            },
+        )
         resp = client.get("/api/vendor/inbox")
         assert resp.status_code == 200
 
     def test_vendor_cannot_access_buyer_routes(self, client, vendor_with_profile):
         """Vendor should not access /api/buyer/* routes."""
-        user, _ = vendor_with_profile
-        client.post("/api/auth/login", json={
-            "email": "vendor-auth@test.com",
-            "password": "vendor123!",
-        })
+        _user, _ = vendor_with_profile
+        client.post(
+            "/api/auth/login",
+            json={
+                "email": "vendor-auth@test.com",
+                "password": "vendor123!",
+            },
+        )
         resp = client.get("/api/buyer/rfx")
         assert resp.status_code == 403
 
     def test_vendor_cannot_access_admin_routes(self, client, vendor_with_profile):
         """Vendor should not access /api/admin/* routes."""
-        user, _ = vendor_with_profile
-        client.post("/api/auth/login", json={
-            "email": "vendor-auth@test.com",
-            "password": "vendor123!",
-        })
+        _user, _ = vendor_with_profile
+        client.post(
+            "/api/auth/login",
+            json={
+                "email": "vendor-auth@test.com",
+                "password": "vendor123!",
+            },
+        )
         resp = client.get("/api/admin/stats")
         assert resp.status_code == 403
 
     def test_admin_can_access_admin_routes(self, client, admin_user):
         """Admin should access /api/admin/* routes."""
-        client.post("/api/auth/login", json={
-            "email": "admin-auth@test.com",
-            "password": "admin123!",
-        })
+        client.post(
+            "/api/auth/login",
+            json={
+                "email": "admin-auth@test.com",
+                "password": "admin123!",
+            },
+        )
         resp = client.get("/api/admin/stats")
         assert resp.status_code == 200
 
     def test_admin_can_access_buyer_routes(self, client, admin_user):
         """Admin should also access /api/buyer/* routes (admin bypass)."""
-        client.post("/api/auth/login", json={
-            "email": "admin-auth@test.com",
-            "password": "admin123!",
-        })
+        client.post(
+            "/api/auth/login",
+            json={
+                "email": "admin-auth@test.com",
+                "password": "admin123!",
+            },
+        )
         resp = client.get("/api/buyer/rfx")
         assert resp.status_code == 200
 
     def test_admin_cannot_access_vendor_routes(self, client, admin_user):
         """Admin should not access /api/vendor/* routes (vendor-only)."""
-        client.post("/api/auth/login", json={
-            "email": "admin-auth@test.com",
-            "password": "admin123!",
-        })
+        client.post(
+            "/api/auth/login",
+            json={
+                "email": "admin-auth@test.com",
+                "password": "admin123!",
+            },
+        )
         resp = client.get("/api/vendor/inbox")
         assert resp.status_code == 403
 
@@ -448,10 +499,13 @@ class TestTokenMechanics:
     def test_refresh_endpoint_with_valid_token(self, client, buyer_user):
         """Refresh endpoint should rotate tokens."""
         # Login first to get refresh token
-        login_resp = client.post("/api/auth/login", json={
-            "email": "buyer@test.com",
-            "password": "test123",
-        })
+        login_resp = client.post(
+            "/api/auth/login",
+            json={
+                "email": "buyer@test.com",
+                "password": "test123",
+            },
+        )
         assert login_resp.status_code == 200
 
         # Refresh
@@ -469,20 +523,26 @@ class TestTokenMechanics:
         session.add(buyer_user)
         session.commit()
 
-        resp = client.post("/api/auth/login", json={
-            "email": "buyer@test.com",
-            "password": "test123",
-        })
+        resp = client.post(
+            "/api/auth/login",
+            json={
+                "email": "buyer@test.com",
+                "password": "test123",
+            },
+        )
         assert resp.status_code == 401
 
     def test_register_as_vendor_creates_vendor_role(self, client):
         """Registering with role=vendor should create a vendor-role user."""
-        resp = client.post("/api/auth/register", json={
-            "email": "new-vendor@test.com",
-            "password": "vendorpass1",
-            "display_name": "New Vendor",
-            "role": "vendor",
-        })
+        resp = client.post(
+            "/api/auth/register",
+            json={
+                "email": "new-vendor@test.com",
+                "password": "vendorpass1",
+                "display_name": "New Vendor",
+                "role": "vendor",
+            },
+        )
         assert resp.status_code == 200
         data = resp.json()
         assert data["role"] == "vendor"

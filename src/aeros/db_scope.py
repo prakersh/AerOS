@@ -48,18 +48,14 @@ def for_user(
     if role == Role.BUYER or role == Role.BUYER.value:
         if buyer_org_field:
             entity = statement.column_descriptions[0]["entity"]
-            return statement.where(
-                getattr(entity, buyer_org_field) == caller.org_id
-            )
+            return statement.where(getattr(entity, buyer_org_field) == caller.org_id)
         return statement  # buyer sees own org data (filtered at service level)
 
     # Vendor — optionally filter by user
     if role == Role.VENDOR or role == Role.VENDOR.value:
         if user_field:
             entity = statement.column_descriptions[0]["entity"]
-            return statement.where(
-                getattr(entity, user_field) == caller.user_id
-            )
+            return statement.where(getattr(entity, user_field) == caller.user_id)
         return statement
 
     raise MissingScopeError(f"Unknown role: {role}")

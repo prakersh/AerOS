@@ -42,9 +42,7 @@ async def render_and_send_po(
                 logger.info("po.render.success", rfx_id=rfx_id)
                 return True
             else:
-                logger.error(
-                    "po.render.failed", rfx_id=rfx_id, message=result.message
-                )
+                logger.error("po.render.failed", rfx_id=rfx_id, message=result.message)
                 return False
         except Exception as e:
             logger.error("po.render.error", rfx_id=rfx_id, error=str(e))

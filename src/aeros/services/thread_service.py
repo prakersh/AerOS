@@ -5,9 +5,7 @@ from sqlmodel import Session, select
 from aeros.models.rfx import Attachment, Message, Thread
 
 
-def get_or_create_thread(
-    session: Session, rfx_id: int, vendor_id: int
-) -> Thread:
+def get_or_create_thread(session: Session, rfx_id: int, vendor_id: int) -> Thread:
     """Return the existing thread for an RFx+vendor, or create one.
 
     Args:
@@ -19,9 +17,7 @@ def get_or_create_thread(
         The Thread row (existing or newly created).
     """
     thread = session.exec(
-        select(Thread).where(
-            Thread.rfx_id == rfx_id, Thread.vendor_id == vendor_id
-        )
+        select(Thread).where(Thread.rfx_id == rfx_id, Thread.vendor_id == vendor_id)
     ).first()
     if not thread:
         thread = Thread(rfx_id=rfx_id, vendor_id=vendor_id)
@@ -84,16 +80,12 @@ def get_thread_messages(session: Session, thread_id: int) -> list[Message]:
     """
     return list(
         session.exec(
-            select(Message)
-            .where(Message.thread_id == thread_id)
-            .order_by(Message.created_at)
+            select(Message).where(Message.thread_id == thread_id).order_by(Message.created_at)
         ).all()
     )
 
 
-def get_thread_attachments(
-    session: Session, thread_id: int
-) -> list[Attachment]:
+def get_thread_attachments(session: Session, thread_id: int) -> list[Attachment]:
     """Return all attachments for messages in a thread.
 
     Args:

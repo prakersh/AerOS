@@ -98,9 +98,13 @@ def rfx_with_thread(session, buyer_user, sku_milk, vendor_user_record):
         buyer_id=buyer_user.id,
         title="Milk Procurement Q3",
     )
-    rfx_service.add_line_items(session, rfx.id, [
-        {"sku_id": sku_milk.id, "qty": 500, "unit_override": "ltr", "target_price": 55.0},
-    ])
+    rfx_service.add_line_items(
+        session,
+        rfx.id,
+        [
+            {"sku_id": sku_milk.id, "qty": 500, "unit_override": "ltr", "target_price": 55.0},
+        ],
+    )
 
     # Invite vendor + create thread
     rfx_service.invite_vendor(session, rfx.id, vendor.id, "dummy-token-hash")
@@ -112,7 +116,7 @@ def rfx_with_thread(session, buyer_user, sku_milk, vendor_user_record):
 @pytest.fixture
 def vendor_auth_client(client, vendor_user_record):
     """TestClient authenticated as the milk vendor."""
-    user, _ = vendor_user_record
+    _user, _ = vendor_user_record
     resp = client.post(
         "/api/auth/login",
         json={"email": "milk-vendor@test.com", "password": "test123"},
@@ -147,7 +151,7 @@ class TestVendorUploadFlow:
         assert len(inbox) >= 1
         rfx_ids = [r["rfx_id"] for r in inbox]
         assert rfx_with_thread.id in rfx_ids
-        item = [r for r in inbox if r["rfx_id"] == rfx_with_thread.id][0]
+        item = next(r for r in inbox if r["rfx_id"] == rfx_with_thread.id)
         assert item["title"] == "Milk Procurement Q3"
 
     def test_vendor_can_view_thread(self, vendor_auth_client, rfx_with_thread):
@@ -161,35 +165,39 @@ class TestVendorUploadFlow:
         self, vendor_auth_client, rfx_with_thread, vendor_user_record, sku_milk
     ):
         """Upload should trigger extraction (mocked) and create an Offer."""
-        _, vendor = vendor_user_record
+        _, _vendor = vendor_user_record
 
         # Mock the extraction LLM — two calls: first pass + gleaning pass
-        extraction_result = json.dumps({
-            "line_items": [
-                {
-                    "sku_name": "Full Cream Milk",
-                    "qty": 500,
-                    "unit": "ltr",
-                    "unit_price": 52.0,
-                    "total": 26000.0,
-                    "confidence_per_field": {"unit_price": 0.95, "qty": 0.98},
-                },
-            ],
-            "total_quote": 26000.0,
-            "currency": "INR",
-            "payment_terms": "NET15",
-            "delivery_terms": "doorstep",
-            "lead_time_hours": 24,
-            "confidence_overall": 0.92,
-        })
+        extraction_result = json.dumps(
+            {
+                "line_items": [
+                    {
+                        "sku_name": "Full Cream Milk",
+                        "qty": 500,
+                        "unit": "ltr",
+                        "unit_price": 52.0,
+                        "total": 26000.0,
+                        "confidence_per_field": {"unit_price": 0.95, "qty": 0.98},
+                    },
+                ],
+                "total_quote": 26000.0,
+                "currency": "INR",
+                "payment_terms": "NET15",
+                "delivery_terms": "doorstep",
+                "lead_time_hours": 24,
+                "confidence_overall": 0.92,
+            }
+        )
         mock_provider = AsyncMock()
         mock_provider.chat.return_value = _mock_chat_response(extraction_result)
 
         # Create a simple CSV test file
         csv_content = b"Item,Price/ltr,Qty\nFull Cream Milk,52,500\n"
 
-        with patch("aeros.ai.factory.get_chat_provider", return_value=mock_provider), \
-             patch("aeros.ai.factory.get_vision_provider", return_value=None):
+        with (
+            patch("aeros.ai.factory.get_chat_provider", return_value=mock_provider),
+            patch("aeros.ai.factory.get_vision_provider", return_value=None),
+        ):
             resp = vendor_auth_client.post(
                 f"/api/vendor/rfx/{rfx_with_thread.id}/upload",
                 files={"file": ("quote.csv", io.BytesIO(csv_content), "text/csv")},
@@ -205,37 +213,45 @@ class TestVendorUploadFlow:
         self, client, session, buyer_user, rfx_with_thread, vendor_user_record, sku_milk
     ):
         """After vendor uploads, buyer should see comparison data in RFx details."""
-        _, vendor = vendor_user_record
+        _, _vendor = vendor_user_record
 
         # Login as vendor and upload
-        client.post("/api/auth/login", json={
-            "email": "milk-vendor@test.com", "password": "test123",
-        })
+        client.post(
+            "/api/auth/login",
+            json={
+                "email": "milk-vendor@test.com",
+                "password": "test123",
+            },
+        )
 
-        extraction_result = json.dumps({
-            "line_items": [
-                {
-                    "sku_name": "Full Cream Milk",
-                    "qty": 500,
-                    "unit": "ltr",
-                    "unit_price": 52.0,
-                    "total": 26000.0,
-                    "confidence_per_field": {"unit_price": 0.95},
-                },
-            ],
-            "total_quote": 26000.0,
-            "currency": "INR",
-            "payment_terms": "NET15",
-            "lead_time_hours": 24,
-            "confidence_overall": 0.92,
-        })
+        extraction_result = json.dumps(
+            {
+                "line_items": [
+                    {
+                        "sku_name": "Full Cream Milk",
+                        "qty": 500,
+                        "unit": "ltr",
+                        "unit_price": 52.0,
+                        "total": 26000.0,
+                        "confidence_per_field": {"unit_price": 0.95},
+                    },
+                ],
+                "total_quote": 26000.0,
+                "currency": "INR",
+                "payment_terms": "NET15",
+                "lead_time_hours": 24,
+                "confidence_overall": 0.92,
+            }
+        )
         mock_provider = AsyncMock()
         mock_provider.chat.return_value = _mock_chat_response(extraction_result)
 
         csv_content = b"Item,Price/ltr,Qty\nFull Cream Milk,52,500\n"
 
-        with patch("aeros.ai.factory.get_chat_provider", return_value=mock_provider), \
-             patch("aeros.ai.factory.get_vision_provider", return_value=None):
+        with (
+            patch("aeros.ai.factory.get_chat_provider", return_value=mock_provider),
+            patch("aeros.ai.factory.get_vision_provider", return_value=None),
+        ):
             upload_resp = client.post(
                 f"/api/vendor/rfx/{rfx_with_thread.id}/upload",
                 files={"file": ("quote.csv", io.BytesIO(csv_content), "text/csv")},
@@ -243,9 +259,13 @@ class TestVendorUploadFlow:
         assert upload_resp.status_code == 200
 
         # Now login as buyer and check details
-        client.post("/api/auth/login", json={
-            "email": "buyer@test.com", "password": "test123",
-        })
+        client.post(
+            "/api/auth/login",
+            json={
+                "email": "buyer@test.com",
+                "password": "test123",
+            },
+        )
 
         detail_resp = client.get(f"/api/buyer/rfx/{rfx_with_thread.id}")
         assert detail_resp.status_code == 200
@@ -259,23 +279,25 @@ class TestVendorUploadFlow:
         assert vo["total_quote"] == 26000.0
         assert vo["payment_terms"] == "NET15"
 
-    def test_vendor_uploads_list(
-        self, vendor_auth_client, rfx_with_thread, vendor_user_record
-    ):
+    def test_vendor_uploads_list(self, vendor_auth_client, rfx_with_thread, vendor_user_record):
         """GET /api/vendor/rfx/{id}/uploads should list uploaded files."""
-        _, vendor = vendor_user_record
+        _, _vendor = vendor_user_record
 
-        extraction_result = json.dumps({
-            "line_items": [],
-            "confidence_overall": 0.5,
-        })
+        extraction_result = json.dumps(
+            {
+                "line_items": [],
+                "confidence_overall": 0.5,
+            }
+        )
         mock_provider = AsyncMock()
         mock_provider.chat.return_value = _mock_chat_response(extraction_result)
 
         csv_content = b"Item,Price\nTest,10\n"
 
-        with patch("aeros.ai.factory.get_chat_provider", return_value=mock_provider), \
-             patch("aeros.ai.factory.get_vision_provider", return_value=None):
+        with (
+            patch("aeros.ai.factory.get_chat_provider", return_value=mock_provider),
+            patch("aeros.ai.factory.get_vision_provider", return_value=None),
+        ):
             vendor_auth_client.post(
                 f"/api/vendor/rfx/{rfx_with_thread.id}/upload",
                 files={"file": ("prices.csv", io.BytesIO(csv_content), "text/csv")},
@@ -297,9 +319,7 @@ class TestVendorUploadFlow:
         assert resp.status_code == 200
 
         # Verify message appears in thread
-        thread_resp = vendor_auth_client.get(
-            f"/api/vendor/rfx/{rfx_with_thread.id}/thread"
-        )
+        thread_resp = vendor_auth_client.get(f"/api/vendor/rfx/{rfx_with_thread.id}/thread")
         assert thread_resp.status_code == 200
         messages = thread_resp.json()
         texts = [m["body_text"] for m in messages]

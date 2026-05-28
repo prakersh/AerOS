@@ -38,7 +38,12 @@ class TestChat:
         )
         mock_resp = _make_mock_response(content="Hello world", tokens_in=15, tokens_out=25)
 
-        with patch.object(provider._client.chat.completions, "create", new_callable=AsyncMock, return_value=mock_resp):
+        with patch.object(
+            provider._client.chat.completions,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
+        ):
             messages = [ChatMessage(role="user", content="Hi")]
             result = await provider.chat(messages)
 
@@ -53,7 +58,12 @@ class TestChat:
         )
         mock_resp = _make_mock_response()
 
-        with patch.object(provider._client.chat.completions, "create", new_callable=AsyncMock, return_value=mock_resp) as mock_create:
+        with patch.object(
+            provider._client.chat.completions,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
+        ) as mock_create:
             messages = [ChatMessage(role="user", content="test")]
             await provider.chat(messages, model="custom-model")
 
@@ -67,12 +77,22 @@ class TestChat:
         )
         mock_resp = _make_mock_response()
 
-        with patch.object(provider._client.chat.completions, "create", new_callable=AsyncMock, return_value=mock_resp) as mock_create:
+        with patch.object(
+            provider._client.chat.completions,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
+        ) as mock_create:
             messages = [ChatMessage(role="user", content="test")]
-            await provider.chat(messages, response_format={"type": "json_object"})
+            await provider.chat(
+                messages,
+                response_format={"type": "json_object"},
+            )
 
             call_kwargs = mock_create.call_args[1]
-            assert call_kwargs["response_format"] == {"type": "json_object"}
+            assert call_kwargs["response_format"] == {
+                "type": "json_object",
+            }
 
     async def test_chat_with_no_usage(self):
         """Should handle missing usage gracefully."""
@@ -82,7 +102,12 @@ class TestChat:
         mock_resp = _make_mock_response()
         mock_resp.usage = None
 
-        with patch.object(provider._client.chat.completions, "create", new_callable=AsyncMock, return_value=mock_resp):
+        with patch.object(
+            provider._client.chat.completions,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
+        ):
             messages = [ChatMessage(role="user", content="test")]
             result = await provider.chat(messages)
 
@@ -98,8 +123,16 @@ class TestVision:
         )
         mock_resp = _make_mock_response(content="Image description")
 
-        with patch.object(provider._client.chat.completions, "create", new_callable=AsyncMock, return_value=mock_resp):
-            result = await provider.vision(b"fake-image", "Describe this")
+        with patch.object(
+            provider._client.chat.completions,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
+        ):
+            result = await provider.vision(
+                b"fake-image",
+                "Describe this",
+            )
 
         assert result.content == "Image description"
 
@@ -110,8 +143,17 @@ class TestVision:
         )
         mock_resp = _make_mock_response()
 
-        with patch.object(provider._client.chat.completions, "create", new_callable=AsyncMock, return_value=mock_resp) as mock_create:
-            await provider.vision(b"data", "prompt", mime_type="image/png")
+        with patch.object(
+            provider._client.chat.completions,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
+        ) as mock_create:
+            await provider.vision(
+                b"data",
+                "prompt",
+                mime_type="image/png",
+            )
 
             call_kwargs = mock_create.call_args[1]
             content = call_kwargs["messages"][0]["content"]
@@ -127,7 +169,12 @@ class TestEmbed:
         )
         mock_resp = _make_mock_embedding_response(dim=8)
 
-        with patch.object(provider._client.embeddings, "create", new_callable=AsyncMock, return_value=mock_resp):
+        with patch.object(
+            provider._client.embeddings,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
+        ):
             result = await provider.embed(["hello", "world"])
 
         assert len(result) == 1

@@ -83,9 +83,7 @@ async def extract_offer_from_attachment(
                     session.add(rv)
 
                 session.commit()
-                logger.info(
-                    "extract.success", rfx_id=rfx_id, vendor_id=vendor_id
-                )
+                logger.info("extract.success", rfx_id=rfx_id, vendor_id=vendor_id)
                 return True
             else:
                 attachment.extraction_status = ExtractionStatus.FAILED

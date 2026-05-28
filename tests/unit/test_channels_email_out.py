@@ -15,7 +15,7 @@ class TestSendRfxInvitation:
                 vendor_name="Test Vendor",
                 rfx_title="Q3 Vegetables",
                 rfx_summary="Need 100kg rice",
-                correlation_token="abc123token_long_enough_here",
+                correlation_token="abc123token_long_enough_here",  # noqa: S106
                 portal_url="http://localhost:5173/portal/abc",
             )
             assert result is True
@@ -32,7 +32,7 @@ class TestSendRfxInvitation:
                 vendor_name="Test Vendor",
                 rfx_title="Test RFx",
                 rfx_summary="Summary",
-                correlation_token="tok123",
+                correlation_token="tok123",  # noqa: S106
                 portal_url="http://localhost",
             )
             assert result is False

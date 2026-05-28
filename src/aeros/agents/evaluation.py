@@ -32,9 +32,7 @@ class EvaluationAgent(BaseAgent):
 
         # Attachments
         attachments = list(
-            ctx.session.exec(
-                select(Attachment).where(Attachment.message_id == message_id)
-            ).all()
+            ctx.session.exec(select(Attachment).where(Attachment.message_id == message_id)).all()
         )
         for att in attachments:
             try:
@@ -112,8 +110,10 @@ class EvaluationAgent(BaseAgent):
 
         ctx.session.commit()
 
+        item_count = len(extracted.line_items)
+        confidence = f"{extracted.confidence_overall:.0%}"
         return AgentResult(
-            message=f"Extracted {len(extracted.line_items)} line items with {extracted.confidence_overall:.0%} confidence",
+            message=f"Extracted {item_count} line items with {confidence} confidence",
             data=offer_data,
             success=True,
         )

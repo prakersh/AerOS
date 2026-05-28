@@ -1,5 +1,17 @@
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import {
+  KpiCard,
+  StatusBadge,
+  PageHeader,
+  LoadingSpinner,
+  EmptyState,
+  Modal,
+  DetailView,
+  FilterChips,
+} from "@/components/ui";
+import { formatTimestampAbsolute, formatCost, formatPercent } from "@/lib/format";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -28,106 +40,82 @@ interface ObservabilityDashboardProps {
 }
 
 /* ------------------------------------------------------------------ */
-/* KPI card                                                            */
+/* Constants                                                            */
 /* ------------------------------------------------------------------ */
-
-function KpiCard({
-  label,
-  value,
-  accent = "text-zinc-100",
-}: {
-  label: string;
-  value: string | number;
-  accent?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-      <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-        {label}
-      </p>
-      <p className={`mt-2 text-3xl font-semibold tabular-nums ${accent}`}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Helpers                                                             */
-/* ------------------------------------------------------------------ */
-
-function formatTimestamp(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatCost(cost: number): string {
-  return `$${cost.toFixed(4)}`;
-}
-
-function formatPercent(rate: number): string {
-  return `${rate.toFixed(1)}%`;
-}
-
-const STATUS_STYLES: Record<string, string> = {
-  success: "bg-green-900/40 text-green-400",
-  ok: "bg-green-900/40 text-green-400",
-  error: "bg-red-900/40 text-red-400",
-  failed: "bg-red-900/40 text-red-400",
-};
 
 const SCOPE_SUBTITLE: Record<ObservabilityDashboardProps["scope"], string> = {
   buyer: "AI call telemetry, latency tracking, and cost reporting.",
   admin: "Cross-tenant AI telemetry, latency distributions, and cost dashboards.",
 };
 
+const DAY_FILTER_OPTIONS = [
+  { label: "7 days", value: "7" },
+  { label: "14 days", value: "14" },
+  { label: "30 days", value: "30" },
+  { label: "90 days", value: "90" },
+];
+
 /* ------------------------------------------------------------------ */
 /* Main Component                                                      */
 /* ------------------------------------------------------------------ */
 
 export default function ObservabilityDashboard({ scope }: ObservabilityDashboardProps) {
+  const [days, setDays] = useState("7");
+  const [modelFilter, setModelFilter] = useState("all");
+  const [selectedCall, setSelectedCall] = useState<LLMCall | null>(null);
+
   const {
     data: summary,
     isLoading: summaryLoading,
   } = useQuery<ObservabilitySummary>({
-    queryKey: [scope, "observability", "summary"],
+    queryKey: [scope, "observability", "summary", days],
     queryFn: () =>
-      api.get<ObservabilitySummary>("/api/observability/summary?days=7"),
+      api.get<ObservabilitySummary>(`/api/observability/summary?days=${days}`),
   });
 
   const {
     data: calls = [],
     isLoading: callsLoading,
   } = useQuery<LLMCall[]>({
-    queryKey: [scope, "observability", "calls"],
-    queryFn: () => api.get<LLMCall[]>("/api/observability/calls?limit=50"),
+    queryKey: [scope, "observability", "calls", days],
+    queryFn: () => api.get<LLMCall[]>(`/api/observability/calls?limit=50&days=${days}`),
   });
 
   const isLoading = summaryLoading || callsLoading;
 
+  /* Extract unique models for dropdown filter */
+  const uniqueModels = useMemo(() => {
+    const models = new Set(calls.map((c) => c.model));
+    return Array.from(models).sort();
+  }, [calls]);
+
+  /* Filtered calls by model */
+  const filteredCalls = useMemo(
+    () =>
+      modelFilter === "all"
+        ? calls
+        : calls.filter((c) => c.model === modelFilter),
+    [calls, modelFilter],
+  );
+
   return (
     <div className="space-y-6 p-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">Observability</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          {SCOPE_SUBTITLE[scope]}
-        </p>
-      </div>
+      <PageHeader
+        title="Observability"
+        subtitle={SCOPE_SUBTITLE[scope]}
+      />
 
       {/* Loading state */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-indigo-500" />
-          <span className="ml-3 text-sm text-zinc-500">Loading telemetry...</span>
-        </div>
+      {isLoading && <LoadingSpinner message="Loading telemetry..." />}
+
+      {/* Date range filter */}
+      {!isLoading && (
+        <FilterChips
+          options={DAY_FILTER_OPTIONS}
+          active={days}
+          onChange={setDays}
+        />
       )}
 
       {/* Summary cards */}
@@ -161,6 +149,25 @@ export default function ObservabilityDashboard({ scope }: ObservabilityDashboard
         </div>
       )}
 
+      {/* Model filter dropdown */}
+      {!isLoading && uniqueModels.length > 1 && (
+        <div className="flex items-center gap-3">
+          <label className="text-xs font-medium text-zinc-500">Model:</label>
+          <select
+            value={modelFilter}
+            onChange={(e) => setModelFilter(e.target.value)}
+            className="rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-sm text-zinc-200 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+          >
+            <option value="all">All Models</option>
+            {uniqueModels.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Recent calls table */}
       {!isLoading && (
         <div className="overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-900">
@@ -169,70 +176,99 @@ export default function ObservabilityDashboard({ scope }: ObservabilityDashboard
               Recent LLM Calls
             </h2>
           </div>
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-zinc-800">
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                  Model
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                  Tokens
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                  Latency
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                  Cost
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                  Status
-                </th>
-                <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
-                  Timestamp
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-800/60">
-              {calls.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm text-zinc-600">
-                    No LLM calls recorded yet.
-                  </td>
+
+          {filteredCalls.length === 0 ? (
+            <div className="p-6">
+              <EmptyState
+                title="No LLM calls recorded"
+                description={
+                  modelFilter !== "all"
+                    ? "No calls match the selected model filter."
+                    : "No LLM calls recorded for this period."
+                }
+              />
+            </div>
+          ) : (
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-zinc-800">
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Model
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Tokens
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Latency
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Cost
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+                    Timestamp
+                  </th>
                 </tr>
-              )}
-              {calls.map((call) => (
-                <tr
-                  key={call.id}
-                  className="transition hover:bg-zinc-800/40"
-                >
-                  <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-300">
-                    {call.model}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-400">
-                    {call.total_tokens.toLocaleString()}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-400">
-                    {call.latency_ms}ms
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-400">
-                    {formatCost(call.cost_usd)}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3">
-                    <span
-                      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${STATUS_STYLES[call.status.toLowerCase()] ?? "bg-zinc-700/50 text-zinc-400"}`}
-                    >
-                      {call.status}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-500">
-                    {formatTimestamp(call.created_at)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-zinc-800/60">
+                {filteredCalls.map((call) => (
+                  <tr
+                    key={call.id}
+                    className="cursor-pointer transition hover:bg-zinc-800/40"
+                    onClick={() => setSelectedCall(call)}
+                  >
+                    <td className="whitespace-nowrap px-4 py-3 font-mono text-xs text-zinc-300">
+                      {call.model}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-400">
+                      {call.total_tokens.toLocaleString()}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-400">
+                      {call.latency_ms}ms
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-400">
+                      {formatCost(call.cost_usd)}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3">
+                      <StatusBadge
+                        status={call.status}
+                        variant="health"
+                      />
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-500">
+                      {formatTimestampAbsolute(call.created_at)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
+
+      {/* LLM Call Detail Modal */}
+      <Modal
+        open={!!selectedCall}
+        onClose={() => setSelectedCall(null)}
+        title="LLM Call Details"
+        size="md"
+      >
+        {selectedCall && (
+          <DetailView
+            items={[
+              { label: "Model", value: selectedCall.model },
+              { label: "Total Tokens", value: selectedCall.total_tokens.toLocaleString() },
+              { label: "Latency", value: `${selectedCall.latency_ms}ms` },
+              { label: "Cost", value: formatCost(selectedCall.cost_usd) },
+              { label: "Status", value: selectedCall.status },
+              { label: "Timestamp", value: formatTimestampAbsolute(selectedCall.created_at) },
+            ]}
+            columns={2}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

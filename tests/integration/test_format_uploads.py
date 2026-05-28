@@ -56,24 +56,26 @@ def _extraction_json(
     total_quote: float = 46100.0,
 ) -> str:
     """Return realistic extraction JSON for mocked LLM responses."""
-    return json.dumps({
-        "line_items": [
-            {
-                "sku_name": sku_name,
-                "qty": qty,
-                "unit": unit,
-                "unit_price": unit_price,
-                "total": total,
-                "confidence_per_field": {"unit_price": 0.95, "qty": 0.98},
-            },
-        ],
-        "total_quote": total_quote,
-        "currency": "INR",
-        "payment_terms": "NET15",
-        "delivery_terms": "doorstep",
-        "lead_time_hours": 24,
-        "confidence_overall": 0.92,
-    })
+    return json.dumps(
+        {
+            "line_items": [
+                {
+                    "sku_name": sku_name,
+                    "qty": qty,
+                    "unit": unit,
+                    "unit_price": unit_price,
+                    "total": total,
+                    "confidence_per_field": {"unit_price": 0.95, "qty": 0.98},
+                },
+            ],
+            "total_quote": total_quote,
+            "currency": "INR",
+            "payment_terms": "NET15",
+            "delivery_terms": "doorstep",
+            "lead_time_hours": 24,
+            "confidence_overall": 0.92,
+        }
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -157,9 +159,13 @@ def dispatched_rfx(session, buyer_user, sku, vendor_record):
         buyer_id=buyer_user.id,
         title="Multi-Format Upload Test RFx",
     )
-    rfx_service.add_line_items(session, rfx.id, [
-        {"sku_id": sku.id, "qty": 200, "unit_override": "ltr", "target_price": 55.0},
-    ])
+    rfx_service.add_line_items(
+        session,
+        rfx.id,
+        [
+            {"sku_id": sku.id, "qty": 200, "unit_override": "ltr", "target_price": 55.0},
+        ],
+    )
 
     rfx_service.invite_vendor(session, rfx.id, vendor.id, "token-hash-fmt-test")
     rfx_service.dispatch_rfx(session, rfx.id, buyer_user.id)
@@ -169,7 +175,7 @@ def dispatched_rfx(session, buyer_user, sku, vendor_record):
 @pytest.fixture
 def vendor_auth_client(client, vendor_record):
     """TestClient authenticated as the format-test vendor."""
-    user, _ = vendor_record
+    _user, _ = vendor_record
     resp = client.post(
         "/api/auth/login",
         json={"email": "format-vendor@test.com", "password": "test123"},
@@ -464,9 +470,7 @@ class TestExtractionMimeRouting:
         mock_vision = AsyncMock()
         from aeros.ai.base import VisionResponse
 
-        mock_vision.vision.return_value = VisionResponse(
-            content="Extracted text from image"
-        )
+        mock_vision.vision.return_value = VisionResponse(content="Extracted text from image")
 
         with (
             open(filepath, "rb") as f,
@@ -484,9 +488,7 @@ class TestExtractionMimeRouting:
         # Verify the Attachment record has the correct MIME type
         from sqlmodel import select
 
-        att = session.exec(
-            select(Attachment).where(Attachment.id == data["attachment_id"])
-        ).first()
+        att = session.exec(select(Attachment).where(Attachment.id == data["attachment_id"])).first()
         assert att is not None
         assert att.mime_type == mime_type
 
@@ -533,9 +535,7 @@ class TestOfferCreation:
         mock_vision = AsyncMock()
         from aeros.ai.base import VisionResponse
 
-        mock_vision.vision.return_value = VisionResponse(
-            content="Extracted text from image"
-        )
+        mock_vision.vision.return_value = VisionResponse(content="Extracted text from image")
 
         with (
             open(filepath, "rb") as f,

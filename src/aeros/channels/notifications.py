@@ -1,5 +1,6 @@
 """Unified notification fan-out across channels (in-app, email, Telegram)."""
 
+import contextlib
 import json
 
 import structlog
@@ -43,10 +44,8 @@ async def notify_vendor(
     if vendor.vendor_user_id:
         user = session.get(User, vendor.vendor_user_id)
         if user and user.notification_prefs_json:
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 prefs = json.loads(user.notification_prefs_json)
-            except json.JSONDecodeError:
-                pass
 
     if prefs.get("in_app") and thread_id:
         from aeros.channels.in_app import deliver_in_app

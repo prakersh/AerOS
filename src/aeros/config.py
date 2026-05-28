@@ -15,14 +15,16 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///data/aeros.db"
 
-    jwt_secret: str = "change-me"
+    jwt_secret: str = "change-me"  # noqa: S105
     jwt_access_ttl_min: int = 15
     jwt_refresh_ttl_days: int = 7
-    hmac_secret: str = "change-me"
+    hmac_secret: str = "change-me"  # noqa: S105
 
+    mimo_api_key: str = ""
+    mimo_base_url: str = "https://token-plan-sgp.xiaomimimo.com/v1"
+    default_chat_model: str = "mimo-v2.5"
+    default_vision_model: str = "mimo-v2.5"
     nvidia_api_key: str = ""
-    default_chat_model: str = "nvidia/llama-3.1-nemotron-70b-instruct"
-    default_vision_model: str = "meta/llama-3.2-90b-vision-instruct"
     default_embed_model: str = "nvidia/nv-embed-v1"
 
     groq_api_key: str = ""
@@ -42,6 +44,8 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""
+
+    show_demo_credentials: bool = True
 
     frontend_url: str = "http://localhost:5173"
     cors_allowed_origins: str = "http://localhost:5173"

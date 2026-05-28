@@ -6,7 +6,7 @@ from datetime import datetime
 from sqlmodel import Field, SQLModel
 
 
-class ProviderStatus(str, enum.Enum):
+class ProviderStatus(enum.StrEnum):
     ACTIVE = "active"
     DISABLED = "disabled"
     ERROR = "error"
@@ -14,8 +14,8 @@ class ProviderStatus(str, enum.Enum):
 
 class AIProviderConfig(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    provider_name: str = Field(index=True)  # "nvidia_nim", "groq", "anthropic"
-    model_id: str  # "nvidia/llama-3.1-nemotron-70b-instruct"
+    provider_name: str = Field(index=True)  # "mimo", "nvidia_nim", "groq", "anthropic"
+    model_id: str  # "mimo-v2.5"
     display_name: str = ""
     capability: str = "chat"  # chat, vision, asr, embedding
     is_default: bool = False

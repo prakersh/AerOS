@@ -58,9 +58,7 @@ async def telegram_webhook(
     if text.startswith("/start "):
         token = text.split(" ", 1)[1].strip()
         logger.info("telegram.start", chat_id=chat_id, token=token[:8])
-        vendor = session.exec(
-            select(Vendor).where(Vendor.telegram_chat_id == token)
-        ).first()
+        vendor = session.exec(select(Vendor).where(Vendor.telegram_chat_id == token)).first()
         if vendor:
             vendor.telegram_chat_id = chat_id
             session.add(vendor)
@@ -72,9 +70,7 @@ async def telegram_webhook(
         return {"ok": True}
 
     # Look up vendor by chat_id
-    vendor = session.exec(
-        select(Vendor).where(Vendor.telegram_chat_id == chat_id)
-    ).first()
+    vendor = session.exec(select(Vendor).where(Vendor.telegram_chat_id == chat_id)).first()
     if not vendor:
         await telegram_bot.send_message(
             chat_id,
@@ -84,9 +80,7 @@ async def telegram_webhook(
 
     # Find the most recent thread for this vendor
     thread = session.exec(
-        select(Thread)
-        .where(Thread.vendor_id == vendor.id)
-        .order_by(Thread.created_at.desc())
+        select(Thread).where(Thread.vendor_id == vendor.id).order_by(Thread.created_at.desc())
     ).first()
     if not thread:
         await telegram_bot.send_message(chat_id, "No active RFQ thread found.")
@@ -123,9 +117,7 @@ async def telegram_webhook(
         mime_type = "image/jpeg"
 
     if file_id:
-        save_dir = os.path.join(
-            settings.upload_dir, str(thread.rfx_id), str(vendor.id)
-        )
+        save_dir = os.path.join(settings.upload_dir, str(thread.rfx_id), str(vendor.id))
         local_path = await telegram_bot.download_file(file_id, save_dir)
         if local_path:
             size = os.path.getsize(local_path)

@@ -51,6 +51,7 @@ class TestHMACVerification:
     def test_no_dot_returns_none(self):
         """Token without a dot separator should return None."""
         from aeros.security.hmac import verify_correlation_token
+
         assert verify_correlation_token("noseparator") is None
 
 

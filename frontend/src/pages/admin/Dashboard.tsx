@@ -1,8 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import {
+  KpiCard,
+  StatusBadge,
+  PageHeader,
+  LoadingSpinner,
+  ErrorState,
+} from "@/components/ui";
+import { formatTimestampAbsolute } from "@/lib/format";
+import type { AuditEntry } from "@/types";
 
 /* ------------------------------------------------------------------ */
-/* Types                                                               */
+/* Page-specific types & data                                          */
 /* ------------------------------------------------------------------ */
 
 interface AdminStats {
@@ -13,71 +22,17 @@ interface AdminStats {
   total_extractions: number;
 }
 
-interface AuditEntry {
-  id: number;
-  action: string;
-  actor_name: string;
-  actor_role: string;
-  entity_type: string;
-  entity_id: string;
-  details: Record<string, unknown>;
-  created_at: string;
-}
-
 interface SystemService {
   name: string;
   status: "healthy" | "degraded" | "down";
   detail: string;
 }
 
-/* ------------------------------------------------------------------ */
-/* Sub-components                                                      */
-/* ------------------------------------------------------------------ */
-
-function KpiCard({
-  label,
-  value,
-  accent = "text-zinc-100",
-}: {
-  label: string;
-  value: number;
-  accent?: string;
-}) {
-  return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-5">
-      <p className="text-xs font-medium uppercase tracking-wider text-zinc-500">
-        {label}
-      </p>
-      <p className={`mt-2 text-3xl font-semibold tabular-nums ${accent}`}>
-        {value}
-      </p>
-    </div>
-  );
-}
-
-const HEALTH_STYLES: Record<SystemService["status"], string> = {
-  healthy: "bg-green-900/40 text-green-400",
-  degraded: "bg-amber-900/40 text-amber-400",
-  down: "bg-red-900/40 text-red-400",
-};
-
 const SERVICES: SystemService[] = [
   { name: "API", status: "healthy", detail: "All endpoints responding" },
   { name: "AI Provider", status: "healthy", detail: "NVIDIA NIM" },
   { name: "Database", status: "healthy", detail: "SQLite (WAL mode)" },
 ];
-
-function formatTimestamp(iso: string): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "—";
-  return d.toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function actionLabel(entry: AuditEntry): string {
   const details = entry.details;
@@ -102,7 +57,7 @@ function actionLabel(entry: AuditEntry): string {
 /* ------------------------------------------------------------------ */
 
 export default function AdminDashboard() {
-  const { data: stats } = useQuery<AdminStats>({
+  const { data: stats, isLoading, error, refetch } = useQuery<AdminStats>({
     queryKey: ["admin", "stats"],
     queryFn: () => api.get<AdminStats>("/api/admin/stats"),
   });
@@ -112,18 +67,17 @@ export default function AdminDashboard() {
     queryFn: () => api.get<AuditEntry[]>("/api/admin/audit"),
   });
 
+  if (isLoading) return <LoadingSpinner message="Loading dashboard..." />;
+  if (error) return <ErrorState message="Failed to load dashboard." onRetry={refetch} />;
+
   const recentAudit = audit.slice(0, 5);
 
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">
-          Admin Dashboard
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          System-wide metrics, user activity, and AI usage.
-        </p>
-      </div>
+      <PageHeader
+        title="Admin Dashboard"
+        subtitle="System-wide metrics, user activity, and AI usage."
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard label="Total Users" value={stats?.total_users ?? 0} accent="text-indigo-400" />
@@ -151,7 +105,7 @@ export default function AdminDashboard() {
                   <p className="mt-0.5 text-xs text-zinc-500">{entry.actor_name}</p>
                 </div>
                 <span className="shrink-0 text-[11px] tabular-nums text-zinc-600">
-                  {formatTimestamp(entry.created_at)}
+                  {formatTimestampAbsolute(entry.created_at)}
                 </span>
               </div>
             ))}
@@ -172,11 +126,7 @@ export default function AdminDashboard() {
                   <p className="text-sm font-medium text-zinc-200">{svc.name}</p>
                   <p className="mt-0.5 text-xs text-zinc-500">{svc.detail}</p>
                 </div>
-                <span
-                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${HEALTH_STYLES[svc.status]}`}
-                >
-                  {svc.status}
-                </span>
+                <StatusBadge status={svc.status} variant="health" />
               </div>
             ))}
           </div>

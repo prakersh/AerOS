@@ -1,5 +1,7 @@
 """Tests for system_setting model and db module."""
 
+import contextlib
+
 from aeros.models.system_setting import SystemSetting
 
 
@@ -44,7 +46,5 @@ class TestDBModule:
         session = next(gen)
         assert session is not None
         # Clean up
-        try:
+        with contextlib.suppress(StopIteration):
             next(gen)
-        except StopIteration:
-            pass

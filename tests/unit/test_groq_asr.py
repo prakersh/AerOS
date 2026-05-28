@@ -25,8 +25,10 @@ class TestGroqASRProvider:
         mock_resp.duration = 5.2
 
         with patch.object(
-            provider._client.audio.transcriptions, "create",
-            new_callable=AsyncMock, return_value=mock_resp
+            provider._client.audio.transcriptions,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
         ):
             result = await provider.transcribe(b"fake-audio-data")
 
@@ -42,8 +44,10 @@ class TestGroqASRProvider:
         mock_resp.duration = 2.0
 
         with patch.object(
-            provider._client.audio.transcriptions, "create",
-            new_callable=AsyncMock, return_value=mock_resp
+            provider._client.audio.transcriptions,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
         ) as mock_create:
             await provider.transcribe(b"audio", language="hi")
             call_kwargs = mock_create.call_args[1]
@@ -58,8 +62,10 @@ class TestGroqASRProvider:
         mock_resp.duration = 1.0
 
         with patch.object(
-            provider._client.audio.transcriptions, "create",
-            new_callable=AsyncMock, return_value=mock_resp
+            provider._client.audio.transcriptions,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
         ) as mock_create:
             await provider.transcribe(b"audio")
             call_kwargs = mock_create.call_args[1]
@@ -74,8 +80,10 @@ class TestGroqASRProvider:
         del mock_resp.duration  # Simulate missing attribute
 
         with patch.object(
-            provider._client.audio.transcriptions, "create",
-            new_callable=AsyncMock, return_value=mock_resp
+            provider._client.audio.transcriptions,
+            "create",
+            new_callable=AsyncMock,
+            return_value=mock_resp,
         ):
             result = await provider.transcribe(b"audio")
 

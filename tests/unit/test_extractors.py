@@ -34,7 +34,8 @@ class TestRouter:
         """Word MIME types should route to extract_word."""
         from aeros.ai.extractors.router import MIME_ROUTER
 
-        assert "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in MIME_ROUTER
+        word_mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+        assert word_mime in MIME_ROUTER
         assert "application/msword" in MIME_ROUTER
 
     async def test_routes_html_and_text(self):
@@ -62,10 +63,18 @@ class TestRouter:
         mock_vp.vision.return_value = VisionResponse(content="extracted text")
 
         with patch("aeros.ai.extractors.image.open", create=True):
-            result = await route_extraction(str(fake_image), "image/jpeg", vision_provider=mock_vp)
+            result = await route_extraction(
+                str(fake_image),
+                "image/jpeg",
+                vision_provider=mock_vp,
+            )
 
         # Should have called the vision provider
-        assert mock_vp.vision.called or "vision provider" in result.lower() or "extracted" in result.lower()
+        assert (
+            mock_vp.vision.called
+            or "vision provider" in result.lower()
+            or "extracted" in result.lower()
+        )
 
 
 # ---- email_body tests ----
@@ -180,7 +189,7 @@ class TestSpreadsheetExtractor:
         assert "1 | 2" in result
         assert "3 | 4" in result
         # The row with just commas (empty after strip) should be skipped
-        lines = [l for l in result.strip().split("\n") if l.strip()]
+        lines = [line for line in result.strip().split("\n") if line.strip()]
         assert len(lines) == 3  # header + 2 data rows
 
     async def test_excel_extraction(self, tmp_path):
@@ -347,7 +356,8 @@ class TestImageExtractor:
 
         await extract_image(str(f), vision_provider=mock_vp)
         call_args = mock_vp.vision.call_args
-        assert call_args.kwargs.get("mime_type") == "image/png" or call_args[1].get("mime_type") == "image/png"
+        mt = call_args.kwargs.get("mime_type") or call_args[1].get("mime_type")
+        assert mt == "image/png"
 
     async def test_image_detects_mime_type_webp(self, tmp_path):
         """WebP files should use image/webp mime type."""
@@ -361,4 +371,5 @@ class TestImageExtractor:
 
         await extract_image(str(f), vision_provider=mock_vp)
         call_args = mock_vp.vision.call_args
-        assert call_args.kwargs.get("mime_type") == "image/webp" or call_args[1].get("mime_type") == "image/webp"
+        mt = call_args.kwargs.get("mime_type") or call_args[1].get("mime_type")
+        assert mt == "image/webp"

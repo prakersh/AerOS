@@ -1,21 +1,32 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import {
+  PageHeader,
+  LoadingSpinner,
+  ErrorState,
+  EmptyState,
+  Modal,
+  DetailView,
+  FilterChips,
+} from "@/components/ui";
+import { formatTimestamp } from "@/lib/format";
+import type { ActivityEntry } from "@/types";
 
 /* ------------------------------------------------------------------ */
-/* Types                                                               */
+/* Filter options                                                       */
 /* ------------------------------------------------------------------ */
 
-interface ActivityEntry {
-  id: number;
-  action: string;
-  entity_type: string;
-  entity_id: string;
-  details: Record<string, unknown>;
-  created_at: string;
-}
+const ACTION_FILTER_OPTIONS = [
+  { label: "All", value: "all" },
+  { label: "Create RFx", value: "create_rfx" },
+  { label: "Dispatch RFx", value: "dispatch_rfx" },
+  { label: "Award RFx", value: "award_rfx" },
+  { label: "Cancel RFx", value: "cancel_rfx" },
+];
 
 /* ------------------------------------------------------------------ */
-/* Styles                                                              */
+/* Styles (page-specific)                                               */
 /* ------------------------------------------------------------------ */
 
 const ACTION_BORDER: Record<string, string> = {
@@ -32,6 +43,10 @@ const ACTION_ICON: Record<string, string> = {
   award_rfx: "M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
   cancel_rfx: "M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z",
 };
+
+/* ------------------------------------------------------------------ */
+/* Action label (page-specific logic)                                  */
+/* ------------------------------------------------------------------ */
 
 function actionLabel(entry: ActivityEntry): string {
   const d = entry.details;
@@ -51,65 +66,73 @@ function actionLabel(entry: ActivityEntry): string {
   }
 }
 
-function formatTimestamp(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  const now = new Date();
-  const diff = now.getTime() - d.getTime();
-  if (diff < 60_000) return "Just now";
-  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
-  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-}
-
 /* ------------------------------------------------------------------ */
 /* Main Component                                                      */
 /* ------------------------------------------------------------------ */
 
 export default function Activity() {
+  const [actionFilter, setActionFilter] = useState("all");
+  const [selectedEntry, setSelectedEntry] = useState<ActivityEntry | null>(null);
+
   const { data: entries = [], isLoading, error } = useQuery<ActivityEntry[]>({
     queryKey: ["buyer", "activity"],
     queryFn: () => api.get<ActivityEntry[]>("/api/buyer/activity"),
   });
 
+  /* Filtered entries */
+  const filteredEntries =
+    actionFilter === "all"
+      ? entries
+      : entries.filter((e) => e.action === actionFilter);
+
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">Activity</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Recent actions and event timeline.
-        </p>
-      </div>
+      <PageHeader
+        title="Activity"
+        subtitle="Recent actions and event timeline."
+      />
 
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-indigo-500" />
-          <span className="ml-3 text-sm text-zinc-500">Loading activity...</span>
-        </div>
-      )}
+      {isLoading && <LoadingSpinner message="Loading activity..." />}
 
       {error && !isLoading && (
-        <div className="rounded-xl border border-red-800/50 bg-red-900/20 p-4">
-          <p className="text-sm text-red-400">Failed to load activity.</p>
-        </div>
+        <ErrorState message="Failed to load activity." />
       )}
 
-      {!isLoading && !error && entries.length === 0 && (
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-8 text-center">
-          <p className="text-sm text-zinc-500">No activity yet. Start by drafting an RFx.</p>
-        </div>
+      {!isLoading && !error && (
+        <FilterChips
+          options={ACTION_FILTER_OPTIONS}
+          active={actionFilter}
+          onChange={setActionFilter}
+        />
       )}
 
-      {!isLoading && !error && entries.length > 0 && (
+      {!isLoading && !error && filteredEntries.length === 0 && (
+        <EmptyState
+          title="No activity found"
+          description={
+            actionFilter !== "all"
+              ? "No activity matches the selected filter."
+              : "No activity yet. Start by drafting an RFx."
+          }
+          action={
+            actionFilter !== "all"
+              ? { label: "Clear filter", onClick: () => setActionFilter("all") }
+              : { label: "Draft your first request", to: "/buyer/chat" }
+          }
+        />
+      )}
+
+      {!isLoading && !error && filteredEntries.length > 0 && (
         <div className="space-y-2">
-          {entries.map((entry) => {
+          {filteredEntries.map((entry) => {
             const borderClass = ACTION_BORDER[entry.action] ?? "border-l-zinc-700";
             const iconPath = ACTION_ICON[entry.action] ?? "M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z";
             return (
-              <div
+              <button
                 key={entry.id}
-                className={`flex items-start gap-4 rounded-lg border border-zinc-800 border-l-4 bg-zinc-900 px-4 py-3 ${borderClass}`}
+                type="button"
+                onClick={() => setSelectedEntry(entry)}
+                className={`flex w-full items-start gap-4 rounded-lg border border-zinc-800 border-l-4 bg-zinc-900 px-4 py-3 text-left transition hover:bg-zinc-800/50 ${borderClass}`}
               >
                 <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-800">
                   <svg className="h-4 w-4 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -125,11 +148,38 @@ export default function Activity() {
                 <span className="shrink-0 text-[11px] tabular-nums text-zinc-600">
                   {formatTimestamp(entry.created_at)}
                 </span>
-              </div>
+              </button>
             );
           })}
         </div>
       )}
+
+      {/* Activity Detail Modal */}
+      <Modal
+        open={!!selectedEntry}
+        onClose={() => setSelectedEntry(null)}
+        title="Activity Details"
+        size="md"
+      >
+        {selectedEntry && (
+          <DetailView
+            items={[
+              { label: "Action", value: selectedEntry.action.replace(/_/g, " ") },
+              { label: "Description", value: actionLabel(selectedEntry) },
+              { label: "Entity Type", value: selectedEntry.entity_type },
+              { label: "Entity ID", value: selectedEntry.entity_id },
+              {
+                label: "Details",
+                value: Object.keys(selectedEntry.details).length > 0
+                  ? JSON.stringify(selectedEntry.details, null, 2)
+                  : "--",
+              },
+              { label: "Timestamp", value: formatTimestamp(selectedEntry.created_at) },
+            ]}
+            columns={2}
+          />
+        )}
+      </Modal>
     </div>
   );
 }

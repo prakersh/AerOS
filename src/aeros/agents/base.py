@@ -32,5 +32,4 @@ class BaseAgent(ABC):
     name: str = "base"
 
     @abstractmethod
-    async def run(self, ctx: AgentContext, user_input: str) -> AgentResult:
-        ...
+    async def run(self, ctx: AgentContext, user_input: str) -> AgentResult: ...

@@ -1,6 +1,13 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import {
+  PageHeader,
+  LoadingSpinner,
+  ErrorState,
+  ConfirmDialog,
+  Toast,
+} from "@/components/ui";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -45,18 +52,18 @@ function sectionForKey(key: string): string {
 
 function SettingRow({
   setting,
-  onSave,
+  onInitSave,
   isSaving,
 }: {
   setting: SettingItem;
-  onSave: (key: string, value: string) => void;
+  onInitSave: (key: string, value: string) => void;
   isSaving: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(setting.value);
 
   const handleSave = () => {
-    onSave(setting.key, draft);
+    onInitSave(setting.key, draft);
     setEditing(false);
   };
 
@@ -134,6 +141,7 @@ export default function AdminSettings() {
     data: settings = [],
     isLoading,
     error,
+    refetch,
   } = useQuery<SettingItem[]>({
     queryKey: ["admin", "settings"],
     queryFn: () => api.get<SettingItem[]>("/api/admin/settings"),
@@ -147,9 +155,31 @@ export default function AdminSettings() {
     },
   });
 
-  const handleSave = (key: string, value: string) => {
-    updateMutation.mutate({ key, value });
-  };
+  /* --- confirmation + toast state --- */
+  const [confirmTarget, setConfirmTarget] = useState<{ key: string; value: string } | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const handleInitSave = useCallback((key: string, value: string) => {
+    setConfirmTarget({ key, value });
+  }, []);
+
+  const handleConfirmSave = useCallback(() => {
+    if (!confirmTarget) return;
+    updateMutation.mutate(
+      { key: confirmTarget.key, value: confirmTarget.value },
+      {
+        onSuccess: () => {
+          setToast(`Setting "${confirmTarget.key}" updated successfully.`);
+        },
+        onError: () => {
+          setToast(`Failed to update "${confirmTarget.key}".`);
+        },
+        onSettled: () => {
+          setConfirmTarget(null);
+        },
+      },
+    );
+  }, [confirmTarget, updateMutation]);
 
   /** Group settings by inferred section. */
   const grouped = settings.reduce<Record<string, SettingItem[]>>(
@@ -165,47 +195,27 @@ export default function AdminSettings() {
   // Ensure stable ordering of sections
   const sectionOrder = ["Application", "Database", "Upload", "Security"];
   const orderedSections = sectionOrder.filter((s) => grouped[s]);
-  // Add any sections not in the predefined order
   Object.keys(grouped).forEach((s) => {
     if (!orderedSections.includes(s)) orderedSections.push(s);
   });
 
+  if (isLoading) return <LoadingSpinner message="Loading settings..." />;
+  if (error) return <ErrorState message="Failed to load settings." onRetry={refetch} />;
+
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">
-          System Settings
-        </h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Retention policies, rate limits, budgets, and system configuration.
-        </p>
-      </div>
-
-      {/* Loading state */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-indigo-500" />
-          <span className="ml-3 text-sm text-zinc-500">Loading settings...</span>
-        </div>
-      )}
-
-      {/* Error state */}
-      {error && !isLoading && (
-        <div className="rounded-xl border border-red-800/50 bg-red-900/20 p-4">
-          <p className="text-sm text-red-400">Failed to load settings.</p>
-        </div>
-      )}
-
-      {/* Update error toast */}
-      {updateMutation.isError && (
-        <div className="rounded-xl border border-red-800/50 bg-red-900/20 p-3">
-          <p className="text-sm text-red-400">Failed to save setting. Please try again.</p>
-        </div>
-      )}
+      <PageHeader
+        title="System Settings"
+        subtitle="Retention policies, rate limits, budgets, and system configuration."
+      />
 
       {/* Config Cards */}
-      {!isLoading && !error && (
+      {settings.length === 0 ? (
+        <p className="text-xs text-zinc-600">
+          No settings found. Configuration may require editing environment
+          variables and restarting the server.
+        </p>
+      ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {orderedSections.map((section) => (
             <div
@@ -238,7 +248,7 @@ export default function AdminSettings() {
                   <SettingRow
                     key={item.key}
                     setting={item}
-                    onSave={handleSave}
+                    onInitSave={handleInitSave}
                     isSaving={updateMutation.isPending}
                   />
                 ))}
@@ -248,12 +258,26 @@ export default function AdminSettings() {
         </div>
       )}
 
-      {/* If no settings were returned at all, show the old static view */}
-      {!isLoading && !error && settings.length === 0 && (
-        <p className="text-xs text-zinc-600">
-          No settings found. Configuration may require editing environment
-          variables and restarting the server.
-        </p>
+      {/* Save confirmation dialog */}
+      <ConfirmDialog
+        open={!!confirmTarget}
+        onClose={() => setConfirmTarget(null)}
+        onConfirm={handleConfirmSave}
+        title="Update Setting"
+        message={`Update ${confirmTarget?.key}? This will change the system setting.`}
+        confirmLabel="Save"
+        confirmVariant="primary"
+        isPending={updateMutation.isPending}
+      />
+
+      {/* Success / error toast */}
+      {toast && (
+        <Toast
+          message={toast}
+          type={updateMutation.isError ? "error" : "success"}
+          onClose={() => setToast(null)}
+          duration={3000}
+        />
       )}
     </div>
   );

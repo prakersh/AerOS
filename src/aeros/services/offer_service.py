@@ -55,11 +55,13 @@ def create_offer_from_extraction(
                 line_item_id = lid
                 break
         confidence_per_field = item.get("confidence_per_field", {})
-        mapped_items.append({
-            **item,
-            "line_item_id": line_item_id,
-            "confidence": confidence_per_field.get("unit_price", item.get("confidence")),
-        })
+        mapped_items.append(
+            {
+                **item,
+                "line_item_id": line_item_id,
+                "confidence": confidence_per_field.get("unit_price", item.get("confidence")),
+            }
+        )
 
     offer = Offer(
         rfx_id=rfx_id,

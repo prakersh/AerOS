@@ -53,12 +53,10 @@ def get_setting(session: Session, key: str) -> str | None:
     try:
         from aeros.models.system_setting import SystemSetting
 
-        setting = session.exec(
-            select(SystemSetting).where(SystemSetting.key == key)
-        ).first()
+        setting = session.exec(select(SystemSetting).where(SystemSetting.key == key)).first()
         if setting:
             return setting.value
-    except Exception:
+    except Exception:  # noqa: S110
         pass
     default = DEFAULT_SETTINGS.get(key)
     return default["value"] if default else None
@@ -83,13 +81,15 @@ def get_all_settings(session: Session) -> list[dict]:
 
     for key, default in DEFAULT_SETTINGS.items():
         db = db_settings.get(key)
-        result.append({
-            "key": key,
-            "value": db.value if db else default["value"],
-            "type": default["type"],
-            "description": default["description"],
-            "source": "database" if db else "default",
-        })
+        result.append(
+            {
+                "key": key,
+                "value": db.value if db else default["value"],
+                "type": default["type"],
+                "description": default["description"],
+                "source": "database" if db else "default",
+            }
+        )
     return result
 
 
@@ -110,9 +110,7 @@ def update_setting(session: Session, key: str, value: str, user_id: int) -> dict
     try:
         from aeros.models.system_setting import SystemSetting
 
-        setting = session.exec(
-            select(SystemSetting).where(SystemSetting.key == key)
-        ).first()
+        setting = session.exec(select(SystemSetting).where(SystemSetting.key == key)).first()
         if setting:
             setting.value = value
             setting.updated_by_user_id = user_id

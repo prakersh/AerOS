@@ -1,6 +1,6 @@
 """Tests for aeros.services.ai_budget_service — circuit breaker and budget stubs."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -76,7 +76,7 @@ class TestCheckCircuit:
 
     def test_old_errors_expire(self) -> None:
         """Errors outside the window should not count."""
-        past = datetime.utcnow() - timedelta(seconds=CIRCUIT_BREAKER_WINDOW_SEC + 10)
+        past = datetime.now(UTC) - timedelta(seconds=CIRCUIT_BREAKER_WINDOW_SEC + 10)
         _error_counts["nvidia_nim"] = [past] * CIRCUIT_BREAKER_MAX_ERRORS
 
         # Old errors should have expired; circuit should be closed

@@ -1,4 +1,4 @@
-"""OpenAI-compatible provider — works with NVIDIA NIM, OpenAI, Azure, etc."""
+"""OpenAI-compatible provider — works with Mimo, NVIDIA NIM, OpenAI, Azure, etc."""
 
 import base64
 import time
@@ -65,6 +65,8 @@ class OpenAICompatibleProvider:
         self._client = AsyncOpenAI(base_url=base_url, api_key=api_key)
         self._default_model = default_model
         self._provider_name = base_url.split("//")[-1].split("/")[0]
+        self.user_id: int | None = None
+        self.rfx_id: int | None = None
 
     async def chat(
         self,
@@ -74,7 +76,11 @@ class OpenAICompatibleProvider:
         temperature: float = 0.7,
         max_tokens: int = 2048,
         response_format: dict | None = None,
+        user_id: int | None = None,
+        rfx_id: int | None = None,
     ) -> ChatResponse:
+        _uid = user_id if user_id is not None else self.user_id
+        _rfx = rfx_id if rfx_id is not None else self.rfx_id
         kwargs: dict = {
             "model": model or self._default_model,
             "messages": [m.model_dump() for m in messages],
@@ -95,8 +101,18 @@ class OpenAICompatibleProvider:
             status = "error"
             error_msg = str(e)
             latency_ms = int((time.monotonic() - t0) * 1000)
-            _log_llm_call(trace_id, self._provider_name, kwargs["model"],
-                          0, 0, latency_ms, status, error_msg)
+            _log_llm_call(
+                trace_id,
+                self._provider_name,
+                kwargs["model"],
+                0,
+                0,
+                latency_ms,
+                status,
+                error_msg,
+                rfx_id=_rfx,
+                user_id=_uid,
+            )
             raise
 
         latency_ms = int((time.monotonic() - t0) * 1000)
@@ -105,9 +121,16 @@ class OpenAICompatibleProvider:
 
         prompt_tokens = usage.prompt_tokens if usage else 0
         completion_tokens = usage.completion_tokens if usage else 0
-        _log_llm_call(trace_id, self._provider_name,
-                       resp.model or kwargs["model"],
-                       prompt_tokens, completion_tokens, latency_ms)
+        _log_llm_call(
+            trace_id,
+            self._provider_name,
+            resp.model or kwargs["model"],
+            prompt_tokens,
+            completion_tokens,
+            latency_ms,
+            rfx_id=_rfx,
+            user_id=_uid,
+        )
 
         return ChatResponse(
             content=choice.message.content or "",
@@ -151,8 +174,9 @@ class OpenAICompatibleProvider:
             )
         except Exception as e:
             latency_ms = int((time.monotonic() - t0) * 1000)
-            _log_llm_call(trace_id, self._provider_name, used_model,
-                          0, 0, latency_ms, "error", str(e))
+            _log_llm_call(
+                trace_id, self._provider_name, used_model, 0, 0, latency_ms, "error", str(e)
+            )
             raise
 
         latency_ms = int((time.monotonic() - t0) * 1000)
@@ -161,9 +185,14 @@ class OpenAICompatibleProvider:
 
         prompt_tokens = usage.prompt_tokens if usage else 0
         completion_tokens = usage.completion_tokens if usage else 0
-        _log_llm_call(trace_id, self._provider_name,
-                       resp.model or used_model,
-                       prompt_tokens, completion_tokens, latency_ms)
+        _log_llm_call(
+            trace_id,
+            self._provider_name,
+            resp.model or used_model,
+            prompt_tokens,
+            completion_tokens,
+            latency_ms,
+        )
 
         return VisionResponse(
             content=choice.message.content or "",

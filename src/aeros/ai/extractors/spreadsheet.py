@@ -38,7 +38,8 @@ async def _extract_csv(file_path: str) -> str:
     except csv.Error:
         dialect = None  # type: ignore[assignment]
 
-    reader = csv.reader(io.StringIO(content), dialect) if dialect else csv.reader(io.StringIO(content))
+    stream = io.StringIO(content)
+    reader = csv.reader(stream, dialect) if dialect else csv.reader(stream)
     rows = []
     for row in reader:
         if any(c.strip() for c in row):

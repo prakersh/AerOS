@@ -15,9 +15,7 @@ def get_defaults(session: Session, user_id: int) -> UserDefaults | None:
     Returns:
         The UserDefaults row or None.
     """
-    return session.exec(
-        select(UserDefaults).where(UserDefaults.user_id == user_id)
-    ).first()
+    return session.exec(select(UserDefaults).where(UserDefaults.user_id == user_id)).first()
 
 
 def update_defaults(session: Session, user_id: int, **kwargs: object) -> UserDefaults:

@@ -6,11 +6,12 @@ import pymupdf
 async def extract_pdf(file_path: str, *, vision_provider=None, **kwargs) -> str:
     try:
         import pymupdf4llm
+
         md = pymupdf4llm.to_markdown(file_path)
         if md and len(md.strip()) > 50:
             return md
-    except Exception:
-        pass  # pymupdf4llm may not be available or fail on complex PDFs
+    except Exception:  # noqa: S110
+        pass
 
     doc = pymupdf.open(file_path)
     text_parts = []

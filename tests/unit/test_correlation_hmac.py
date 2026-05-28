@@ -6,7 +6,7 @@ import pytest
 
 pytestmark = pytest.mark.asyncio(loop_scope="function")
 
-SECRET = "test-secret-key-for-unit-tests"
+SECRET = "test-secret-key-for-unit-tests"  # noqa: S105
 
 
 def _generate(rfx_id: int, vendor_id: int, secret: str) -> tuple[str, str]:
@@ -38,7 +38,7 @@ def _verify(token: str, secret: str) -> tuple[int, int, str] | None:
 
 
 async def test_roundtrip():
-    token, token_hash = _generate(42, 7, SECRET)
+    token, _token_hash = _generate(42, 7, SECRET)
     result = _verify(token, SECRET)
     assert result is not None
     rfx_id, vendor_id, nonce = result

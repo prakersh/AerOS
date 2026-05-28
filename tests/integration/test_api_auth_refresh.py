@@ -1,6 +1,5 @@
 """Tests for the /api/auth/refresh endpoint."""
 
-
 from aeros.security.jwt import create_access_token
 
 
@@ -26,9 +25,7 @@ class TestRefreshEndpoint:
         resp = client.post("/api/auth/refresh")
         assert resp.status_code == 401
         detail = resp.json().get("detail", "")
-        assert "token type" in detail.lower(), (
-            f"Expected 'token type' in detail, got: {detail}"
-        )
+        assert "token type" in detail.lower(), f"Expected 'token type' in detail, got: {detail}"
 
     def test_refresh_suspended_user(self, client, session, buyer_user):
         """Refresh for a suspended user should return 403."""
@@ -65,9 +62,7 @@ class TestRefreshEndpoint:
         # httpx / TestClient may combine multiple Set-Cookie values into a
         # single comma-separated header, so we collect all raw values and
         # look for cookie names inside them.
-        raw_cookies = [
-            v for k, v in resp.headers.items() if k.lower() == "set-cookie"
-        ]
+        raw_cookies = [v for k, v in resp.headers.items() if k.lower() == "set-cookie"]
         combined = " ".join(raw_cookies)
         assert "access_token=" in combined, (
             f"Expected access_token cookie in Set-Cookie, got: {combined}"

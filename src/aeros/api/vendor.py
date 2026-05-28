@@ -33,9 +33,7 @@ def vendor_inbox(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
 ):
-    vendor = session.exec(
-        select(Vendor).where(Vendor.vendor_user_id == caller.user_id)
-    ).first()
+    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         return []
     return rfx_service.list_rfx_for_vendor(session, vendor.id)  # type: ignore[arg-type]
@@ -47,9 +45,7 @@ def get_thread(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
 ):
-    vendor = session.exec(
-        select(Vendor).where(Vendor.vendor_user_id == caller.user_id)
-    ).first()
+    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         raise HTTPException(403, "No vendor profile")
     thread = session.exec(
@@ -85,9 +81,7 @@ def reply_to_rfx(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
 ):
-    vendor = session.exec(
-        select(Vendor).where(Vendor.vendor_user_id == caller.user_id)
-    ).first()
+    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         raise HTTPException(403, "No vendor profile")
     thread = session.exec(
@@ -116,9 +110,7 @@ async def upload_file(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
 ):
-    vendor = session.exec(
-        select(Vendor).where(Vendor.vendor_user_id == caller.user_id)
-    ).first()
+    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         raise HTTPException(403, "No vendor profile")
     thread = session.exec(
@@ -210,9 +202,7 @@ def list_uploads(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
 ):
-    vendor = session.exec(
-        select(Vendor).where(Vendor.vendor_user_id == caller.user_id)
-    ).first()
+    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         return []
     thread = session.exec(
@@ -220,9 +210,7 @@ def list_uploads(
     ).first()
     if not thread:
         return []
-    messages = list(
-        session.exec(select(Message).where(Message.thread_id == thread.id)).all()
-    )
+    messages = list(session.exec(select(Message).where(Message.thread_id == thread.id)).all())
     msg_ids = [m.id for m in messages]
     if not msg_ids:
         return []
@@ -251,12 +239,10 @@ def decline_rfx(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
 ):
-    vendor = session.exec(
-        select(Vendor).where(Vendor.vendor_user_id == caller.user_id)
-    ).first()
+    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         raise HTTPException(403, "No vendor profile")
     try:
         return rfx_service.decline_rfx_vendor(session, rfx_id, vendor.id, body.reason)  # type: ignore[arg-type]
     except ValueError as e:
-        raise HTTPException(404, str(e))
+        raise HTTPException(404, str(e)) from None

@@ -56,11 +56,13 @@ def parse_email_message(raw_bytes: bytes) -> dict[str, Any]:
             if "attachment" in disposition:
                 payload = part.get_payload(decode=True)
                 if payload:
-                    result["attachments"].append({
-                        "filename": part.get_filename() or "attachment",
-                        "mime_type": content_type,
-                        "data": payload,
-                    })
+                    result["attachments"].append(
+                        {
+                            "filename": part.get_filename() or "attachment",
+                            "mime_type": content_type,
+                            "data": payload,
+                        }
+                    )
             elif content_type == "text/plain" and not result["body_text"]:
                 payload = part.get_payload(decode=True)
                 if payload:
@@ -106,13 +108,15 @@ def save_attachments(
         path = os.path.join(upload_dir, f"{sha[:8]}_{filename}")
         with open(path, "wb") as f:
             f.write(data)
-        saved.append({
-            "filename": filename,
-            "mime_type": att["mime_type"],
-            "storage_path": path,
-            "size_bytes": len(data),
-            "sha256": sha,
-        })
+        saved.append(
+            {
+                "filename": filename,
+                "mime_type": att["mime_type"],
+                "storage_path": path,
+                "size_bytes": len(data),
+                "sha256": sha,
+            }
+        )
     return saved
 
 

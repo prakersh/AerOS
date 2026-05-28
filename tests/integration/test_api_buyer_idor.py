@@ -50,18 +50,12 @@ class TestBuyerIDOR:
         assert resp.status_code == 200
         return client
 
-    def test_buyer_cannot_view_others_rfx(
-        self, second_buyer_client, rfx_owned_by_first_buyer
-    ):
+    def test_buyer_cannot_view_others_rfx(self, second_buyer_client, rfx_owned_by_first_buyer):
         """Second buyer should get 403 when viewing first buyer's RFx."""
-        resp = second_buyer_client.get(
-            f"/api/buyer/rfx/{rfx_owned_by_first_buyer.id}"
-        )
+        resp = second_buyer_client.get(f"/api/buyer/rfx/{rfx_owned_by_first_buyer.id}")
         assert resp.status_code == 403
 
-    def test_buyer_cannot_cancel_others_rfx(
-        self, second_buyer_client, rfx_owned_by_first_buyer
-    ):
+    def test_buyer_cannot_cancel_others_rfx(self, second_buyer_client, rfx_owned_by_first_buyer):
         """Second buyer should get 403 when cancelling first buyer's RFx."""
         resp = second_buyer_client.post(
             f"/api/buyer/rfx/{rfx_owned_by_first_buyer.id}/cancel",
@@ -69,9 +63,7 @@ class TestBuyerIDOR:
         )
         assert resp.status_code == 403
 
-    def test_buyer_cannot_award_others_rfx(
-        self, second_buyer_client, rfx_owned_by_first_buyer
-    ):
+    def test_buyer_cannot_award_others_rfx(self, second_buyer_client, rfx_owned_by_first_buyer):
         """Second buyer should get 403 when awarding first buyer's RFx."""
         resp = second_buyer_client.post(
             f"/api/buyer/rfx/{rfx_owned_by_first_buyer.id}/award",
@@ -79,9 +71,7 @@ class TestBuyerIDOR:
         )
         assert resp.status_code == 403
 
-    def test_admin_can_view_any_rfx(
-        self, session, client, buyer_org, rfx_owned_by_first_buyer
-    ):
+    def test_admin_can_view_any_rfx(self, session, client, buyer_org, rfx_owned_by_first_buyer):
         """Admin should be able to view any buyer's RFx."""
         admin = User(
             email="admin_idor@test.com",
@@ -96,7 +86,5 @@ class TestBuyerIDOR:
             "/api/auth/login",
             json={"email": "admin_idor@test.com", "password": "test12345"},
         )
-        resp = client.get(
-            f"/api/buyer/rfx/{rfx_owned_by_first_buyer.id}"
-        )
+        resp = client.get(f"/api/buyer/rfx/{rfx_owned_by_first_buyer.id}")
         assert resp.status_code == 200

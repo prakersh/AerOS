@@ -37,8 +37,20 @@ def category(session):
 @pytest.fixture
 def skus(session, buyer_org, category):
     items = [
-        SKU(org_id=buyer_org.id, code="GRN-001", name="Basmati Rice", category_id=category.id, unit="kg"),
-        SKU(org_id=buyer_org.id, code="GRN-002", name="Wheat Flour", category_id=category.id, unit="kg"),
+        SKU(
+            org_id=buyer_org.id,
+            code="GRN-001",
+            name="Basmati Rice",
+            category_id=category.id,
+            unit="kg",
+        ),
+        SKU(
+            org_id=buyer_org.id,
+            code="GRN-002",
+            name="Wheat Flour",
+            category_id=category.id,
+            unit="kg",
+        ),
     ]
     for s in items:
         session.add(s)
@@ -52,10 +64,13 @@ def skus(session, buyer_org, category):
 def vendor_records(session, buyer_org):
     """Two vendor records owned by the buyer org."""
     vendors = []
-    for i, (name, email) in enumerate([
-        ("Agro Traders", "agro@test.com"),
-        ("Fresh Supplies", "fresh@test.com"),
-    ], start=1):
+    for i, (name, email) in enumerate(
+        [
+            ("Agro Traders", "agro@test.com"),
+            ("Fresh Supplies", "fresh@test.com"),
+        ],
+        start=1,
+    ):
         v_org = Organization(name=f"VendorOrg{i}", type=OrgType.VENDOR)
         session.add(v_org)
         session.commit()
@@ -107,30 +122,37 @@ class TestRFxLifecycle:
 
     def test_chat_draft_rfx_via_llm(self, auth_client, skus):
         """POST /api/chat should return an AI-drafted RFx JSON when LLM is mocked."""
-        draft_response = json.dumps({
-            "message": "Here is your RFx draft for grains procurement.",
-            "status": "draft_ready",
-            "draft": {
-                "title": "Weekly Grains Order",
-                "line_items": [
-                    {"sku_name": "Basmati Rice", "qty": 100, "unit": "kg", "target_price": 80},
-                    {"sku_name": "Wheat Flour", "qty": 50, "unit": "kg", "target_price": 35},
-                ],
-                "payment_terms": "NET15",
-                "currency": "INR",
-                "response_deadline": "2026-06-10T23:59:00",
-            },
-        })
+        draft_response = json.dumps(
+            {
+                "message": "Here is your RFx draft for grains procurement.",
+                "status": "draft_ready",
+                "draft": {
+                    "title": "Weekly Grains Order",
+                    "line_items": [
+                        {"sku_name": "Basmati Rice", "qty": 100, "unit": "kg", "target_price": 80},
+                        {"sku_name": "Wheat Flour", "qty": 50, "unit": "kg", "target_price": 35},
+                    ],
+                    "payment_terms": "NET15",
+                    "currency": "INR",
+                    "response_deadline": "2026-06-10T23:59:00",
+                },
+            }
+        )
 
         mock_provider = AsyncMock()
         mock_provider.chat.return_value = _mock_chat_response(draft_response)
 
-        with patch("aeros.api.chat.get_chat_provider", return_value=mock_provider), \
-             patch("aeros.api.chat.get_vision_provider", return_value=None):
-            resp = auth_client.post("/api/chat", json={
-                "message": "I need 100kg Basmati Rice and 50kg Wheat Flour for next week",
-                "history": [],
-            })
+        with (
+            patch("aeros.api.chat.get_chat_provider", return_value=mock_provider),
+            patch("aeros.api.chat.get_vision_provider", return_value=None),
+        ):
+            resp = auth_client.post(
+                "/api/chat",
+                json={
+                    "message": "I need 100kg Basmati Rice and 50kg Wheat Flour for next week",
+                    "history": [],
+                },
+            )
 
         assert resp.status_code == 200
         data = resp.json()
@@ -224,10 +246,12 @@ class TestRFxLifecycle:
         rfx_id = create_resp.json()["data"]["rfx_id"]
 
         # Mock the LLM for sourcing agent + email sending
-        sourcing_llm_response = json.dumps({
-            "subject": "RFQ: Dispatch Demo Order",
-            "summary": "We need 200kg Basmati Rice. Please quote by June 10.",
-        })
+        sourcing_llm_response = json.dumps(
+            {
+                "subject": "RFQ: Dispatch Demo Order",
+                "summary": "We need 200kg Basmati Rice. Please quote by June 10.",
+            }
+        )
         mock_provider = AsyncMock()
         mock_provider.chat.return_value = _mock_chat_response(sourcing_llm_response)
 
@@ -236,13 +260,18 @@ class TestRFxLifecycle:
             {"vendor_id": vendor_records[1].id, "channel": "email"},
         ]
 
-        with patch("aeros.api.chat.get_chat_provider", return_value=mock_provider), \
-             patch("aeros.api.chat.get_vision_provider", return_value=None), \
-             patch("aeros.channels.email_out.aiosmtplib.send", new_callable=AsyncMock):
-            resp = auth_client.post("/api/chat/dispatch", json={
-                "rfx_id": rfx_id,
-                "dispatch_plan": dispatch_plan,
-            })
+        with (
+            patch("aeros.api.chat.get_chat_provider", return_value=mock_provider),
+            patch("aeros.api.chat.get_vision_provider", return_value=None),
+            patch("aeros.channels.email_out.aiosmtplib.send", new_callable=AsyncMock),
+        ):
+            resp = auth_client.post(
+                "/api/chat/dispatch",
+                json={
+                    "rfx_id": rfx_id,
+                    "dispatch_plan": dispatch_plan,
+                },
+            )
 
         assert resp.status_code == 200
         data = resp.json()
@@ -273,15 +302,21 @@ class TestRFxLifecycle:
         session.add(v_user)
         session.commit()
 
-        client.post("/api/auth/login", json={
-            "email": "vendor-dispatch@test.com",
-            "password": "test123",
-        })
+        client.post(
+            "/api/auth/login",
+            json={
+                "email": "vendor-dispatch@test.com",
+                "password": "test123",
+            },
+        )
 
-        resp = client.post("/api/chat/dispatch", json={
-            "rfx_id": 1,
-            "dispatch_plan": [],
-        })
+        resp = client.post(
+            "/api/chat/dispatch",
+            json={
+                "rfx_id": 1,
+                "dispatch_plan": [],
+            },
+        )
         assert resp.status_code == 403
 
     def test_create_rfx_requires_buyer_role(self, client, session):
@@ -301,41 +336,54 @@ class TestRFxLifecycle:
         session.add(v_user)
         session.commit()
 
-        client.post("/api/auth/login", json={
-            "email": "vendor-create@test.com",
-            "password": "test123",
-        })
+        client.post(
+            "/api/auth/login",
+            json={
+                "email": "vendor-create@test.com",
+                "password": "test123",
+            },
+        )
 
-        resp = client.post("/api/chat/create-rfx", json={
-            "draft": {"title": "Should Fail"},
-        })
+        resp = client.post(
+            "/api/chat/create-rfx",
+            json={
+                "draft": {"title": "Should Fail"},
+            },
+        )
         assert resp.status_code == 403
 
     def test_full_lifecycle_end_to_end(self, auth_client, skus, vendor_records):
         """End-to-end: draft -> create -> list -> detail -> dispatch -> verify status."""
         # Step 1: Draft via chat (mock LLM)
-        draft_json = json.dumps({
-            "message": "Draft ready for your review.",
-            "status": "draft_ready",
-            "draft": {
-                "title": "E2E Lifecycle Test",
-                "line_items": [
-                    {"sku_name": "Basmati Rice", "qty": 150, "unit": "kg"},
-                    {"sku_name": "Wheat Flour", "qty": 80, "unit": "kg"},
-                ],
-                "payment_terms": "NET30",
-                "currency": "INR",
-            },
-        })
+        draft_json = json.dumps(
+            {
+                "message": "Draft ready for your review.",
+                "status": "draft_ready",
+                "draft": {
+                    "title": "E2E Lifecycle Test",
+                    "line_items": [
+                        {"sku_name": "Basmati Rice", "qty": 150, "unit": "kg"},
+                        {"sku_name": "Wheat Flour", "qty": 80, "unit": "kg"},
+                    ],
+                    "payment_terms": "NET30",
+                    "currency": "INR",
+                },
+            }
+        )
         mock_chat = AsyncMock()
         mock_chat.chat.return_value = _mock_chat_response(draft_json)
 
-        with patch("aeros.api.chat.get_chat_provider", return_value=mock_chat), \
-             patch("aeros.api.chat.get_vision_provider", return_value=None):
-            chat_resp = auth_client.post("/api/chat", json={
-                "message": "I need rice and wheat flour",
-                "history": [],
-            })
+        with (
+            patch("aeros.api.chat.get_chat_provider", return_value=mock_chat),
+            patch("aeros.api.chat.get_vision_provider", return_value=None),
+        ):
+            chat_resp = auth_client.post(
+                "/api/chat",
+                json={
+                    "message": "I need rice and wheat flour",
+                    "history": [],
+                },
+            )
         assert chat_resp.status_code == 200
         assert chat_resp.json()["success"] is True
 
@@ -367,10 +415,12 @@ class TestRFxLifecycle:
         assert len(detail["line_items"]) == 2
 
         # Step 5: Dispatch
-        sourcing_response = json.dumps({
-            "subject": "RFQ: E2E Lifecycle Test",
-            "summary": "We need 150kg Rice and 80kg Wheat Flour.",
-        })
+        sourcing_response = json.dumps(
+            {
+                "subject": "RFQ: E2E Lifecycle Test",
+                "summary": "We need 150kg Rice and 80kg Wheat Flour.",
+            }
+        )
         mock_sourcing = AsyncMock()
         mock_sourcing.chat.return_value = _mock_chat_response(sourcing_response)
 
@@ -378,13 +428,18 @@ class TestRFxLifecycle:
             {"vendor_id": vendor_records[0].id, "channel": "in_app"},
             {"vendor_id": vendor_records[1].id, "channel": "in_app"},
         ]
-        with patch("aeros.api.chat.get_chat_provider", return_value=mock_sourcing), \
-             patch("aeros.api.chat.get_vision_provider", return_value=None), \
-             patch("aeros.channels.email_out.aiosmtplib.send", new_callable=AsyncMock):
-            dispatch_resp = auth_client.post("/api/chat/dispatch", json={
-                "rfx_id": rfx_id,
-                "dispatch_plan": dispatch_plan,
-            })
+        with (
+            patch("aeros.api.chat.get_chat_provider", return_value=mock_sourcing),
+            patch("aeros.api.chat.get_vision_provider", return_value=None),
+            patch("aeros.channels.email_out.aiosmtplib.send", new_callable=AsyncMock),
+        ):
+            dispatch_resp = auth_client.post(
+                "/api/chat/dispatch",
+                json={
+                    "rfx_id": rfx_id,
+                    "dispatch_plan": dispatch_plan,
+                },
+            )
         assert dispatch_resp.status_code == 200
         assert dispatch_resp.json()["data"]["dispatched_count"] == 2
 

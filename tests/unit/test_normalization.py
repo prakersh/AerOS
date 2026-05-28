@@ -1,6 +1,5 @@
 """Tests for aeros.ai.normalization — unit/currency normalization utilities."""
 
-
 from aeros.ai.normalization import (
     convert_quantity,
     normalize_currency,

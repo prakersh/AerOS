@@ -43,9 +43,7 @@ class TestFuseExtractions:
         """Single extraction should pass through unchanged."""
         extractions = [
             {
-                "line_items": [
-                    {"name": "Milk", "qty": 100, "price": 50, "confidence": 0.9}
-                ],
+                "line_items": [{"name": "Milk", "qty": 100, "price": 50, "confidence": 0.9}],
                 "currency": "INR",
                 "payment_terms": "NET30",
             }
@@ -80,14 +78,10 @@ class TestFuseExtractions:
         """Items from different files should all appear in result."""
         extractions = [
             {
-                "line_items": [
-                    {"name": "Milk", "price": 50, "confidence": 0.9}
-                ],
+                "line_items": [{"name": "Milk", "price": 50, "confidence": 0.9}],
             },
             {
-                "line_items": [
-                    {"name": "Butter", "price": 200, "confidence": 0.85}
-                ],
+                "line_items": [{"name": "Butter", "price": 200, "confidence": 0.85}],
             },
         ]
         result = fuse_extractions(extractions, rfx_line_items=[])
@@ -137,14 +131,10 @@ class TestFuseExtractions:
         rfx_items = [{"code": "", "name": "Widget"}]
         extractions = [
             {
-                "line_items": [
-                    {"name": "Widget", "price": 100, "confidence": 0.95}
-                ],
+                "line_items": [{"name": "Widget", "price": 100, "confidence": 0.95}],
             },
             {
-                "line_items": [
-                    {"name": "Widget", "price": 80, "confidence": 0.6}
-                ],
+                "line_items": [{"name": "Widget", "price": 80, "confidence": 0.6}],
             },
         ]
         result = fuse_extractions(extractions, rfx_items)

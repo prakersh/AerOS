@@ -106,9 +106,7 @@ def normalize_currency(raw: str) -> str:
     return CURRENCY_SYMBOLS.get(cleaned, raw.strip().upper())
 
 
-def convert_quantity(
-    qty: float, from_unit: str, to_unit: str
-) -> float | None:
+def convert_quantity(qty: float, from_unit: str, to_unit: str) -> float | None:
     """Convert a quantity between compatible units.
 
     Args:
@@ -142,14 +140,10 @@ def parse_price_string(raw: str) -> tuple[float | None, str]:
     cleaned = raw.strip()
     currency = "INR"
     # Sort symbols longest-first so "rs." matches before "rs"
-    for symbol, code in sorted(
-        CURRENCY_SYMBOLS.items(), key=lambda kv: len(kv[0]), reverse=True
-    ):
+    for symbol, code in sorted(CURRENCY_SYMBOLS.items(), key=lambda kv: len(kv[0]), reverse=True):
         if symbol in cleaned.lower():
             currency = code
-            cleaned = re.sub(
-                re.escape(symbol), "", cleaned, flags=re.IGNORECASE
-            ).strip()
+            cleaned = re.sub(re.escape(symbol), "", cleaned, flags=re.IGNORECASE).strip()
             break
     cleaned = cleaned.replace(",", "")
     match = re.search(r"\d+(?:\.\d+)?", cleaned)

@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlmodel import Field, SQLModel
 
 
-class OrgType(str, enum.Enum):
+class OrgType(enum.StrEnum):
     BUYER = "buyer"
     VENDOR = "vendor"
 

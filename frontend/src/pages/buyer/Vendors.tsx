@@ -1,113 +1,42 @@
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/api/client";
+import {
+  StatusBadge,
+  PageHeader,
+  LoadingSpinner,
+  ErrorState,
+  EmptyState,
+  Modal,
+  DetailView,
+  StarRating,
+  FilterChips,
+  Toast,
+} from "@/components/ui";
+import type { Vendor, KycStatus } from "@/types";
 
 /* ------------------------------------------------------------------ */
-/* Types                                                               */
+/* Filter options                                                       */
 /* ------------------------------------------------------------------ */
 
-type KycStatus = "approved" | "pending" | "rejected";
-
-interface Vendor {
-  id: number;
-  name: string;
-  primary_email: string;
-  category_ids_csv: string;
-  performance_score: number;
-  kyc_status: KycStatus;
-  preferred_rank: number;
-}
-
-/* ------------------------------------------------------------------ */
-/* KYC badge palette                                                   */
-/* ------------------------------------------------------------------ */
-
-const KYC_STYLES: Record<KycStatus, string> = {
-  approved: "bg-green-900/40 text-green-400",
-  pending: "bg-amber-900/40 text-amber-400",
-  rejected: "bg-red-900/40 text-red-400",
-};
-
-function KycBadge({ status }: { status: KycStatus }) {
-  return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium capitalize ${KYC_STYLES[status] ?? "bg-zinc-700/50 text-zinc-400"}`}
-    >
-      {status}
-    </span>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Star Rating                                                         */
-/* ------------------------------------------------------------------ */
-
-function StarRating({ score }: { score: number }) {
-  const fullStars = Math.floor(score);
-  const hasHalf = score - fullStars >= 0.5;
-  const emptyStars = 5 - fullStars - (hasHalf ? 1 : 0);
-
-  return (
-    <div className="flex items-center gap-0.5" title={`${score.toFixed(1)} / 5`}>
-      {Array.from({ length: fullStars }).map((_, i) => (
-        <StarFull key={`full-${i}`} />
-      ))}
-      {hasHalf && <StarHalf />}
-      {Array.from({ length: emptyStars }).map((_, i) => (
-        <StarEmpty key={`empty-${i}`} />
-      ))}
-      <span className="ml-1.5 text-xs tabular-nums text-zinc-400">
-        {score.toFixed(1)}
-      </span>
-    </div>
-  );
-}
-
-function StarFull() {
-  return (
-    <svg
-      className="h-4 w-4 text-amber-400"
-      fill="currentColor"
-      viewBox="0 0 20 20"
-    >
-      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-    </svg>
-  );
-}
-
-function StarHalf() {
-  return (
-    <svg className="h-4 w-4" viewBox="0 0 20 20">
-      <defs>
-        <linearGradient id="half-grad">
-          <stop offset="50%" stopColor="currentColor" className="text-amber-400" />
-          <stop offset="50%" stopColor="currentColor" className="text-zinc-700" />
-        </linearGradient>
-      </defs>
-      <path
-        fill="url(#half-grad)"
-        d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"
-      />
-    </svg>
-  );
-}
-
-function StarEmpty() {
-  return (
-    <svg
-      className="h-4 w-4 text-zinc-700"
-      fill="currentColor"
-      viewBox="0 0 20 20"
-    >
-      <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-    </svg>
-  );
-}
+const KYC_FILTER_OPTIONS = [
+  { label: "All", value: "all" },
+  { label: "Approved", value: "approved" },
+  { label: "Pending", value: "pending" },
+  { label: "Rejected", value: "rejected" },
+];
 
 /* ------------------------------------------------------------------ */
 /* Main Component                                                      */
 /* ------------------------------------------------------------------ */
 
 export default function Vendors() {
+  const [kycFilter, setKycFilter] = useState("all");
+  const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
+  const [contactModalOpen, setContactModalOpen] = useState(false);
+  const [contactMessage, setContactMessage] = useState("");
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   const {
     data: vendors = [],
     isLoading,
@@ -117,46 +46,75 @@ export default function Vendors() {
     queryFn: () => api.get<Vendor[]>("/api/buyer/vendors"),
   });
 
+  /* Filtered vendors */
+  const filteredVendors = useMemo(
+    () =>
+      kycFilter === "all"
+        ? vendors
+        : vendors.filter((v) => v.kyc_status === (kycFilter as KycStatus)),
+    [vendors, kycFilter],
+  );
+
+  function openContactModal() {
+    setContactMessage("");
+    setContactModalOpen(true);
+  }
+
+  function handleSendContact() {
+    setContactModalOpen(false);
+    setSelectedVendor(null);
+    setToastMessage("Message sent");
+  }
+
   return (
     <div className="space-y-6 p-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-100">Vendors</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Vendor directory and performance tracking.
-        </p>
-      </div>
+      <PageHeader
+        title="Vendors"
+        subtitle="Vendor directory and performance tracking."
+      />
 
       {/* Loading */}
-      {isLoading && (
-        <div className="flex items-center justify-center py-12">
-          <div className="h-6 w-6 animate-spin rounded-full border-2 border-zinc-600 border-t-indigo-500" />
-          <span className="ml-3 text-sm text-zinc-500">Loading vendors...</span>
-        </div>
-      )}
+      {isLoading && <LoadingSpinner message="Loading vendors..." />}
 
       {/* Error */}
       {error && !isLoading && (
-        <div className="rounded-xl border border-red-800/50 bg-red-900/20 p-4">
-          <p className="text-sm text-red-400">
-            Failed to load vendors. Please try again.
-          </p>
-        </div>
+        <ErrorState message="Failed to load vendors. Please try again." />
+      )}
+
+      {/* KYC Filter */}
+      {!isLoading && !error && (
+        <FilterChips
+          options={KYC_FILTER_OPTIONS}
+          active={kycFilter}
+          onChange={setKycFilter}
+        />
       )}
 
       {/* Vendor Cards Grid */}
       {!isLoading && !error && (
         <>
-          {vendors.length === 0 ? (
-            <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-8 text-center">
-              <p className="text-sm text-zinc-500">No vendors found.</p>
-            </div>
+          {filteredVendors.length === 0 ? (
+            <EmptyState
+              title="No vendors found"
+              description={
+                kycFilter !== "all"
+                  ? "No vendors match the selected KYC filter."
+                  : "No vendors have been added yet."
+              }
+              action={
+                kycFilter !== "all"
+                  ? { label: "Clear filter", onClick: () => setKycFilter("all") }
+                  : undefined
+              }
+            />
           ) : (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {vendors.map((vendor) => (
-                <div
+              {filteredVendors.map((vendor) => (
+                <button
                   key={vendor.id}
-                  className="rounded-xl border border-zinc-800 bg-zinc-900 p-5 transition hover:border-zinc-700"
+                  type="button"
+                  onClick={() => setSelectedVendor(vendor)}
+                  className="rounded-xl border border-zinc-800 bg-zinc-900 p-5 text-left transition hover:border-zinc-700"
                 >
                   {/* Name + KYC */}
                   <div className="flex items-start justify-between">
@@ -165,23 +123,26 @@ export default function Vendors() {
                         {vendor.name}
                       </h3>
                       <p className="mt-0.5 truncate text-xs text-zinc-500">
-                        {vendor.primary_email}
+                        {vendor.primary_email ?? vendor.email}
                       </p>
                     </div>
-                    <KycBadge status={vendor.kyc_status} />
+                    <StatusBadge status={vendor.kyc_status} variant="kyc" />
                   </div>
 
                   {/* Categories */}
                   <div className="mt-3">
                     <div className="flex flex-wrap gap-1.5">
-                      {(vendor.category_ids_csv || "").split(",").filter(Boolean).map((catId) => (
-                        <span
-                          key={catId.trim()}
-                          className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400"
-                        >
-                          Category {catId.trim()}
-                        </span>
-                      ))}
+                      {(vendor.category_ids_csv ?? vendor.categories ?? "")
+                        .split(",")
+                        .filter(Boolean)
+                        .map((catId) => (
+                          <span
+                            key={catId.trim()}
+                            className="rounded-full bg-zinc-800 px-2 py-0.5 text-[10px] text-zinc-400"
+                          >
+                            Category {catId.trim()}
+                          </span>
+                        ))}
                     </div>
                   </div>
 
@@ -192,11 +153,112 @@ export default function Vendors() {
                       Rank #{vendor.preferred_rank}
                     </span>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
         </>
+      )}
+
+      {/* Vendor Detail Modal */}
+      <Modal
+        open={!!selectedVendor && !contactModalOpen}
+        onClose={() => setSelectedVendor(null)}
+        title={selectedVendor?.name ?? "Vendor Details"}
+        size="md"
+      >
+        {selectedVendor && (
+          <div className="space-y-4">
+            <DetailView
+              items={[
+                { label: "Name", value: selectedVendor.name },
+                { label: "Email", value: selectedVendor.primary_email ?? selectedVendor.email ?? "--" },
+                { label: "KYC Status", value: selectedVendor.kyc_status },
+                { label: "Performance Score", value: `${selectedVendor.performance_score.toFixed(1)} / 5` },
+                { label: "Preferred Rank", value: `#${selectedVendor.preferred_rank}` },
+                {
+                  label: "Categories",
+                  value: (selectedVendor.category_ids_csv ?? selectedVendor.categories ?? "")
+                    .split(",")
+                    .filter(Boolean)
+                    .join(", ") || "--",
+                },
+              ]}
+              columns={2}
+            />
+            <div>
+              <label className="block text-xs font-medium text-zinc-500">Star Rating</label>
+              <div className="mt-1">
+                <StarRating score={selectedVendor.performance_score} />
+              </div>
+            </div>
+            <div className="flex justify-end pt-2">
+              <button
+                type="button"
+                onClick={openContactModal}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+              >
+                Contact Vendor
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Contact Vendor Modal */}
+      <Modal
+        open={contactModalOpen}
+        onClose={() => setContactModalOpen(false)}
+        title="Contact Vendor"
+        size="md"
+      >
+        {selectedVendor && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-medium text-zinc-500">Vendor Name</label>
+              <p className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200">
+                {selectedVendor.name}
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500">Email</label>
+              <p className="mt-1 rounded-lg border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-200">
+                {selectedVendor.primary_email ?? selectedVendor.email ?? "--"}
+              </p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-zinc-500">Message</label>
+              <textarea
+                value={contactMessage}
+                onChange={(e) => setContactMessage(e.target.value)}
+                rows={4}
+                placeholder="Type your message..."
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              />
+            </div>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setContactModalOpen(false)}
+                className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSendContact}
+                className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+              >
+                Send
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Toast */}
+      {toastMessage && (
+        <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
       )}
     </div>
   );

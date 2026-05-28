@@ -36,7 +36,10 @@ class TestNotifyVendor:
     async def test_email_notification(self, session, vendor_record):
         """Should send email notification when email pref is on."""
         # Patch at the source module since import is local
-        with patch("aeros.channels.email_out.send_rfx_invitation", new_callable=AsyncMock) as mock_send:
+        with patch(
+            "aeros.channels.email_out.send_rfx_invitation",
+            new_callable=AsyncMock,
+        ) as mock_send:
             mock_send.return_value = True
             result = await notify_vendor(
                 session,
@@ -52,7 +55,10 @@ class TestNotifyVendor:
 
     async def test_email_failure(self, session, vendor_record):
         """Should return False when email send fails."""
-        with patch("aeros.channels.email_out.send_rfx_invitation", new_callable=AsyncMock) as mock_send:
+        with patch(
+            "aeros.channels.email_out.send_rfx_invitation",
+            new_callable=AsyncMock,
+        ) as mock_send:
             mock_send.return_value = False
             result = await notify_vendor(
                 session,
@@ -65,7 +71,10 @@ class TestNotifyVendor:
 
     async def test_email_exception(self, session, vendor_record):
         """Should catch email exception and return False."""
-        with patch("aeros.channels.email_out.send_rfx_invitation", new_callable=AsyncMock) as mock_send:
+        with patch(
+            "aeros.channels.email_out.send_rfx_invitation",
+            new_callable=AsyncMock,
+        ) as mock_send:
             mock_send.side_effect = Exception("SMTP down")
             result = await notify_vendor(
                 session,
@@ -93,7 +102,7 @@ class TestNotifyVendor:
     async def test_in_app_skipped_without_thread(self, session, vendor_record):
         """Should skip in-app notification when thread_id is None."""
         with patch("aeros.channels.in_app.deliver_in_app", new_callable=AsyncMock) as mock_deliver:
-            result = await notify_vendor(
+            await notify_vendor(
                 session,
                 vendor_record,
                 event_type="rfq",
@@ -114,8 +123,11 @@ class TestNotifyVendor:
         session.commit()
         session.refresh(vendor)
 
-        with patch("aeros.channels.email_out.send_rfx_invitation", new_callable=AsyncMock) as mock_send:
-            result = await notify_vendor(
+        with patch(
+            "aeros.channels.email_out.send_rfx_invitation",
+            new_callable=AsyncMock,
+        ) as mock_send:
+            await notify_vendor(
                 session,
                 vendor,
                 event_type="rfq",

@@ -16,7 +16,7 @@ Covers:
 
 import asyncio
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -117,7 +117,7 @@ def rfx(session: Session, buyer: User) -> RFxRun:
         buyer_id=buyer.id,
         title="Channel Test RFx",
         status=RFxStatus.DISPATCHED,
-        response_deadline=datetime.utcnow() + timedelta(hours=3),
+        response_deadline=datetime.now(UTC) + timedelta(hours=3),
     )
     session.add(r)
     session.commit()
@@ -140,7 +140,7 @@ def rfx_vendor(session: Session, rfx: RFxRun, vendor_record: Vendor) -> RFxVendo
         rfx_id=rfx.id,
         vendor_id=vendor_record.id,
         status=RFxVendorStatus.INVITED,
-        dispatched_at=datetime.utcnow(),
+        dispatched_at=datetime.now(UTC),
     )
     session.add(rv)
     session.commit()
@@ -160,9 +160,7 @@ class TestInAppChannel:
         """Should create a Message with channel='in_app' and persist it."""
         from aeros.channels.in_app import deliver_in_app
 
-        msg = asyncio.run(
-            deliver_in_app(session, thread.id, "Hello from in-app")
-        )
+        msg = asyncio.run(deliver_in_app(session, thread.id, "Hello from in-app"))
 
         assert msg.id is not None
         assert msg.thread_id == thread.id
@@ -170,12 +168,23 @@ class TestInAppChannel:
         assert msg.body_text == "Hello from in-app"
         assert msg.sender_kind == "system"
 
-    def test_deliver_in_app_with_sender(self, session: Session, thread: Thread, buyer: User) -> None:
+    def test_deliver_in_app_with_sender(
+        self,
+        session: Session,
+        thread: Thread,
+        buyer: User,
+    ) -> None:
         """Should set sender_user_id and sender_kind when provided."""
         from aeros.channels.in_app import deliver_in_app
 
         msg = asyncio.run(
-            deliver_in_app(session, thread.id, "Buyer message", sender_kind="buyer", sender_user_id=buyer.id)
+            deliver_in_app(
+                session,
+                thread.id,
+                "Buyer message",
+                sender_kind="buyer",
+                sender_user_id=buyer.id,
+            )
         )
 
         assert msg.sender_user_id == buyer.id
@@ -185,9 +194,7 @@ class TestInAppChannel:
         """Should store body_html when provided."""
         from aeros.channels.in_app import deliver_in_app
 
-        msg = asyncio.run(
-            deliver_in_app(session, thread.id, "plain", body_html="<p>rich</p>")
-        )
+        msg = asyncio.run(deliver_in_app(session, thread.id, "plain", body_html="<p>rich</p>"))
 
         assert msg.body_html == "<p>rich</p>"
 
@@ -214,15 +221,9 @@ class TestInAppChannel:
         """Should count messages after last_seen_message_id."""
         from aeros.channels.in_app import deliver_in_app, get_unread_count
 
-        m1 = asyncio.run(
-            deliver_in_app(session, thread.id, "msg1")
-        )
-        asyncio.run(
-            deliver_in_app(session, thread.id, "msg2")
-        )
-        asyncio.run(
-            deliver_in_app(session, thread.id, "msg3")
-        )
+        m1 = asyncio.run(deliver_in_app(session, thread.id, "msg1"))
+        asyncio.run(deliver_in_app(session, thread.id, "msg2"))
+        asyncio.run(deliver_in_app(session, thread.id, "msg3"))
 
         assert get_unread_count(session, thread.id) == 3
         assert get_unread_count(session, thread.id, last_seen_message_id=m1.id) == 2
@@ -241,7 +242,7 @@ class TestEmailInChannel:
         from aeros.channels.email_in import extract_correlation_token
 
         token = extract_correlation_token("procurement+abc123@aeros.local")
-        assert token == "abc123"
+        assert token == "abc123"  # noqa: S105
 
     def test_extract_correlation_token_none(self) -> None:
         """Should return None when address has no token."""
@@ -325,7 +326,9 @@ class TestEmailInChannel:
             attachments = [
                 {
                     "filename": "rates.xlsx",
-                    "mime_type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "mime_type": (
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    ),
                     "data": b"fake excel content here",
                 }
             ]
@@ -336,6 +339,7 @@ class TestEmailInChannel:
         assert saved[0]["size_bytes"] == len(b"fake excel content here")
         assert len(saved[0]["sha256"]) == 64
         import os
+
         assert os.path.exists(saved[0]["storage_path"])
 
 
@@ -352,7 +356,7 @@ class TestTelegramBot:
         from aeros.channels.telegram_bot import verify_webhook_secret
 
         with patch("aeros.channels.telegram_bot.settings") as mock_settings:
-            mock_settings.telegram_webhook_secret = "my-secret"
+            mock_settings.telegram_webhook_secret = "my-secret"  # noqa: S105
             assert verify_webhook_secret("my-secret") is True
 
     def test_verify_webhook_secret_invalid(self) -> None:
@@ -360,7 +364,7 @@ class TestTelegramBot:
         from aeros.channels.telegram_bot import verify_webhook_secret
 
         with patch("aeros.channels.telegram_bot.settings") as mock_settings:
-            mock_settings.telegram_webhook_secret = "my-secret"
+            mock_settings.telegram_webhook_secret = "my-secret"  # noqa: S105
             assert verify_webhook_secret("wrong-secret") is False
 
     def test_verify_webhook_secret_empty(self) -> None:
@@ -437,7 +441,9 @@ class TestNotifications:
         from aeros.channels.notifications import notify_vendor
 
         # Set prefs to in_app only
-        vendor_user.notification_prefs_json = json.dumps({"email": False, "telegram": False, "in_app": True})
+        vendor_user.notification_prefs_json = json.dumps(
+            {"email": False, "telegram": False, "in_app": True}
+        )
         session.add(vendor_user)
         session.commit()
 
@@ -461,7 +467,9 @@ class TestNotifications:
         """Should skip in-app when no thread_id is provided."""
         from aeros.channels.notifications import notify_vendor
 
-        vendor_user.notification_prefs_json = json.dumps({"email": False, "telegram": False, "in_app": True})
+        vendor_user.notification_prefs_json = json.dumps(
+            {"email": False, "telegram": False, "in_app": True}
+        )
         session.add(vendor_user)
         session.commit()
 
@@ -493,11 +501,13 @@ class TestVendorCopilotAgent:
 
         mock_provider = AsyncMock()
         mock_provider.chat.return_value = ChatResponse(
-            content=json.dumps({
-                "message": "I can help you compose a quote.",
-                "suggestions": ["Check unit prices", "Review quantities"],
-                "status": "chatting",
-            }),
+            content=json.dumps(
+                {
+                    "message": "I can help you compose a quote.",
+                    "suggestions": ["Check unit prices", "Review quantities"],
+                    "status": "chatting",
+                }
+            ),
             input_tokens=10,
             output_tokens=20,
         )
@@ -700,17 +710,22 @@ class TestRemindersWorker:
         from aeros.workers.reminders import check_and_send_reminders
 
         # Set deadline to 1 hour from now so T-24h and T-2h are due
-        rfx.response_deadline = datetime.utcnow() + timedelta(hours=1)
+        rfx.response_deadline = datetime.now(UTC) + timedelta(hours=1)
         session.add(rfx)
         session.commit()
 
-        with patch("aeros.workers.reminders.engine", session.get_bind()):
-            with patch("aeros.workers.reminders.Session") as MockSession:
-                MockSession.return_value.__enter__ = MagicMock(return_value=session)
-                MockSession.return_value.__exit__ = MagicMock(return_value=False)
-                with patch("aeros.channels.notifications.notify_vendor", new_callable=AsyncMock) as mock_notify:
-                    mock_notify.return_value = {"in_app": True}
-                    sent = await check_and_send_reminders()
+        with (
+            patch("aeros.workers.reminders.engine", session.get_bind()),
+            patch("aeros.workers.reminders.Session") as MockSession,
+        ):
+            MockSession.return_value.__enter__ = MagicMock(return_value=session)
+            MockSession.return_value.__exit__ = MagicMock(return_value=False)
+            with patch(
+                "aeros.channels.notifications.notify_vendor",
+                new_callable=AsyncMock,
+            ) as mock_notify:
+                mock_notify.return_value = {"in_app": True}
+                sent = await check_and_send_reminders()
 
         # T-24h and T-2h should be due (deadline is 1h away)
         assert sent >= 1
@@ -729,18 +744,20 @@ class TestExtractOfferWorker:
         """Should return False when attachment does not exist."""
         from aeros.workers.extract_offer import extract_offer_from_attachment
 
-        with patch("aeros.workers.extract_offer.engine") as mock_engine:
+        with (
+            patch("aeros.workers.extract_offer.engine"),
+            patch("aeros.workers.extract_offer.Session") as MockSession,
+        ):
             mock_session = MagicMock()
             mock_session.get.return_value = None
-            with patch("aeros.workers.extract_offer.Session") as MockSession:
-                MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
-                MockSession.return_value.__exit__ = MagicMock(return_value=False)
-                result = await extract_offer_from_attachment(
-                    attachment_id=9999,
-                    rfx_id=1,
-                    vendor_id=1,
-                    message_id=1,
-                )
+            MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+            MockSession.return_value.__exit__ = MagicMock(return_value=False)
+            result = await extract_offer_from_attachment(
+                attachment_id=9999,
+                rfx_id=1,
+                vendor_id=1,
+                message_id=1,
+            )
         assert result is False
 
 
@@ -769,17 +786,21 @@ class TestPORenderWorker:
 
         mock_session = MagicMock()
 
-        with patch("aeros.workers.po_render.engine"):
-            with patch("aeros.workers.po_render.Session") as MockSession:
-                MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
-                MockSession.return_value.__exit__ = MagicMock(return_value=False)
-                with patch("aeros.agents.po.POAgent", return_value=mock_agent_instance):
-                    with patch("aeros.ai.factory.get_chat_provider"):
-                        with patch("aeros.security.auth_context.AuthContext"):
-                            result = await render_and_send_po(
-                                rfx_id=1,
-                                award_decisions=[{"vendor_id": 1, "line_item_id": 1}],
-                            )
+        with (
+            patch("aeros.workers.po_render.engine"),
+            patch("aeros.workers.po_render.Session") as MockSession,
+        ):
+            MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+            MockSession.return_value.__exit__ = MagicMock(return_value=False)
+            with (
+                patch("aeros.agents.po.POAgent", return_value=mock_agent_instance),
+                patch("aeros.ai.factory.get_chat_provider"),
+                patch("aeros.security.auth_context.AuthContext"),
+            ):
+                result = await render_and_send_po(
+                    rfx_id=1,
+                    award_decisions=[{"vendor_id": 1, "line_item_id": 1}],
+                )
 
         assert result is True
 
@@ -799,16 +820,20 @@ class TestPORenderWorker:
 
         mock_session = MagicMock()
 
-        with patch("aeros.workers.po_render.engine"):
-            with patch("aeros.workers.po_render.Session") as MockSession:
-                MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
-                MockSession.return_value.__exit__ = MagicMock(return_value=False)
-                with patch("aeros.agents.po.POAgent", return_value=mock_agent_instance):
-                    with patch("aeros.ai.factory.get_chat_provider"):
-                        with patch("aeros.security.auth_context.AuthContext"):
-                            result = await render_and_send_po(
-                                rfx_id=1,
-                                award_decisions=[],
-                            )
+        with (
+            patch("aeros.workers.po_render.engine"),
+            patch("aeros.workers.po_render.Session") as MockSession,
+        ):
+            MockSession.return_value.__enter__ = MagicMock(return_value=mock_session)
+            MockSession.return_value.__exit__ = MagicMock(return_value=False)
+            with (
+                patch("aeros.agents.po.POAgent", return_value=mock_agent_instance),
+                patch("aeros.ai.factory.get_chat_provider"),
+                patch("aeros.security.auth_context.AuthContext"),
+            ):
+                result = await render_and_send_po(
+                    rfx_id=1,
+                    award_decisions=[],
+                )
 
         assert result is False

@@ -4,13 +4,13 @@ from datetime import datetime
 from sqlmodel import Field, SQLModel
 
 
-class Role(str, enum.Enum):
+class Role(enum.StrEnum):
     BUYER = "buyer"
     VENDOR = "vendor"
     ADMIN = "admin"
 
 
-class UserStatus(str, enum.Enum):
+class UserStatus(enum.StrEnum):
     ACTIVE = "active"
     SUSPENDED = "suspended"
     PENDING = "pending"

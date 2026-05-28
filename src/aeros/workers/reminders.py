@@ -1,7 +1,7 @@
 """Reminder worker -- sends multi-slot reminders to vendors per RFx deadline."""
 
 import json
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlmodel import Session, select
@@ -35,15 +35,13 @@ async def check_and_send_reminders() -> int:
         active_rfx = list(
             session.exec(
                 select(RFxRun).where(
-                    RFxRun.status.in_(
-                        [RFxStatus.DISPATCHED, RFxStatus.COLLECTING]
-                    ),
+                    RFxRun.status.in_([RFxStatus.DISPATCHED, RFxStatus.COLLECTING]),
                     RFxRun.response_deadline.is_not(None),
                 )
             ).all()
         )
 
-        now = datetime.utcnow()
+        now = datetime.now(UTC).replace(tzinfo=None)
 
         for rfx in active_rfx:
             if not rfx.response_deadline:
@@ -53,9 +51,7 @@ async def check_and_send_reminders() -> int:
                 session.exec(
                     select(RFxVendor).where(
                         RFxVendor.rfx_id == rfx.id,
-                        RFxVendor.status.in_(
-                            [RFxVendorStatus.INVITED, RFxVendorStatus.VIEWED]
-                        ),
+                        RFxVendor.status.in_([RFxVendorStatus.INVITED, RFxVendorStatus.VIEWED]),
                     )
                 ).all()
             )
@@ -67,9 +63,7 @@ async def check_and_send_reminders() -> int:
                     if slot["name"] in sent_slots:
                         continue
 
-                    trigger_time = rfx.response_deadline - timedelta(
-                        hours=slot["hours_before"]
-                    )
+                    trigger_time = rfx.response_deadline - timedelta(hours=slot["hours_before"])
                     if now >= trigger_time:
                         vendor = session.get(Vendor, rv.vendor_id)
                         if not vendor:
@@ -80,8 +74,7 @@ async def check_and_send_reminders() -> int:
 
                             hours_left = max(
                                 0,
-                                (rfx.response_deadline - now).total_seconds()
-                                / 3600,
+                                (rfx.response_deadline - now).total_seconds() / 3600,
                             )
                             await notify_vendor(
                                 session,

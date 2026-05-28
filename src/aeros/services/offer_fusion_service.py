@@ -81,8 +81,8 @@ def _match_key(item: dict, rfx_line_items: list[dict]) -> str | None:
 
         if item_code and rfx_code and item_code == rfx_code:
             return rfx_code
-        if item_name and rfx_name:
-            if item_name == rfx_name or item_name in rfx_name or rfx_name in item_name:
-                return rfx_name
+        names_match = item_name == rfx_name or item_name in rfx_name or rfx_name in item_name
+        if item_name and rfx_name and names_match:
+            return rfx_name
 
     return None

@@ -1,6 +1,6 @@
 """Tests for observability_service — dashboard aggregations and trace lookups."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -15,7 +15,7 @@ from aeros.services import observability_service
 @pytest.fixture
 def sample_llm_calls(session):
     """Create sample LLM call log entries."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     calls = [
         LLMCallLog(
             trace_id="trace-1",
@@ -50,7 +50,7 @@ def sample_llm_calls(session):
 @pytest.fixture
 def sample_agent_runs(session):
     """Create sample agent run log entries."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     runs = [
         AgentRunLog(
             trace_id="trace-1",
@@ -82,7 +82,7 @@ def sample_agent_runs(session):
 @pytest.fixture
 def sample_channel_events(session):
     """Create sample channel event log entries."""
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     events = [
         ChannelEventLog(
             trace_id="trace-1",

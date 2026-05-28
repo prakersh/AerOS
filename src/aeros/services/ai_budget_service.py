@@ -1,6 +1,6 @@
 """Per-RFx and per-user AI token budget tracking with circuit breaker."""
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlmodel import Session
 
@@ -73,15 +73,13 @@ def record_error(provider: str) -> None:
     Old errors outside the window are pruned on each call.
 
     Args:
-        provider: The provider name (e.g. "nvidia_nim", "groq").
+        provider: The provider name (e.g. "mimo", "nvidia_nim", "groq").
     """
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     if provider not in _error_counts:
         _error_counts[provider] = []
     _error_counts[provider] = [
-        t
-        for t in _error_counts[provider]
-        if (now - t).total_seconds() < CIRCUIT_BREAKER_WINDOW_SEC
+        t for t in _error_counts[provider] if (now - t).total_seconds() < CIRCUIT_BREAKER_WINDOW_SEC
     ]
     _error_counts[provider].append(now)
 
@@ -95,13 +93,9 @@ def check_circuit(provider: str) -> None:
     Raises:
         CircuitOpenError: If too many recent errors have occurred.
     """
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     errors = _error_counts.get(provider, [])
-    recent = [
-        t
-        for t in errors
-        if (now - t).total_seconds() < CIRCUIT_BREAKER_WINDOW_SEC
-    ]
+    recent = [t for t in errors if (now - t).total_seconds() < CIRCUIT_BREAKER_WINDOW_SEC]
     if len(recent) >= CIRCUIT_BREAKER_MAX_ERRORS:
         raise CircuitOpenError(
             f"Circuit breaker open for {provider}: "

@@ -47,7 +47,7 @@ def vendor_user_with_profile(session, vendor_org, buyer_org):
 @pytest.fixture
 def vendor_auth_client(client, vendor_user_with_profile):
     """TestClient with vendor auth cookie set."""
-    user, _ = vendor_user_with_profile
+    _user, _ = vendor_user_with_profile
     resp = client.post(
         "/api/auth/login",
         json={"email": "vendor-api@test.com", "password": "test123"},

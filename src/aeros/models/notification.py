@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlmodel import Field, SQLModel
 
 
-class NotificationStatus(str, enum.Enum):
+class NotificationStatus(enum.StrEnum):
     QUEUED = "queued"
     SENT = "sent"
     FAILED = "failed"

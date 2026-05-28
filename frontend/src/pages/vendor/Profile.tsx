@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useAuthStore } from "@/stores/auth";
+import { Modal, PageHeader, Toast } from "@/components/ui";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -50,64 +51,11 @@ function Toggle({
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Telegram modal                                                      */
-/* ------------------------------------------------------------------ */
-
-function TelegramModal({ onClose }: { onClose: () => void }) {
-  const { user } = useAuthStore();
-  const token = user?.id ?? "unknown";
-  const deepLink = `https://t.me/aeros_bot?start=${token}`;
-
+function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
-      <div className="w-full max-w-md rounded-xl border border-zinc-800 bg-zinc-900 p-6">
-        <h3 className="text-lg font-semibold text-zinc-100">
-          Bind Telegram Account
-        </h3>
-        <p className="mt-2 text-sm text-zinc-400">
-          Click the link below to open Telegram and connect your account to
-          AEROS notifications.
-        </p>
-
-        <div className="mt-4 rounded-lg border border-zinc-700 bg-zinc-950 p-3">
-          <p className="text-xs text-zinc-500 mb-1">Your personal bind link:</p>
-          <a
-            href={deepLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="break-all font-mono text-sm text-indigo-400 hover:underline"
-          >
-            {deepLink}
-          </a>
-        </div>
-
-        <ol className="mt-4 space-y-2 text-sm text-zinc-400">
-          <li className="flex gap-2">
-            <span className="shrink-0 font-medium text-zinc-300">1.</span>
-            Click the link above (or copy it to Telegram).
-          </li>
-          <li className="flex gap-2">
-            <span className="shrink-0 font-medium text-zinc-300">2.</span>
-            Press <span className="font-medium text-zinc-200">Start</span> in the
-            Telegram bot chat.
-          </li>
-          <li className="flex gap-2">
-            <span className="shrink-0 font-medium text-zinc-300">3.</span>
-            You will receive a confirmation message once bound.
-          </li>
-        </ol>
-
-        <div className="mt-6 flex justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-zinc-700"
-          >
-            Close
-          </button>
-        </div>
-      </div>
+    <div className="flex items-center justify-between">
+      <span className="text-xs text-zinc-500">{label}</span>
+      <span className="text-sm text-zinc-300">{value}</span>
     </div>
   );
 }
@@ -126,21 +74,54 @@ export default function VendorProfile() {
   });
 
   const [showTelegramModal, setShowTelegramModal] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [editForm, setEditForm] = useState({
+    vendor_name: "",
+    email: "",
+    phone: "",
+    address: "",
+  });
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const togglePref = (key: keyof NotificationPrefs) => {
     setPrefs((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const token = user?.id ?? "unknown";
+  const deepLink = `https://t.me/aeros_bot?start=${token}`;
+
+  function openEditProfileModal() {
+    setEditForm({
+      vendor_name: user?.display_name ?? "",
+      email: user?.email ?? "",
+      phone: "",
+      address: "",
+    });
+    setEditProfileOpen(true);
+  }
+
+  function handleProfileSave() {
+    setEditProfileOpen(false);
+    setToastMessage("Profile update submitted");
+  }
+
   return (
     <div className="p-6">
-      <div className="mb-8">
-        <h1 className="text-2xl font-semibold text-zinc-100">Vendor Profile</h1>
-        <p className="mt-1 text-sm text-zinc-500">
-          Business details, categories, and offered terms.
-        </p>
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Vendor Profile"
+          subtitle="Business details, categories, and offered terms."
+        />
+        <button
+          type="button"
+          onClick={openEditProfileModal}
+          className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800"
+        >
+          Edit Profile
+        </button>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="mt-8 grid gap-6 lg:grid-cols-2">
         {/* ---- Profile info card ---- */}
         <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500">
@@ -218,22 +199,125 @@ export default function VendorProfile() {
       </div>
 
       {/* Telegram modal */}
-      {showTelegramModal && (
-        <TelegramModal onClose={() => setShowTelegramModal(false)} />
+      <Modal
+        open={showTelegramModal}
+        onClose={() => setShowTelegramModal(false)}
+        title="Bind Telegram Account"
+        size="md"
+      >
+        <p className="text-sm text-zinc-400">
+          Click the link below to open Telegram and connect your account to
+          AEROS notifications.
+        </p>
+
+        <div className="mt-4 rounded-lg border border-zinc-700 bg-zinc-950 p-3">
+          <p className="text-xs text-zinc-500 mb-1">Your personal bind link:</p>
+          <a
+            href={deepLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="break-all font-mono text-sm text-indigo-400 hover:underline"
+          >
+            {deepLink}
+          </a>
+        </div>
+
+        <ol className="mt-4 space-y-2 text-sm text-zinc-400">
+          <li className="flex gap-2">
+            <span className="shrink-0 font-medium text-zinc-300">1.</span>
+            Click the link above (or copy it to Telegram).
+          </li>
+          <li className="flex gap-2">
+            <span className="shrink-0 font-medium text-zinc-300">2.</span>
+            Press <span className="font-medium text-zinc-200">Start</span> in the
+            Telegram bot chat.
+          </li>
+          <li className="flex gap-2">
+            <span className="shrink-0 font-medium text-zinc-300">3.</span>
+            You will receive a confirmation message once bound.
+          </li>
+        </ol>
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={() => setShowTelegramModal(false)}
+            className="rounded-lg bg-zinc-800 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-zinc-700"
+          >
+            Close
+          </button>
+        </div>
+      </Modal>
+
+      {/* Edit Profile Modal */}
+      <Modal
+        open={editProfileOpen}
+        onClose={() => setEditProfileOpen(false)}
+        title="Edit Profile"
+        size="md"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Vendor Name</label>
+            <input
+              type="text"
+              value={editForm.vendor_name}
+              onChange={(e) => setEditForm((f) => ({ ...f, vendor_name: e.target.value }))}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Email</label>
+            <input
+              type="email"
+              value={editForm.email}
+              onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Phone</label>
+            <input
+              type="tel"
+              value={editForm.phone}
+              onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+              placeholder="+91 98765 43210"
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-zinc-500">Address</label>
+            <textarea
+              value={editForm.address}
+              onChange={(e) => setEditForm((f) => ({ ...f, address: e.target.value }))}
+              rows={3}
+              placeholder="Business address..."
+              className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm text-zinc-100 outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+            />
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setEditProfileOpen(false)}
+              className="rounded-lg border border-zinc-700 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleProfileSave}
+              className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-indigo-500"
+            >
+              Save
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Toast */}
+      {toastMessage && (
+        <Toast message={toastMessage} onClose={() => setToastMessage(null)} />
       )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/* Tiny helper                                                         */
-/* ------------------------------------------------------------------ */
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-xs text-zinc-500">{label}</span>
-      <span className="text-sm text-zinc-300">{value}</span>
     </div>
   );
 }

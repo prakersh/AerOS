@@ -73,9 +73,7 @@ def rfx(session: Session, buyer: User) -> RFxRun:
 
 
 class TestGetOrCreateThread:
-    def test_creates_new_thread(
-        self, session: Session, rfx: RFxRun, vendor_record: Vendor
-    ) -> None:
+    def test_creates_new_thread(self, session: Session, rfx: RFxRun, vendor_record: Vendor) -> None:
         """Should create a new thread when none exists."""
         thread = thread_service.get_or_create_thread(session, rfx.id, vendor_record.id)
 
@@ -116,9 +114,7 @@ class TestAddMessage:
         assert msg.sender_kind == "buyer"
         assert msg.body_text == "Hello vendor!"
 
-    def test_add_system_message(
-        self, session: Session, rfx: RFxRun, vendor_record: Vendor
-    ) -> None:
+    def test_add_system_message(self, session: Session, rfx: RFxRun, vendor_record: Vendor) -> None:
         """System messages should have sender_user_id=None."""
         thread = thread_service.get_or_create_thread(session, rfx.id, vendor_record.id)
         msg = thread_service.add_message(
@@ -178,9 +174,7 @@ class TestGetThreadMessages:
 
 
 class TestGetThreadAttachments:
-    def test_no_attachments(
-        self, session: Session, rfx: RFxRun, vendor_record: Vendor
-    ) -> None:
+    def test_no_attachments(self, session: Session, rfx: RFxRun, vendor_record: Vendor) -> None:
         """Thread with no messages should return empty attachments."""
         thread = thread_service.get_or_create_thread(session, rfx.id, vendor_record.id)
         attachments = thread_service.get_thread_attachments(session, thread.id)

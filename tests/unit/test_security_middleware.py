@@ -14,9 +14,7 @@ from starlette.responses import Response
 class TestCSRFMiddleware:
     """Tests for CSRF token validation by calling dispatch directly."""
 
-    def _build_request(
-        self, method="GET", cookies=None, headers=None
-    ) -> Request:
+    def _build_request(self, method="GET", cookies=None, headers=None) -> Request:
         """Build a minimal ASGI scope request."""
         scope = {
             "type": "http",
@@ -26,9 +24,7 @@ class TestCSRFMiddleware:
             "headers": [],
         }
         if headers:
-            scope["headers"] = [
-                (k.lower().encode(), v.encode()) for k, v in headers.items()
-            ]
+            scope["headers"] = [(k.lower().encode(), v.encode()) for k, v in headers.items()]
         # Starlette reads cookies from the 'cookie' header
         if cookies:
             cookie_str = "; ".join(f"{k}={v}" for k, v in cookies.items())
@@ -76,6 +72,7 @@ class TestCSRFMiddleware:
         call_next = AsyncMock()
 
         import asyncio
+
         with patch("aeros.security.csrf.settings") as mock_settings:
             mock_settings.debug = False
             result = asyncio.run(middleware.dispatch(request, call_next))
@@ -95,6 +92,7 @@ class TestCSRFMiddleware:
         call_next = AsyncMock()
 
         import asyncio
+
         with patch("aeros.security.csrf.settings") as mock_settings:
             mock_settings.debug = False
             result = asyncio.run(middleware.dispatch(request, call_next))
@@ -114,6 +112,7 @@ class TestCSRFMiddleware:
         call_next = AsyncMock(return_value=expected_response)
 
         import asyncio
+
         with patch("aeros.security.csrf.settings") as mock_settings:
             mock_settings.debug = False
             result = asyncio.run(middleware.dispatch(request, call_next))
@@ -125,12 +124,11 @@ class TestCSRFMiddleware:
         from aeros.security.csrf import CSRFMiddleware
 
         middleware = CSRFMiddleware(app=None)
-        request = self._build_request(
-            method="POST", cookies={"aeros_csrf": "token-only"}
-        )
+        request = self._build_request(method="POST", cookies={"aeros_csrf": "token-only"})
         call_next = AsyncMock()
 
         import asyncio
+
         with patch("aeros.security.csrf.settings") as mock_settings:
             mock_settings.debug = False
             result = asyncio.run(middleware.dispatch(request, call_next))
@@ -141,12 +139,11 @@ class TestCSRFMiddleware:
         from aeros.security.csrf import CSRFMiddleware
 
         middleware = CSRFMiddleware(app=None)
-        request = self._build_request(
-            method="POST", headers={"x-csrf-token": "token-only"}
-        )
+        request = self._build_request(method="POST", headers={"x-csrf-token": "token-only"})
         call_next = AsyncMock()
 
         import asyncio
+
         with patch("aeros.security.csrf.settings") as mock_settings:
             mock_settings.debug = False
             result = asyncio.run(middleware.dispatch(request, call_next))
@@ -157,14 +154,13 @@ class TestCSRFMiddleware:
         from aeros.security.csrf import CSRFMiddleware
 
         middleware = CSRFMiddleware(app=None)
-        request = self._build_request(
-            method="GET", cookies={"aeros_csrf": "existing-token"}
-        )
+        request = self._build_request(method="GET", cookies={"aeros_csrf": "existing-token"})
         mock_response = MagicMock()
         mock_response.set_cookie = MagicMock()
         call_next = AsyncMock(return_value=mock_response)
 
         import asyncio
+
         asyncio.run(middleware.dispatch(request, call_next))
         mock_response.set_cookie.assert_not_called()
 
@@ -255,7 +251,7 @@ class TestRateLimitMiddleware:
             asyncio.run(middleware.dispatch(request, call_next))
 
             # Third should fail
-            with pytest.raises(Exception):
+            with pytest.raises(Exception):  # noqa: B017
                 asyncio.run(middleware.dispatch(request, call_next))
 
             # Clear the bucket by advancing time
@@ -282,6 +278,7 @@ class TestRateLimitMiddleware:
             call_next = AsyncMock(return_value=response)
 
             import asyncio
+
             result = asyncio.run(middleware.dispatch(request, call_next))
             assert "X-RateLimit-Remaining" in result.headers
 
@@ -333,6 +330,7 @@ class TestRateLimitMiddleware:
                 call_next = AsyncMock(return_value=Response(content="ok"))
 
                 import asyncio
+
                 # Should never be rate limited
                 for _ in range(5):
                     result = asyncio.run(middleware.dispatch(request, call_next))

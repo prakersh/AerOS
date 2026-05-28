@@ -1,3 +1,4 @@
+import contextlib
 import json
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -113,6 +114,49 @@ def get_rfx(
     return details
 
 
+@router.get("/rfx/{rfx_id}/vendor-suggestions")
+def vendor_suggestions(
+    rfx_id: int,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
+):
+    _verify_rfx_ownership(session, rfx_id, caller)
+    try:
+        return rfx_service.get_vendor_suggestions(session, rfx_id, caller.org_id or 0)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(404, msg) from None
+        raise HTTPException(400, msg) from None
+
+
+class VendorAssignment(BaseModel):
+    vendor_id: int
+    line_item_ids: list[int]
+
+
+class AssignVendorsRequest(BaseModel):
+    assignments: list[VendorAssignment]
+
+
+@router.post("/rfx/{rfx_id}/assign-vendors")
+def assign_vendors(
+    rfx_id: int,
+    body: AssignVendorsRequest,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.BUYER),
+):
+    _verify_rfx_ownership(session, rfx_id, caller)
+    try:
+        assignments = [a.model_dump() for a in body.assignments]
+        return rfx_service.assign_vendors_to_items(session, rfx_id, caller.user_id, assignments)
+    except ValueError as e:
+        msg = str(e)
+        if "not found" in msg.lower():
+            raise HTTPException(404, msg) from None
+        raise HTTPException(400, msg) from None
+
+
 class CancelRFxRequest(BaseModel):
     reason: str = ""
 
@@ -130,8 +174,8 @@ def cancel_rfx(
     except ValueError as e:
         msg = str(e)
         if "not found" in msg.lower():
-            raise HTTPException(404, msg)
-        raise HTTPException(400, msg)
+            raise HTTPException(404, msg) from None
+        raise HTTPException(400, msg) from None
 
 
 class AwardRequest(BaseModel):
@@ -151,8 +195,8 @@ def award_rfx(
     except ValueError as e:
         msg = str(e)
         if "not found" in msg.lower():
-            raise HTTPException(404, msg)
-        raise HTTPException(400, msg)
+            raise HTTPException(404, msg) from None
+        raise HTTPException(400, msg) from None
 
 
 # --- Activity ---
@@ -176,18 +220,18 @@ def list_activity(
     for log in logs:
         after = {}
         if log.after_json:
-            try:
+            with contextlib.suppress(json.JSONDecodeError):
                 after = json.loads(log.after_json)
-            except json.JSONDecodeError:
-                pass
-        results.append({
-            "id": log.id,
-            "action": log.action,
-            "entity_type": log.entity_type,
-            "entity_id": log.entity_id,
-            "details": after,
-            "created_at": log.created_at.isoformat() if log.created_at else "",
-        })
+        results.append(
+            {
+                "id": log.id,
+                "action": log.action,
+                "entity_type": log.entity_type,
+                "entity_id": log.entity_id,
+                "details": after,
+                "created_at": log.created_at.isoformat() if log.created_at else "",
+            }
+        )
     return results
 
 

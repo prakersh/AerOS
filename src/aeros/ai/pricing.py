@@ -1,12 +1,14 @@
 """Per-model token pricing for LLM cost estimation."""
 
 MODEL_PRICING: dict[str, dict[str, float]] = {
-    # NVIDIA NIM models (self-hosted = $0, but track for capacity planning)
-    "nvidia/llama-3.1-nemotron-70b-instruct": {"input": 0.0, "output": 0.0},
-    "meta/llama-3.2-90b-vision-instruct": {"input": 0.0, "output": 0.0},
+    # Mimo v2.5 models
+    "mimo-v2.5": {"input": 0.0, "output": 0.0},
+    "mimo-v2.5-pro": {"input": 0.0, "output": 0.0},
+    # NVIDIA NIM (embeddings only)
     "nvidia/nv-embed-v1": {"input": 0.0, "output": 0.0},
     # Groq (pay-per-use)
-    "whisper-large-v3-turbo": {"input": 0.0, "output": 0.0},  # ASR pricing is per-minute, not tokens
+    # ASR pricing is per-minute, not tokens
+    "whisper-large-v3-turbo": {"input": 0.0, "output": 0.0},
     # Anthropic (if used)
     "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},
     "claude-haiku-4-5": {"input": 0.0008, "output": 0.004},
@@ -31,9 +33,8 @@ def estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> flo
     if not pricing:
         best_key: str | None = None
         for key in MODEL_PRICING:
-            if key in model or model in key:
-                if best_key is None or len(key) > len(best_key):
-                    best_key = key
+            if (key in model or model in key) and (best_key is None or len(key) > len(best_key)):
+                best_key = key
         if best_key is not None:
             pricing = MODEL_PRICING[best_key]
     if not pricing:

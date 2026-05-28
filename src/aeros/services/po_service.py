@@ -89,9 +89,7 @@ def get_po_by_award(session: Session, award_id: int) -> PurchaseOrder | None:
     Returns:
         PurchaseOrder if found, else None.
     """
-    return session.exec(
-        select(PurchaseOrder).where(PurchaseOrder.award_id == award_id)
-    ).first()
+    return session.exec(select(PurchaseOrder).where(PurchaseOrder.award_id == award_id)).first()
 
 
 def list_pos_for_rfx(session: Session, rfx_id: int) -> list[dict]:
@@ -108,11 +106,13 @@ def list_pos_for_rfx(session: Session, rfx_id: int) -> list[dict]:
     result = []
     for award in awards:
         po = get_po_by_award(session, award.id)
-        result.append({
-            "award_id": award.id,
-            "vendor_id": po.vendor_id if po else None,
-            "po_number": po.po_number if po else None,
-            "pdf_path": po.pdf_path if po else None,
-            "issued_at": po.issued_at.isoformat() if po and po.issued_at else "",
-        })
+        result.append(
+            {
+                "award_id": award.id,
+                "vendor_id": po.vendor_id if po else None,
+                "po_number": po.po_number if po else None,
+                "pdf_path": po.pdf_path if po else None,
+                "issued_at": po.issued_at.isoformat() if po and po.issued_at else "",
+            }
+        )
     return result

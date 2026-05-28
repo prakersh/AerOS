@@ -4,13 +4,13 @@ from datetime import datetime
 from sqlmodel import Field, SQLModel
 
 
-class RFxType(str, enum.Enum):
+class RFxType(enum.StrEnum):
     RFQ = "RFQ"
     RFI = "RFI"
     RFP = "RFP"
 
 
-class RFxStatus(str, enum.Enum):
+class RFxStatus(enum.StrEnum):
     DRAFTING = "drafting"
     AWAITING_APPROVAL = "awaiting_approval"
     DISPATCHED = "dispatched"
@@ -21,7 +21,7 @@ class RFxStatus(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class RFxVendorStatus(str, enum.Enum):
+class RFxVendorStatus(enum.StrEnum):
     INVITED = "invited"
     VIEWED = "viewed"
     QUOTED = "quoted"
@@ -29,7 +29,7 @@ class RFxVendorStatus(str, enum.Enum):
     EXPIRED = "expired"
 
 
-class ExtractionStatus(str, enum.Enum):
+class ExtractionStatus(enum.StrEnum):
     PENDING = "pending"
     EXTRACTED = "extracted"
     FAILED = "failed"
@@ -79,6 +79,7 @@ class RFxVendor(SQLModel, table=True):
     decline_reason: str | None = None
     declined_at: datetime | None = None
     reminders_sent_json: str = "[]"
+    line_item_ids_json: str | None = None  # JSON array of line item IDs; null = all items
 
 
 class Thread(SQLModel, table=True):

@@ -69,8 +69,20 @@ def category(session):
 
 @pytest.fixture
 def skus(session, buyer_org, category):
-    sku1 = SKU(org_id=buyer_org.id, code="GROC-001", name="Rice", category_id=category.id, unit="kg")
-    sku2 = SKU(org_id=buyer_org.id, code="GROC-002", name="Wheat", category_id=category.id, unit="kg")
+    sku1 = SKU(
+        org_id=buyer_org.id,
+        code="GROC-001",
+        name="Rice",
+        category_id=category.id,
+        unit="kg",
+    )
+    sku2 = SKU(
+        org_id=buyer_org.id,
+        code="GROC-002",
+        name="Wheat",
+        category_id=category.id,
+        unit="kg",
+    )
     session.add(sku1)
     session.add(sku2)
     session.commit()
@@ -134,7 +146,13 @@ class TestCreateOfferFromExtraction:
         assert offer.is_late is False
         assert offer.extraction_confidence_overall == 0.85
 
-    def test_offer_maps_line_items_by_sku_name(self, session, rfx_run, vendor_record, rfx_line_items):
+    def test_offer_maps_line_items_by_sku_name(
+        self,
+        session,
+        rfx_run,
+        vendor_record,
+        rfx_line_items,
+    ):
         """Should fuzzy-match extracted line item names to RFx line items."""
         extraction = {
             "line_items": [
@@ -153,7 +171,13 @@ class TestCreateOfferFromExtraction:
         # "rice" should match to the Rice SKU's line item
         assert items[0]["line_item_id"] == rfx_line_items[0].id
 
-    def test_revision_increments_on_duplicate(self, session, rfx_run, vendor_record, rfx_line_items):
+    def test_revision_increments_on_duplicate(
+        self,
+        session,
+        rfx_run,
+        vendor_record,
+        rfx_line_items,
+    ):
         """Second offer from same vendor should be revision 2 and supersede the first."""
         extraction = {"line_items": [], "total_quote": 1000.0}
         offer1 = offer_service.create_offer_from_extraction(
@@ -202,7 +226,10 @@ class TestCreateOfferFromExtraction:
 
     def test_raw_extraction_json_stored(self, session, rfx_run, vendor_record):
         """Should store the raw extraction data as JSON."""
-        extraction = {"line_items": [{"sku_name": "Rice", "unit_price": 40}], "custom_field": "value"}
+        extraction = {
+            "line_items": [{"sku_name": "Rice", "unit_price": 40}],
+            "custom_field": "value",
+        }
         offer = offer_service.create_offer_from_extraction(
             session=session,
             rfx_id=rfx_run.id,
@@ -222,7 +249,7 @@ class TestGetOffersForRfx:
 
     def test_returns_only_non_superseded(self, session, rfx_run, vendor_record):
         """Should return only the latest (non-superseded) offers."""
-        offer1 = offer_service.create_offer_from_extraction(
+        offer_service.create_offer_from_extraction(
             session=session,
             rfx_id=rfx_run.id,
             vendor_id=vendor_record.id,

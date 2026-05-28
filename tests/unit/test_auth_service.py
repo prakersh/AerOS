@@ -25,5 +25,6 @@ def test_authenticate_nonexistent(session):
 
 def test_register_duplicate(session, buyer_user):
     import pytest
+
     with pytest.raises(ValueError, match="already registered"):
         register_user(session, "buyer@test.com", "pass", "Dup", "buyer")

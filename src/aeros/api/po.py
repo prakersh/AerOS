@@ -24,7 +24,7 @@ def get_po(
     po = session.get(PurchaseOrder, po_id)
     if not po:
         raise HTTPException(404, "PO not found")
-    award = session.get(Award, po.award_id)
+    session.get(Award, po.award_id)
     return {
         "id": po.id,
         "po_number": po.po_number,
@@ -66,14 +66,14 @@ def list_pos_for_rfx(
     awards = list(session.exec(select(Award).where(Award.rfx_id == rfx_id)).all())
     result = []
     for award in awards:
-        po = session.exec(
-            select(PurchaseOrder).where(PurchaseOrder.award_id == award.id)
-        ).first()
-        result.append({
-            "award_id": award.id,
-            "vendor_id": po.vendor_id if po else None,
-            "po_number": po.po_number if po else None,
-            "has_pdf": bool(po and po.pdf_path),
-            "po_id": po.id if po else None,
-        })
+        po = session.exec(select(PurchaseOrder).where(PurchaseOrder.award_id == award.id)).first()
+        result.append(
+            {
+                "award_id": award.id,
+                "vendor_id": po.vendor_id if po else None,
+                "po_number": po.po_number if po else None,
+                "has_pdf": bool(po and po.pdf_path),
+                "po_id": po.id if po else None,
+            }
+        )
     return result

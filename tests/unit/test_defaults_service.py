@@ -84,9 +84,7 @@ class TestUpdateDefaults:
         session.add(UserDefaults(user_id=user.id))
         session.commit()
 
-        result = defaults_service.update_defaults(
-            session, user.id, currency_default="USD"
-        )
+        result = defaults_service.update_defaults(session, user.id, currency_default="USD")
 
         assert result.currency_default == "USD"
         # Other fields keep their model defaults
@@ -129,9 +127,7 @@ class TestEnsureDefaults:
         assert result.currency_default == "INR"  # model default
         assert result.payment_terms_default == "NET30"
 
-    def test_returns_existing_without_change(
-        self, session: Session, user: User
-    ) -> None:
+    def test_returns_existing_without_change(self, session: Session, user: User) -> None:
         """Should return existing defaults unchanged."""
         session.add(UserDefaults(user_id=user.id, currency_default="EUR"))
         session.commit()

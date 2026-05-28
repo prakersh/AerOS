@@ -31,28 +31,28 @@ def list_providers(session: Session) -> list[dict]:
                 }
                 for p in providers
             ]
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
     # Env fallback
     return [
         {
             "id": 1,
-            "provider_name": "nvidia_nim",
+            "provider_name": "mimo",
             "model_id": settings.default_chat_model,
-            "display_name": "NVIDIA NIM Chat",
+            "display_name": "Mimo v2.5 Chat",
             "capability": "chat",
             "is_default": True,
-            "status": "active" if settings.nvidia_api_key else "disabled",
+            "status": "active" if settings.mimo_api_key else "disabled",
         },
         {
             "id": 2,
-            "provider_name": "nvidia_nim",
+            "provider_name": "mimo",
             "model_id": settings.default_vision_model,
-            "display_name": "NVIDIA NIM Vision",
+            "display_name": "Mimo v2.5 Vision",
             "capability": "vision",
             "is_default": True,
-            "status": "active" if settings.nvidia_api_key else "disabled",
+            "status": "active" if settings.mimo_api_key else "disabled",
         },
         {
             "id": 3,
@@ -79,13 +79,17 @@ def test_provider_connection(provider_name: str) -> dict:
     """Quick connectivity check for a provider.
 
     Args:
-        provider_name: Provider identifier (e.g. "nvidia_nim", "groq").
+        provider_name: Provider identifier (e.g. "mimo", "nvidia_nim", "groq").
 
     Returns:
         Dict with ok (bool) and optionally error or latency_ms.
     """
     try:
-        if provider_name == "nvidia_nim":
+        if provider_name == "mimo":
+            if not settings.mimo_api_key:
+                return {"ok": False, "error": "Mimo API key not set"}
+            return {"ok": True, "latency_ms": 0}
+        elif provider_name == "nvidia_nim":
             if not settings.nvidia_api_key:
                 return {"ok": False, "error": "NVIDIA API key not set"}
             return {"ok": True, "latency_ms": 0}

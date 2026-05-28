@@ -20,17 +20,28 @@ class IntakeAgent(BaseAgent):
         # Gather context for the LLM
         skus = inventory_service.list_skus(ctx.session, org_id)
         sku_list = [
-            {"id": s.id, "code": s.code, "name": s.name, "unit": s.unit,
-             "last_price": s.last_price, "category_id": s.category_id}
+            {
+                "id": s.id,
+                "code": s.code,
+                "name": s.name,
+                "unit": s.unit,
+                "last_price": s.last_price,
+                "category_id": s.category_id,
+            }
             for s in skus
         ]
 
         vendors = vendor_service.list_vendors(ctx.session, org_id)
         vendor_list = [
-            {"id": v.id, "name": v.name, "email": v.primary_email,
-             "categories": v.category_ids_csv, "score": v.performance_score,
-             "has_telegram": bool(v.telegram_chat_id),
-             "has_user_account": bool(v.vendor_user_id)}
+            {
+                "id": v.id,
+                "name": v.name,
+                "email": v.primary_email,
+                "categories": v.category_ids_csv,
+                "score": v.performance_score,
+                "has_telegram": bool(v.telegram_chat_id),
+                "has_user_account": bool(v.vendor_user_id),
+            }
             for v in vendors
         ]
 
@@ -56,15 +67,14 @@ class IntakeAgent(BaseAgent):
             ChatMessage(role="system", content=INTAKE_SYSTEM_PROMPT),
             ChatMessage(
                 role="system",
-                content=f"INVENTORY (available SKUs):\n{json.dumps(sku_list, indent=2)}"
+                content=f"INVENTORY (available SKUs):\n{json.dumps(sku_list, indent=2)}",
+            ),
+            ChatMessage(
+                role="system", content=f"VENDOR DIRECTORY:\n{json.dumps(vendor_list, indent=2)}"
             ),
             ChatMessage(
                 role="system",
-                content=f"VENDOR DIRECTORY:\n{json.dumps(vendor_list, indent=2)}"
-            ),
-            ChatMessage(
-                role="system",
-                content=f"BUYER DEFAULT TERMS:\n{json.dumps(defaults_info, indent=2)}"
+                content=f"BUYER DEFAULT TERMS:\n{json.dumps(defaults_info, indent=2)}",
             ),
         ]
 

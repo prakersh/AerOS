@@ -9,7 +9,8 @@ class TestAIFactory:
         from aeros.ai.factory import get_chat_provider
 
         with patch("aeros.ai.factory.settings") as mock_settings:
-            mock_settings.nvidia_api_key = "test-key"
+            mock_settings.mimo_api_key = "test-key"
+            mock_settings.mimo_base_url = "https://test.xiaomimimo.com/v1"
             mock_settings.default_chat_model = "test-model"
             provider = get_chat_provider()
             assert provider is not None
@@ -19,7 +20,8 @@ class TestAIFactory:
         from aeros.ai.factory import get_vision_provider
 
         with patch("aeros.ai.factory.settings") as mock_settings:
-            mock_settings.nvidia_api_key = "test-key"
+            mock_settings.mimo_api_key = "test-key"
+            mock_settings.mimo_base_url = "https://test.xiaomimimo.com/v1"
             mock_settings.default_vision_model = "test-model"
             provider = get_vision_provider()
             assert provider is not None

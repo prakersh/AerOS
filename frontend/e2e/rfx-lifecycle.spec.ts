@@ -9,17 +9,34 @@ test.describe("RFx Full Lifecycle", () => {
     await expect(page.locator("text=Open RFx")).toBeVisible();
   });
 
-  test("buyer can navigate to RFx detail page", async ({ page }) => {
+  test("buyer can navigate to RFx detail page via direct URL", async ({ page }) => {
+    await loginAsBuyer(page);
+    // RFx tiles are now buttons that open modals; navigate directly for detail page
+    await page.goto("/buyer/rfx/1");
+    await page.waitForLoadState("networkidle");
+
+    await expect(page.locator("text=Line Items")).toBeVisible({ timeout: 10000 });
+    await expect(page.locator("text=Vendor Responses")).toBeVisible();
+    await expect(page.locator("text=RFx Journey")).toBeVisible();
+  });
+
+  test("buyer can navigate to RFx detail via dashboard modal", async ({ page }) => {
     await loginAsBuyer(page);
     await page.waitForLoadState("networkidle");
 
-    const rfxLink = page.locator('a[href*="/buyer/rfx/"]').first();
-    await expect(rfxLink).toBeVisible({ timeout: 10000 });
-    await rfxLink.click();
-    await page.waitForLoadState("networkidle");
+    // Click first RFx tile button to open quick-view modal
+    const tile = page.locator('button.group').first();
+    const count = await tile.count();
+    test.skip(count === 0, "No RFx tiles on dashboard");
+    await tile.click();
 
-    await expect(page.locator("h2:has-text('Line Items')")).toBeVisible({ timeout: 10000 });
-    await expect(page.locator("h2:has-text('Vendor Responses')")).toBeVisible();
+    // Click "View Full Details" link inside the modal
+    const viewDetails = page.locator('text=View Full Details');
+    await expect(viewDetails).toBeVisible({ timeout: 5000 });
+    await viewDetails.click();
+
+    await page.waitForLoadState("networkidle");
+    await expect(page.locator("text=Line Items")).toBeVisible({ timeout: 10000 });
   });
 
   test("buyer can send message to AI co-pilot", async ({ page }) => {
@@ -29,7 +46,8 @@ test.describe("RFx Full Lifecycle", () => {
     await expect(input).toBeVisible({ timeout: 10000 });
 
     await input.fill("I need 50kg tomatoes");
-    await input.press("Enter");
+    // Enter creates newlines now; use Ctrl+Enter to send
+    await input.press("Control+Enter");
 
     await expect(page.locator("text=50kg tomatoes")).toBeVisible({ timeout: 5000 });
   });
@@ -43,11 +61,14 @@ test.describe("RFx Full Lifecycle", () => {
   test("vendor can view RFx thread", async ({ page }) => {
     await loginAsVendor(page);
     await page.waitForLoadState("networkidle");
+    // Vendor inbox items are now buttons; match on the "Dispatched" status badge text
     const rfxItem = page.locator('button:has-text("Dispatched")').first();
     const count = await rfxItem.count();
     test.skip(count === 0, "No RFx invitations in inbox");
     await rfxItem.click();
     await page.waitForURL(/\/vendor\/rfx\/\d+/, { timeout: 15000 });
+    // Reply textarea is now inside the Chat tab
+    await page.locator('button:has-text("Chat")').click();
     await expect(page.locator('textarea[placeholder*="reply" i]')).toBeVisible({ timeout: 10000 });
   });
 

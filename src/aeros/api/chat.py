@@ -1,5 +1,6 @@
 """Chat API — conversational AI for buyer + vendor co-pilots, plus RFx actions."""
 
+import contextlib
 import json
 import traceback
 from datetime import datetime
@@ -10,8 +11,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
-logger = structlog.get_logger()
-
 from aeros.agents.base import AgentContext
 from aeros.agents.intake import IntakeAgent
 from aeros.agents.sourcing import SourcingAgent
@@ -21,6 +20,8 @@ from aeros.models.sku import SKU
 from aeros.models.user import Role
 from aeros.security.auth_context import AuthContext, get_current_user
 from aeros.services import rfx_service
+
+logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
@@ -49,7 +50,12 @@ async def chat(
     if caller.role == Role.BUYER:
         agent = IntakeAgent()
         chat_provider = get_chat_provider()
+        chat_provider.user_id = caller.user_id
+        chat_provider.rfx_id = body.rfx_id
         vision_provider = get_vision_provider()
+        if vision_provider:
+            vision_provider.user_id = caller.user_id
+            vision_provider.rfx_id = body.rfx_id
 
         ctx = AgentContext(
             session=session,
@@ -62,11 +68,13 @@ async def chat(
 
         try:
             result = await agent.run(ctx, body.message)
-            return JSONResponse(content={
-                "message": result.message,
-                "data": result.data,
-                "success": result.success,
-            })
+            return JSONResponse(
+                content={
+                    "message": result.message,
+                    "data": result.data,
+                    "success": result.success,
+                }
+            )
         except Exception as e:
             logger.error("chat.error", error=str(e), traceback=traceback.format_exc())
             return JSONResponse(
@@ -79,7 +87,12 @@ async def chat(
 
         agent = VendorCopilotAgent()
         chat_provider = get_chat_provider()
+        chat_provider.user_id = caller.user_id
+        chat_provider.rfx_id = body.rfx_id
         vision_provider = get_vision_provider()
+        if vision_provider:
+            vision_provider.user_id = caller.user_id
+            vision_provider.rfx_id = body.rfx_id
 
         ctx = AgentContext(
             session=session,
@@ -92,11 +105,13 @@ async def chat(
 
         try:
             result = await agent.run(ctx, body.message)
-            return JSONResponse(content={
-                "message": result.message,
-                "data": result.data,
-                "success": result.success,
-            })
+            return JSONResponse(
+                content={
+                    "message": result.message,
+                    "data": result.data,
+                    "success": result.success,
+                }
+            )
         except Exception as e:
             logger.error("vendor_chat.error", error=str(e), traceback=traceback.format_exc())
             return JSONResponse(
@@ -121,25 +136,19 @@ async def create_rfx_from_draft(
         deadline_str = draft.get("response_deadline")
         deadline = None
         if deadline_str:
-            try:
+            with contextlib.suppress(ValueError, TypeError):
                 deadline = datetime.fromisoformat(deadline_str)
-            except (ValueError, TypeError):
-                pass
 
         dw_start_str = draft.get("delivery_window_start")
         dw_end_str = draft.get("delivery_window_end")
         dw_start = None
         dw_end = None
         if dw_start_str:
-            try:
+            with contextlib.suppress(ValueError, TypeError):
                 dw_start = datetime.fromisoformat(dw_start_str)
-            except (ValueError, TypeError):
-                pass
         if dw_end_str:
-            try:
+            with contextlib.suppress(ValueError, TypeError):
                 dw_end = datetime.fromisoformat(dw_end_str)
-            except (ValueError, TypeError):
-                pass
 
         rfx = rfx_service.create_rfx(
             session,
@@ -154,31 +163,91 @@ async def create_rfx_from_draft(
             notes_for_vendors=draft.get("notes_for_vendors"),
         )
 
-        line_items_data = draft.get("line_items", [])
+        # Accept both "line_items" (frontend shape) and "items" (agent shape)
+        line_items_data = draft.get("line_items") or draft.get("items") or []
         li_records = []
         for li in line_items_data:
-            sku_name = li.get("sku_name", "")
-            sku = session.exec(select(SKU).where(SKU.name == sku_name)).first()
-            if not sku:
+            # Support multiple field name conventions from different agent responses
+            sku_name = li.get("sku_name") or li.get("name") or li.get("item_name") or ""
+            qty = li.get("qty") or li.get("quantity") or li.get("count") or 0
+            unit = li.get("unit") or li.get("unit_override") or "pcs"
+            target_price = (
+                li.get("target_price")
+                or li.get("est_unit_price")
+                or li.get("last_price")
+                or li.get("price")
+            )
+
+            # Try to find SKU by exact name, then fuzzy match
+            sku_id = li.get("sku_id")
+            sku = None
+            if sku_id:
+                sku = session.get(SKU, sku_id)
+            if not sku and sku_name:
+                sku = session.exec(select(SKU).where(SKU.name == sku_name)).first()
+            if not sku and sku_name:
                 sku = session.exec(
                     select(SKU).where(SKU.name.ilike(f"%{sku_name}%"))  # type: ignore[union-attr]
                 ).first()
             if sku:
-                li_records.append({
-                    "sku_id": sku.id,
-                    "qty": li.get("qty", 0),
-                    "unit_override": li.get("unit"),
-                    "target_price": li.get("target_price"),
-                })
+                li_records.append(
+                    {
+                        "sku_id": sku.id,
+                        "qty": int(qty),
+                        "unit_override": unit,
+                        "target_price": float(target_price) if target_price else None,
+                    }
+                )
 
         if li_records:
             rfx_service.add_line_items(session, rfx.id, li_records)  # type: ignore[arg-type]
 
-        return JSONResponse(content={
-            "message": f"RFx '{rfx.title}' created successfully!",
-            "data": {"rfx_id": rfx.id, "status": "created"},
-            "success": True,
-        })
+        # Suggest vendors based on the SKUs in the draft
+        from aeros.services import vendor_service
+
+        vendors = vendor_service.list_vendors(session, caller.org_id or 0)
+        suggested = []
+        for v in vendors[:5]:
+            suggested.append(
+                {
+                    "vendor_id": v.id,
+                    "vendor_name": v.name,
+                    "categories": v.category_ids_csv or "",
+                    "recommended_channel": (
+                        "in_app"
+                        if v.vendor_user_id
+                        else ("email" if v.primary_email else "telegram")
+                    ),
+                }
+            )
+
+        dispatch_plan = []
+        for v in vendors[:5]:
+            channel = "in_app" if v.vendor_user_id else ("email" if v.primary_email else "telegram")
+            detail = v.primary_email or v.name
+            dispatch_plan.append(
+                {
+                    "vendor_id": v.id,
+                    "vendor_name": v.name,
+                    "channel": channel,
+                    "channel_detail": detail,
+                }
+            )
+
+        return JSONResponse(
+            content={
+                "message": (
+                    f"RFx '{rfx.title}' created successfully! Here are vendors you can dispatch to:"
+                ),
+                "data": {
+                    "rfx_id": rfx.id,
+                    "status": "created",
+                    "suggested_vendors": suggested,
+                    "dispatch_plan": dispatch_plan,
+                },
+                "success": True,
+            }
+        )
     except Exception as e:
         logger.error("create_rfx.error", error=str(e), traceback=traceback.format_exc())
         return JSONResponse(
@@ -198,24 +267,34 @@ async def dispatch_rfx(
 
     try:
         agent = SourcingAgent()
+        chat_prov = get_chat_provider()
+        chat_prov.user_id = caller.user_id
+        chat_prov.rfx_id = body.rfx_id
+        vis_prov = get_vision_provider()
+        if vis_prov:
+            vis_prov.user_id = caller.user_id
         ctx = AgentContext(
             session=session,
             caller=caller,
-            chat_provider=get_chat_provider(),
-            vision_provider=get_vision_provider(),
+            chat_provider=chat_prov,
+            vision_provider=vis_prov,
             rfx_id=body.rfx_id,
         )
-        action = json.dumps({
-            "action": "confirm_dispatch",
-            "rfx_id": body.rfx_id,
-            "dispatch_plan": body.dispatch_plan,
-        })
+        action = json.dumps(
+            {
+                "action": "confirm_dispatch",
+                "rfx_id": body.rfx_id,
+                "dispatch_plan": body.dispatch_plan,
+            }
+        )
         result = await agent.run(ctx, action)
-        return JSONResponse(content={
-            "message": result.message,
-            "data": result.data,
-            "success": result.success,
-        })
+        return JSONResponse(
+            content={
+                "message": result.message,
+                "data": result.data,
+                "success": result.success,
+            }
+        )
     except Exception as e:
         logger.error("dispatch.error", error=str(e), traceback=traceback.format_exc())
         return JSONResponse(

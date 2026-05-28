@@ -3,7 +3,7 @@
 import json
 import re
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 import structlog
 from sqlmodel import Session
@@ -75,7 +75,7 @@ def log_llm_call(
         session: Database session.
         trace_id: Correlation ID (auto-generated if empty).
         agent_run_id: FK to the parent AgentRunLog, if applicable.
-        provider: LLM provider name (e.g. "openai", "nvidia").
+        provider: LLM provider name (e.g. "mimo", "openai", "nvidia").
         model: Model identifier string.
         prompt_tokens: Number of input tokens.
         completion_tokens: Number of output tokens.
@@ -185,7 +185,7 @@ def complete_agent_run(
     run.total_tokens = total_tokens
     run.total_estimated_cost_usd = estimate_cost("", total_tokens, 0)
     run.duration_ms = duration_ms
-    run.completed_at = datetime.utcnow()
+    run.completed_at = datetime.now(UTC).replace(tzinfo=None)
     session.add(run)
     session.commit()
     session.refresh(run)

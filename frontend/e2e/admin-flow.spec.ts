@@ -19,6 +19,36 @@ test.describe("Admin Portal", () => {
       await expect(page.locator("h1")).toContainText("User Management", { timeout: 10000 });
       await page.waitForLoadState("networkidle");
     });
+
+    test("clicking user row opens detail modal", async ({ page }) => {
+      await page.goto("/admin/users");
+      await page.waitForLoadState("networkidle");
+      const row = page.locator("table tbody tr.cursor-pointer").first();
+      const count = await row.count();
+      test.skip(count === 0, "No user rows to click");
+      await row.click();
+      // Modal with "User Details" title should appear
+      await expect(page.locator("h3:has-text('User Details')")).toBeVisible({ timeout: 5000 });
+    });
+
+    test("search input filters users", async ({ page }) => {
+      await page.goto("/admin/users");
+      await page.waitForLoadState("networkidle");
+      const searchInput = page.locator('input[placeholder*="Search by name"]');
+      await expect(searchInput).toBeVisible({ timeout: 10000 });
+      await searchInput.fill("admin");
+      // Should not crash; table should still be visible
+      await expect(page.locator("table")).toBeVisible();
+    });
+
+    test("role filter chips are visible", async ({ page }) => {
+      await page.goto("/admin/users");
+      await page.waitForLoadState("networkidle");
+      await expect(page.locator('button:has-text("All")').first()).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('button:has-text("Buyer")').first()).toBeVisible();
+      await expect(page.locator('button:has-text("Vendor")').first()).toBeVisible();
+      await expect(page.locator('button:has-text("Admin")').first()).toBeVisible();
+    });
   });
 
   test.describe("AI Providers", () => {

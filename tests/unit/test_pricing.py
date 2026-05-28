@@ -18,9 +18,9 @@ def test_estimate_cost_unknown_model():
 
 
 def test_estimate_cost_free_tier_model():
-    """Should return 0.0 for self-hosted NVIDIA models."""
+    """Should return 0.0 for Mimo models."""
     cost = estimate_cost(
-        "nvidia/llama-3.1-nemotron-70b-instruct",
+        "mimo-v2.5",
         prompt_tokens=10000,
         completion_tokens=5000,
     )
@@ -36,8 +36,9 @@ def test_estimate_cost_partial_match():
 
 
 def test_is_free_tier_true():
-    """Should return True for self-hosted models with zero cost."""
-    assert is_free_tier("nvidia/llama-3.1-nemotron-70b-instruct") is True
+    """Should return True for Mimo and NVIDIA embed models with zero cost."""
+    assert is_free_tier("mimo-v2.5") is True
+    assert is_free_tier("mimo-v2.5-pro") is True
     assert is_free_tier("nvidia/nv-embed-v1") is True
 
 

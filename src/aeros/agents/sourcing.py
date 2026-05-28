@@ -1,4 +1,5 @@
-"""SourcingAgent — composes RFx messages, proposes dispatch plan (D35), dispatches on confirmation."""
+"""SourcingAgent — composes RFx messages, proposes dispatch plan,
+dispatches on confirmation."""
 
 import json
 
@@ -9,21 +10,23 @@ from aeros.ai.base import ChatMessage
 from aeros.channels.correlation import generate_correlation_token
 from aeros.channels.email_out import send_rfx_invitation
 from aeros.config import settings
-from aeros.models.rfx import Message, RFxLineItem, RFxRun, Thread
+from aeros.models.rfx import Message, RFxLineItem, RFxRun, RFxVendor, Thread
 from aeros.models.vendor import Vendor
 from aeros.services import rfx_service
 
-SOURCING_SYSTEM_PROMPT = """You are the AEROS Sourcing Agent. Your job is to compose clear, professional vendor invitation messages for RFQs.
-
-Given the RFx details and line items, compose a concise summary that vendors can understand and quote against.
-
-OUTPUT (JSON):
-{
-  "subject": "Short subject line",
-  "summary": "Multi-line summary of what's needed, including items, quantities, delivery window, and terms",
-  "per_vendor_notes": {} // optional per-vendor customization
-}
-"""
+SOURCING_SYSTEM_PROMPT = (
+    "You are the AEROS Sourcing Agent. Your job is to compose "
+    "clear, professional vendor invitation messages for RFQs.\n\n"
+    "Given the RFx details and line items, compose a concise "
+    "summary that vendors can understand and quote against.\n\n"
+    "OUTPUT (JSON):\n"
+    "{\n"
+    '  "subject": "Short subject line",\n'
+    '  "summary": "Multi-line summary of what\'s needed, '
+    'including items, quantities, delivery window, and terms",\n'
+    '  "per_vendor_notes": {} // optional per-vendor customization\n'
+    "}\n"
+)
 
 
 class SourcingAgent(BaseAgent):
@@ -47,7 +50,12 @@ class SourcingAgent(BaseAgent):
         if action.get("action") == "propose_dispatch":
             return await self._propose_dispatch(ctx, rfx, line_items, action.get("vendor_ids", []))
         elif action.get("action") == "confirm_dispatch":
-            return await self._confirm_dispatch(ctx, rfx, line_items, action.get("dispatch_plan", []))
+            return await self._confirm_dispatch(
+                ctx,
+                rfx,
+                line_items,
+                action.get("dispatch_plan", []),
+            )
 
         return AgentResult(message="Unknown action", success=False)
 
@@ -74,12 +82,14 @@ class SourcingAgent(BaseAgent):
                 channel = "email"
                 detail = vendor.primary_email
 
-            dispatch_plan.append({
-                "vendor_id": vendor.id,
-                "vendor_name": vendor.name,
-                "channel": channel,
-                "channel_detail": detail,
-            })
+            dispatch_plan.append(
+                {
+                    "vendor_id": vendor.id,
+                    "vendor_name": vendor.name,
+                    "channel": channel,
+                    "channel_detail": detail,
+                }
+            )
 
         return AgentResult(
             message="Here's the proposed dispatch plan. Confirm to send.",
@@ -90,17 +100,33 @@ class SourcingAgent(BaseAgent):
             success=True,
         )
 
+    def _get_items_for_vendor(
+        self, ctx: AgentContext, rfx_id: int, vendor_id: int, all_line_items: list
+    ) -> list:
+        """Return the line items assigned to this vendor, or all items if none assigned."""
+        rv = ctx.session.exec(
+            select(RFxVendor).where(RFxVendor.rfx_id == rfx_id, RFxVendor.vendor_id == vendor_id)
+        ).first()
+        if rv and rv.line_item_ids_json:
+            try:
+                assigned_ids = set(json.loads(rv.line_item_ids_json))
+                return [li for li in all_line_items if li.id in assigned_ids]
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return all_line_items
+
     async def _confirm_dispatch(
         self, ctx: AgentContext, rfx: RFxRun, line_items: list, dispatch_plan: list
     ) -> AgentResult:
-        # Compose the RFx summary via LLM
+        # Compose the RFx summary via LLM using all items for the base summary
         items_text = "\n".join(
-            f"- {li.qty} {li.unit_override or ''} (SKU ID: {li.sku_id})"
-            for li in line_items
+            f"- {li.qty} {li.unit_override or ''} (SKU ID: {li.sku_id})" for li in line_items
         )
         messages = [
             ChatMessage(role="system", content=SOURCING_SYSTEM_PROMPT),
-            ChatMessage(role="user", content=f"""Compose an RFQ invitation for:
+            ChatMessage(
+                role="user",
+                content=f"""Compose an RFQ invitation for:
 Title: {rfx.title}
 Items:
 {items_text}
@@ -108,10 +134,13 @@ Delivery: {rfx.delivery_window_start} to {rfx.delivery_window_end}
 Deadline: {rfx.response_deadline}
 Terms: {rfx.payment_terms_for_this_rfx}, {rfx.delivery_terms_for_this_rfx}
 Currency: {rfx.currency_for_this_rfx}
-"""),
+""",
+            ),
         ]
         resp = await ctx.chat_provider.chat(
-            messages, temperature=0.3, max_tokens=1024,
+            messages,
+            temperature=0.3,
+            max_tokens=1024,
             response_format={"type": "json_object"},
         )
         try:
@@ -119,7 +148,7 @@ Currency: {rfx.currency_for_this_rfx}
         except json.JSONDecodeError:
             composed = {"subject": rfx.title, "summary": resp.content}
 
-        summary = composed.get("summary", rfx.title)
+        base_summary = composed.get("summary", rfx.title)
         dispatched_count = 0
 
         for entry in dispatch_plan:
@@ -128,6 +157,17 @@ Currency: {rfx.currency_for_this_rfx}
             vendor = ctx.session.get(Vendor, vendor_id)
             if not vendor:
                 continue
+
+            # Determine which items this vendor should receive
+            vendor_items = self._get_items_for_vendor(ctx, rfx.id, vendor_id, line_items)
+            if not vendor_items:
+                continue
+
+            # Build vendor-specific summary with only assigned items
+            vendor_items_text = "\n".join(
+                f"- {li.qty} {li.unit_override or ''} (SKU ID: {li.sku_id})" for li in vendor_items
+            )
+            summary = f"{base_summary}\n\nItems for your quote:\n{vendor_items_text}"
 
             # Generate correlation token
             token, token_hash = generate_correlation_token(rfx.id, vendor_id)  # type: ignore[arg-type]
@@ -149,6 +189,7 @@ Currency: {rfx.currency_for_this_rfx}
                 )
             elif channel == "telegram" and vendor.telegram_chat_id:
                 from aeros.channels.telegram_bot import send_rfx_invitation as tg_send
+
                 await tg_send(
                     chat_id=vendor.telegram_chat_id,
                     vendor_name=vendor.name,
@@ -158,9 +199,7 @@ Currency: {rfx.currency_for_this_rfx}
                 )
             # in_app: create a system message in the thread
             thread = ctx.session.exec(
-                select(Thread).where(
-                    Thread.rfx_id == rfx.id, Thread.vendor_id == vendor_id
-                )
+                select(Thread).where(Thread.rfx_id == rfx.id, Thread.vendor_id == vendor_id)
             ).first()
             if thread:
                 sys_msg = Message(

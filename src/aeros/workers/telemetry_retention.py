@@ -1,6 +1,6 @@
 """Telemetry data retention and cleanup worker."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import structlog
 from sqlmodel import Session, select
@@ -25,7 +25,7 @@ def cleanup_old_telemetry(retention_days: int = 30) -> dict[str, int]:
     Returns:
         Dictionary with counts of deleted records per model type.
     """
-    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    cutoff = datetime.now(UTC) - timedelta(days=retention_days)
     deleted: dict[str, int] = {
         "llm_calls": 0,
         "agent_runs": 0,
@@ -41,9 +41,7 @@ def cleanup_old_telemetry(retention_days: int = 30) -> dict[str, int]:
             (PipelineReport, "pipeline_reports"),
         ]:
             old = list(
-                session.exec(
-                    select(model_class).where(model_class.created_at < cutoff)
-                ).all()
+                session.exec(select(model_class).where(model_class.created_at < cutoff)).all()
             )
             for record in old:
                 session.delete(record)
