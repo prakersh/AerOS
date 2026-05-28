@@ -1,6 +1,7 @@
 """Seed demo data for AEROS dark-store persona."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlmodel import Session, select
 
@@ -233,7 +234,7 @@ def seed() -> None:
             price: float,
             days: int,
             conf: float = 1.0,
-        ) -> dict:
+        ) -> dict[str, Any]:
             return {
                 "line_item_id": li_map[code].id,
                 "unit_price": price,

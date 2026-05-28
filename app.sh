@@ -147,9 +147,37 @@ cmd_restart() {
 }
 
 cmd_test() {
-    info "Running test suite..."
-    cd "$SCRIPT_DIR"
-    uv run pytest "${@:---tb=short -q}"
+    local mode="${1:-all}"
+    shift 2>/dev/null || true
+
+    case "$mode" in
+        --pytest-only)
+            info "Running pytest..."
+            cd "$SCRIPT_DIR"
+            uv run pytest "${@:---tb=short -q}"
+            ;;
+        --test-uat-only)
+            info "Running Playwright UAT tests..."
+            cd "$SCRIPT_DIR/frontend"
+            npx playwright test --reporter=list
+            ;;
+        all|--test)
+            info "Running all tests..."
+            cd "$SCRIPT_DIR"
+            uv run pytest "${@:---tb=short -q}"
+            step "pytest complete"
+
+            info "Running Playwright UAT tests..."
+            cd "$SCRIPT_DIR/frontend"
+            npx playwright test --reporter=list
+            step "UAT tests complete"
+            ;;
+        *)
+            error "Unknown test flag: $mode"
+            echo "  Use: ./app.sh test [--test|--test-uat-only|--pytest-only]"
+            exit 1
+            ;;
+    esac
 }
 
 cmd_lint() {
@@ -196,7 +224,7 @@ cmd_help() {
     echo "  start      Start all services"
     echo "  stop       Stop all services"
     echo "  restart    Stop + start"
-    echo "  test       Run pytest"
+    echo "  test [--test|--test-uat-only|--pytest-only]  Run tests (default: all)"
     echo "  lint       Run ruff check + format"
     echo "  migrate    Create new alembic migration"
     echo "  upgrade    Apply pending migrations"
@@ -213,6 +241,9 @@ case "${1:-help}" in
     stop)    cmd_stop ;;
     restart) cmd_restart ;;
     test)    shift; cmd_test "$@" ;;
+    --test)  cmd_test all ;;
+    --test-uat-only) cmd_test --test-uat-only ;;
+    --pytest-only)   cmd_test --pytest-only ;;
     lint)    cmd_lint ;;
     migrate) shift; cmd_migrate "${1:-}" ;;
     upgrade) cmd_upgrade ;;
