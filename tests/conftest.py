@@ -1,3 +1,10 @@
+import os
+
+# Provide non-default secrets before aeros.config loads so production-mode
+# startup checks pass in environments without a .env file (e.g. CI).
+os.environ.setdefault("AEROS_JWT_SECRET", "test-jwt-secret-not-default-0123456789")
+os.environ.setdefault("AEROS_HMAC_SECRET", "test-hmac-secret-not-default-0123456789")
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import StaticPool, create_engine

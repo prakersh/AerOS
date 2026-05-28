@@ -134,6 +134,8 @@ MagicMock/
 ui-test-screenshots/
 dist/
 *.png
+# Test fixtures must be tracked even though *.png is ignored.
+!tests/fixtures/vendor_quotes/*.png
 
 # --- Backups ---
 *.bak

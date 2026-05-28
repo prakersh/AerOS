@@ -19,8 +19,17 @@ import pytest
 
 from aeros.ai.base import ChatMessage
 from aeros.ai.factory import get_chat_provider, get_embedding_provider, get_vision_provider
+from aeros.config import settings
 from aeros.models.user import Role
 from aeros.security.auth_context import AuthContext
+
+# These tests make real calls to the configured LLM provider. They run locally
+# when AEROS_MIMO_API_KEY is set (via .env) and skip in keyless CI rather than
+# erroring on client construction.
+pytestmark = pytest.mark.skipif(
+    not settings.mimo_api_key,
+    reason="requires live LLM credentials (AEROS_MIMO_API_KEY)",
+)
 
 
 @pytest.fixture
