@@ -26,9 +26,13 @@ jobs:
         run: pytest tests/ -q --tb=short
       - name: Secret scan
         run: |
-          python -c "
+          python - <<'PY'
           import re, pathlib, sys
-          patterns = [r'(?i)(password|secret|api.?key|token)\s*[:=]\s*[\"'\\''][^\"\\']{8,}', r'-----BEGIN .* PRIVATE KEY-----']
+          # \x27 is a single quote — avoids shell/quote-escaping issues in YAML.
+          patterns = [
+              r'(?i)(password|secret|api.?key|token)\s*[:=]\s*[\x27"][^\x27"]{8,}',
+              r'-----BEGIN .* PRIVATE KEY-----',
+          ]
           found = False
           for f in pathlib.Path('src').rglob('*.py'):
               content = f.read_text(errors='ignore')
@@ -37,7 +41,7 @@ jobs:
                       print(f'SECRET: {f}')
                       found = True
           sys.exit(1 if found else 0)
-          "
+          PY
 
   frontend:
     runs-on: ubuntu-latest
