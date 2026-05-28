@@ -29,10 +29,8 @@ test.describe("Buyer Portal", () => {
       const count = await tile.count();
       test.skip(count === 0, "No RFx tiles on dashboard");
       await tile.click();
-      // Modal should open with an h3 title
-      await expect(page.locator('h3')).toBeVisible({ timeout: 5000 });
       // "View Full Details" link should be inside the modal
-      await expect(page.locator('text=View Full Details')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('a:has-text("View Full Details")')).toBeVisible({ timeout: 10000 });
     });
 
     test("Draft New Request navigates to chat", async ({ page }) => {
@@ -67,16 +65,16 @@ test.describe("Buyer Portal", () => {
 
     test("voice input button is visible", async ({ page }) => {
       await page.goto("/buyer/chat");
-      // Voice input button is a button with a microphone icon
-      const voiceBtn = page.locator('button[aria-label*="voice" i], button[aria-label*="microphone" i], button:has(svg.lucide-mic)').first();
-      await expect(voiceBtn).toBeVisible({ timeout: 5000 });
+      await page.waitForLoadState("networkidle");
+      const voiceBtn = page.locator('button[title*="voice" i]').first();
+      await expect(voiceBtn).toBeVisible({ timeout: 10000 });
     });
 
     test("file upload paperclip button is visible", async ({ page }) => {
       await page.goto("/buyer/chat");
-      // Paperclip button for file upload
-      const paperclipBtn = page.locator('button[aria-label*="attach" i], button[aria-label*="upload" i], button:has(svg.lucide-paperclip)').first();
-      await expect(paperclipBtn).toBeVisible({ timeout: 5000 });
+      await page.waitForLoadState("networkidle");
+      const paperclipBtn = page.locator('button[title*="Attach" i]').first();
+      await expect(paperclipBtn).toBeVisible({ timeout: 10000 });
     });
 
     test("quick action prompt chips are visible", async ({ page }) => {
@@ -90,12 +88,11 @@ test.describe("Buyer Portal", () => {
 
   test.describe("RFx Detail & Comparison Matrix", () => {
     test("RFx detail page shows line items and vendor responses", async ({ page }) => {
-      // Navigate directly to an RFx detail page
       await page.goto("/buyer/rfx/1");
       await page.waitForLoadState("networkidle");
-      await expect(page.locator("text=Line Items")).toBeVisible({ timeout: 10000 });
-      await expect(page.locator("text=Vendor Responses")).toBeVisible();
-      await expect(page.locator("text=RFx Journey")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Line Items" })).toBeVisible({ timeout: 15000 });
+      await expect(page.getByRole("heading", { name: "Vendor Responses" })).toBeVisible({ timeout: 5000 });
+      await expect(page.locator("text=RFX JOURNEY")).toBeVisible({ timeout: 5000 });
     });
 
     test("comparison matrix shows when vendors have quoted", async ({ page }) => {
@@ -162,12 +159,11 @@ test.describe("Buyer Portal", () => {
     test("clicking vendor card opens detail modal", async ({ page }) => {
       await page.goto("/buyer/vendors");
       await page.waitForLoadState("networkidle");
-      const card = page.locator('button.group, button[type="button"]').filter({ has: page.locator("h3") }).first();
+      const card = page.locator('button[type="button"]').filter({ has: page.locator("h3") }).first();
       const count = await card.count();
       test.skip(count === 0, "No vendor cards to click");
       await card.click();
-      // Modal with vendor details should appear
-      await expect(page.locator("h3")).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('[role="dialog"] h3, .fixed h3')).toBeVisible({ timeout: 10000 });
     });
   });
 

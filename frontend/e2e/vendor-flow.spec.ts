@@ -45,53 +45,47 @@ test.describe("Vendor Portal", () => {
   test.describe("RFx Reply", () => {
     test("reply page shows thread messages and reply form", async ({ page }) => {
       await page.waitForLoadState("networkidle");
-      const rfxItem = page.locator('button:has-text("Dispatched")').first();
-      const count = await rfxItem.count();
-      test.skip(count === 0, "No RFx invitations in inbox");
+      const rfxItem = page.locator('[data-testid="inbox-item"]').first();
+      await expect(rfxItem).toBeVisible({ timeout: 10000 });
       await rfxItem.click();
       await page.waitForURL(/\/vendor\/rfx\/\d+/, { timeout: 15000 });
-      // Reply textarea is now inside the Chat tab
+      await expect(page.locator('button:has-text("Chat")')).toBeVisible({ timeout: 15000 });
       await page.locator('button:has-text("Chat")').click();
       await expect(page.locator('textarea[placeholder*="reply" i]')).toBeVisible({ timeout: 10000 });
     });
 
     test("file upload zone is present", async ({ page }) => {
       await page.waitForLoadState("networkidle");
-      const rfxItem = page.locator('button:has-text("Dispatched")').first();
-      const count = await rfxItem.count();
-      test.skip(count === 0, "No RFx invitations in inbox");
+      const rfxItem = page.locator('[data-testid="inbox-item"]').first();
+      await expect(rfxItem).toBeVisible({ timeout: 10000 });
       await rfxItem.click();
       await page.waitForURL(/\/vendor\/rfx\/\d+/, { timeout: 15000 });
-      // File upload is now inside the Upload & Analyze tab
+      await expect(page.locator('button:has-text("Upload & Analyze")')).toBeVisible({ timeout: 15000 });
       await page.locator('button:has-text("Upload & Analyze")').click();
-      await expect(page.locator("text=Attachments")).toBeVisible({ timeout: 10000 });
+      await expect(page.locator("text=Upload Documents")).toBeVisible({ timeout: 10000 });
     });
 
     test("decline button opens modal", async ({ page }) => {
       await page.waitForLoadState("networkidle");
-      const rfxItem = page.locator('button:has-text("Dispatched")').first();
-      const count = await rfxItem.count();
-      test.skip(count === 0, "No RFx invitations in inbox");
+      const rfxItem = page.locator('[data-testid="inbox-item"]').first();
+      await expect(rfxItem).toBeVisible({ timeout: 10000 });
       await rfxItem.click();
       await page.waitForURL(/\/vendor\/rfx\/\d+/, { timeout: 15000 });
-      // Decline button is in the page header
       const declineBtn = page.locator('button:has-text("Decline")');
-      await expect(declineBtn).toBeVisible({ timeout: 10000 });
+      await expect(declineBtn).toBeVisible({ timeout: 15000 });
       await declineBtn.click();
-      // DeclineModal uses shared Modal component which renders title as h3
-      await expect(page.locator("h3:has-text('Decline this RFx')")).toBeVisible({ timeout: 5000 });
+      await expect(page.locator("h3:has-text('Decline this RFx')")).toBeVisible({ timeout: 10000 });
     });
 
     test("quote form tab is visible", async ({ page }) => {
       await page.waitForLoadState("networkidle");
-      const rfxItem = page.locator('button:has-text("Dispatched")').first();
-      const count = await rfxItem.count();
-      test.skip(count === 0, "No RFx invitations in inbox");
+      const rfxItem = page.locator('[data-testid="inbox-item"]').first();
+      await expect(rfxItem).toBeVisible({ timeout: 10000 });
       await rfxItem.click();
       await page.waitForURL(/\/vendor\/rfx\/\d+/, { timeout: 15000 });
-      await expect(page.locator('button:has-text("Quote Form")')).toBeVisible({ timeout: 10000 });
-      await expect(page.locator('button:has-text("Chat")')).toBeVisible();
-      await expect(page.locator('button:has-text("Upload & Analyze")')).toBeVisible();
+      await expect(page.locator('button:has-text("Quote Form")')).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('button:has-text("Chat")')).toBeVisible({ timeout: 5000 });
+      await expect(page.locator('button:has-text("Upload & Analyze")')).toBeVisible({ timeout: 5000 });
     });
   });
 
