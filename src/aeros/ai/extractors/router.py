@@ -1,5 +1,7 @@
 """Format router — dispatches to the correct extractor based on MIME type."""
 
+from typing import Any
+
 from aeros.ai.extractors.email_body import extract_email_body
 from aeros.ai.extractors.image import extract_image
 from aeros.ai.extractors.pdf import extract_pdf
@@ -25,7 +27,7 @@ MIME_ROUTER = {
 async def route_extraction(
     file_path: str,
     mime_type: str,
-    vision_provider=None,
+    vision_provider: Any = None,
 ) -> str:
     extractor = MIME_ROUTER.get(mime_type)
     if not extractor:

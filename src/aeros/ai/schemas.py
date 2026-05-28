@@ -1,5 +1,7 @@
 """Pydantic schemas for AI I/O."""
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -41,7 +43,7 @@ class ExtractedOffer(BaseModel):
     validity_days: int | None = None
     tax_treatment: str | None = None
     gst_pct: float | None = None
-    additional_charges: list[dict] | None = None
+    additional_charges: list[dict[str, Any]] | None = None
     vendor_remarks: str | None = None
     confidence_overall: float = 0.0
 

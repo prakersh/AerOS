@@ -1,5 +1,6 @@
 import contextlib
 import json
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -45,7 +46,7 @@ def _verify_rfx_ownership(session: Session, rfx_id: int, caller: AuthContext) ->
 def list_categories(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-):
+) -> Any:
     return inventory_service.list_categories(session)
 
 
@@ -54,7 +55,7 @@ def list_inventory(
     category_id: int | None = None,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-):
+) -> Any:
     return inventory_service.list_skus(session, caller.org_id or 0, category_id)
 
 
@@ -63,7 +64,7 @@ def search_inventory(
     q: str,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-):
+) -> Any:
     return inventory_service.search_skus(session, caller.org_id or 0, q)
 
 
@@ -74,7 +75,7 @@ def search_inventory(
 def list_vendors(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-):
+) -> Any:
     return vendor_service.list_vendors(session, caller.org_id or 0)
 
 
@@ -83,7 +84,7 @@ def get_vendor(
     vendor_id: int,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-):
+) -> Any:
     v = vendor_service.get_vendor(session, vendor_id)
     if not v:
         raise HTTPException(404, "Vendor not found")
@@ -97,7 +98,7 @@ def get_vendor(
 def list_rfx(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-):
+) -> list[dict[str, Any]]:
     return rfx_service.list_rfx_for_buyer(session, caller.user_id)
 
 
@@ -106,7 +107,7 @@ def get_rfx(
     rfx_id: int,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-):
+) -> dict[str, Any]:
     _verify_rfx_ownership(session, rfx_id, caller)
     details = rfx_service.get_rfx_with_details(session, rfx_id)
     if not details:
@@ -119,7 +120,7 @@ def vendor_suggestions(
     rfx_id: int,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-):
+) -> Any:
     _verify_rfx_ownership(session, rfx_id, caller)
     try:
         return rfx_service.get_vendor_suggestions(session, rfx_id, caller.org_id or 0)
@@ -145,7 +146,7 @@ def assign_vendors(
     body: AssignVendorsRequest,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER),
-):
+) -> Any:
     _verify_rfx_ownership(session, rfx_id, caller)
     try:
         assignments = [a.model_dump() for a in body.assignments]
@@ -167,7 +168,7 @@ def cancel_rfx(
     body: CancelRFxRequest,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER),
-):
+) -> Any:
     _verify_rfx_ownership(session, rfx_id, caller)
     try:
         return rfx_service.cancel_rfx(session, rfx_id, caller.user_id, body.reason)
@@ -179,7 +180,7 @@ def cancel_rfx(
 
 
 class AwardRequest(BaseModel):
-    decisions: list[dict]
+    decisions: list[dict[str, Any]]
 
 
 @router.post("/rfx/{rfx_id}/award")
@@ -188,7 +189,7 @@ async def award_rfx(
     body: AwardRequest,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER),
-):
+) -> dict[str, Any]:
     _verify_rfx_ownership(session, rfx_id, caller)
     try:
         rfx_service.award_rfx(session, rfx_id, caller.user_id, body.decisions)
@@ -228,12 +229,12 @@ def list_activity(
     limit: int = Query(default=50, ge=1, le=500),
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-):
+) -> list[dict[str, Any]]:
     logs = list(
         session.exec(
             select(AuditLog)
             .where(AuditLog.actor_user_id == caller.user_id)
-            .order_by(AuditLog.created_at.desc())  # type: ignore[union-attr]
+            .order_by(AuditLog.created_at.desc())  # type: ignore[attr-defined]
             .limit(limit)
         ).all()
     )
@@ -259,7 +260,7 @@ def list_activity(
 # --- Defaults ---
 
 
-def _defaults_to_dict(d: UserDefaults) -> dict:
+def _defaults_to_dict(d: UserDefaults) -> dict[str, Any]:
     """Convert a UserDefaults model to the API response dict.
 
     Args:
@@ -282,7 +283,7 @@ def _defaults_to_dict(d: UserDefaults) -> dict:
 def get_defaults(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-):
+) -> dict[str, Any]:
     d = defaults_service.get_defaults(session, caller.user_id)
     if d:
         return _defaults_to_dict(d)

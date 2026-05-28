@@ -3,6 +3,7 @@
 import json
 import os
 from datetime import UTC, datetime
+from typing import Any
 
 from aeros.agents.base import AgentContext, AgentResult, BaseAgent
 from aeros.channels.email_out import send_po_email
@@ -114,7 +115,7 @@ class POAgent(BaseAgent):
         decisions = json.loads(award.decisions_json)
 
         # Group decisions by vendor
-        vendor_decisions: dict[int, list] = {}
+        vendor_decisions: dict[int, list[Any]] = {}
         for d in decisions:
             vid = d["vendor_id"]
             if vid not in vendor_decisions:

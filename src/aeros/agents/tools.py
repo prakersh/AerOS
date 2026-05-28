@@ -44,7 +44,7 @@ class ToolDef:
         )
         return f"{self.name}: {self.description} [{params or 'none'}]"
 
-    def to_catalog_row(self) -> dict:
+    def to_catalog_row(self) -> dict[str, str]:
         params = ", ".join(f"{p.name}:{p.type}{'*' if p.required else ''}" for p in self.parameters)
         return {
             "name": self.name,

@@ -39,9 +39,10 @@ class FileValidation:
 def _detect_mime(content: bytes, filename: str) -> str:
     """Detect MIME type, preferring python-magic if available, else mimetypes fallback."""
     try:
-        import magic  # type: ignore[import-untyped]
+        import magic
 
-        return magic.from_buffer(content[:8192], mime=True)
+        result: str = magic.from_buffer(content[:8192], mime=True)
+        return result
     except Exception:
         mime, _ = mimetypes.guess_type(filename)
         return mime or "application/octet-stream"

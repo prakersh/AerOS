@@ -1,5 +1,7 @@
 """PO lifecycle management — award creation, PO creation and queries."""
 
+from typing import Any
+
 from sqlmodel import Session, select
 
 from aeros.models.award import Award, PurchaseOrder
@@ -92,7 +94,7 @@ def get_po_by_award(session: Session, award_id: int) -> PurchaseOrder | None:
     return session.exec(select(PurchaseOrder).where(PurchaseOrder.award_id == award_id)).first()
 
 
-def list_pos_for_rfx(session: Session, rfx_id: int) -> list[dict]:
+def list_pos_for_rfx(session: Session, rfx_id: int) -> list[dict[str, Any]]:
     """List all awards and their POs for a given RFx.
 
     Args:
@@ -105,7 +107,7 @@ def list_pos_for_rfx(session: Session, rfx_id: int) -> list[dict]:
     awards = list(session.exec(select(Award).where(Award.rfx_id == rfx_id)).all())
     result = []
     for award in awards:
-        po = get_po_by_award(session, award.id)
+        po = get_po_by_award(session, award.id)  # type: ignore[arg-type]
         result.append(
             {
                 "award_id": award.id,

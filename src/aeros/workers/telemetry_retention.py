@@ -41,7 +41,7 @@ def cleanup_old_telemetry(retention_days: int = 30) -> dict[str, int]:
             (PipelineReport, "pipeline_reports"),
         ]:
             old = list(
-                session.exec(select(model_class).where(model_class.created_at < cutoff)).all()
+                session.exec(select(model_class).where(model_class.created_at < cutoff)).all()  # type: ignore[attr-defined]
             )
             for record in old:
                 session.delete(record)

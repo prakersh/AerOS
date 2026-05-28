@@ -2,6 +2,7 @@
 
 import hashlib
 import os
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -28,7 +29,7 @@ class TelegramUpdate(BaseModel):
     """Subset of a Telegram Update object we care about."""
 
     update_id: int
-    message: dict | None = None
+    message: dict[str, Any] | None = None
 
 
 @router.post("/api/webhook/telegram")
@@ -36,7 +37,7 @@ async def telegram_webhook(
     update: TelegramUpdate,
     session: Session = Depends(get_session),
     x_telegram_bot_api_secret_token: str | None = Header(None),
-) -> dict:
+) -> dict[str, Any]:
     """Handle an incoming Telegram webhook update.
 
     Validates the secret token, links vendors via /start,
@@ -80,7 +81,7 @@ async def telegram_webhook(
 
     # Find the most recent thread for this vendor
     thread = session.exec(
-        select(Thread).where(Thread.vendor_id == vendor.id).order_by(Thread.created_at.desc())
+        select(Thread).where(Thread.vendor_id == vendor.id).order_by(Thread.created_at.desc())  # type: ignore[attr-defined]
     ).first()
     if not thread:
         await telegram_bot.send_message(chat_id, "No active RFQ thread found.")
@@ -155,7 +156,7 @@ class FakeTelegramUpdate(BaseModel):
 async def fake_telegram_update(
     body: FakeTelegramUpdate,
     session: Session = Depends(get_session),
-) -> dict:
+) -> dict[str, Any]:
     """Dev-only endpoint to simulate a Telegram update without a real bot."""
     update = TelegramUpdate(
         update_id=0,

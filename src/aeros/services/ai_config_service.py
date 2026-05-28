@@ -1,11 +1,13 @@
 """DB-backed AI provider config management with env fallback."""
 
+from typing import Any
+
 from sqlmodel import Session, select
 
 from aeros.config import settings
 
 
-def list_providers(session: Session) -> list[dict]:
+def list_providers(session: Session) -> list[dict[str, Any]]:
     """List AI providers. DB-first with env fallback for prototype.
 
     Args:
@@ -75,7 +77,7 @@ def list_providers(session: Session) -> list[dict]:
     ]
 
 
-def test_provider_connection(provider_name: str) -> dict:
+def test_provider_connection(provider_name: str) -> dict[str, Any]:
     """Quick connectivity check for a provider.
 
     Args:

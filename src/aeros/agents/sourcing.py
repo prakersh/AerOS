@@ -2,6 +2,7 @@
 dispatches on confirmation."""
 
 import json
+from typing import Any
 
 from sqlmodel import select
 
@@ -48,19 +49,21 @@ class SourcingAgent(BaseAgent):
         )
 
         if action.get("action") == "propose_dispatch":
-            return await self._propose_dispatch(ctx, rfx, line_items, action.get("vendor_ids", []))
+            vendor_ids: list[int] = action.get("vendor_ids", [])  # type: ignore[assignment]
+            return await self._propose_dispatch(ctx, rfx, line_items, vendor_ids)
         elif action.get("action") == "confirm_dispatch":
+            dispatch_plan: list[Any] = action.get("dispatch_plan", [])  # type: ignore[assignment]
             return await self._confirm_dispatch(
                 ctx,
                 rfx,
                 line_items,
-                action.get("dispatch_plan", []),
+                dispatch_plan,
             )
 
         return AgentResult(message="Unknown action", success=False)
 
     async def _propose_dispatch(
-        self, ctx: AgentContext, rfx: RFxRun, line_items: list, vendor_ids: list[int]
+        self, ctx: AgentContext, rfx: RFxRun, line_items: list[Any], vendor_ids: list[int]
     ) -> AgentResult:
         dispatch_plan = []
         for vid in vendor_ids:
@@ -101,8 +104,8 @@ class SourcingAgent(BaseAgent):
         )
 
     def _get_items_for_vendor(
-        self, ctx: AgentContext, rfx_id: int, vendor_id: int, all_line_items: list
-    ) -> list:
+        self, ctx: AgentContext, rfx_id: int, vendor_id: int, all_line_items: list[Any]
+    ) -> list[Any]:
         """Return the line items assigned to this vendor, or all items if none assigned."""
         rv = ctx.session.exec(
             select(RFxVendor).where(RFxVendor.rfx_id == rfx_id, RFxVendor.vendor_id == vendor_id)
@@ -116,7 +119,7 @@ class SourcingAgent(BaseAgent):
         return all_line_items
 
     async def _confirm_dispatch(
-        self, ctx: AgentContext, rfx: RFxRun, line_items: list, dispatch_plan: list
+        self, ctx: AgentContext, rfx: RFxRun, line_items: list[Any], dispatch_plan: list[Any]
     ) -> AgentResult:
         # Compose the RFx summary via LLM using all items for the base summary
         items_text = "\n".join(
@@ -159,6 +162,7 @@ Currency: {rfx.currency_for_this_rfx}
                 continue
 
             # Determine which items this vendor should receive
+            assert rfx.id is not None
             vendor_items = self._get_items_for_vendor(ctx, rfx.id, vendor_id, line_items)
             if not vendor_items:
                 continue
@@ -170,10 +174,10 @@ Currency: {rfx.currency_for_this_rfx}
             summary = f"{base_summary}\n\nItems for your quote:\n{vendor_items_text}"
 
             # Generate correlation token
-            token, token_hash = generate_correlation_token(rfx.id, vendor_id)  # type: ignore[arg-type]
+            token, token_hash = generate_correlation_token(rfx.id, vendor_id)
 
             # Create RFxVendor + Thread
-            rfx_service.invite_vendor(ctx.session, rfx.id, vendor_id, token_hash)  # type: ignore[arg-type]
+            rfx_service.invite_vendor(ctx.session, rfx.id, vendor_id, token_hash)
 
             portal_url = f"{settings.frontend_url}/vendor/rfx/{rfx.id}"
 
@@ -203,7 +207,7 @@ Currency: {rfx.currency_for_this_rfx}
             ).first()
             if thread:
                 sys_msg = Message(
-                    thread_id=thread.id,  # type: ignore[arg-type]
+                    thread_id=thread.id,
                     sender_kind="system",
                     channel="system",
                     body_text=f"RFQ Invitation: {rfx.title}\n\n{summary}",

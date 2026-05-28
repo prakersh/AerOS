@@ -1,5 +1,7 @@
 """Background worker for PO PDF rendering and dispatch."""
 
+from typing import Any
+
 import structlog
 from sqlmodel import Session, select
 
@@ -10,7 +12,7 @@ logger = structlog.get_logger()
 
 async def render_and_send_po(
     rfx_id: int,
-    award_decisions: list[dict],
+    award_decisions: list[dict[str, Any]],
 ) -> bool:
     """Render Purchase Order PDFs and send them to awarded vendors.
 
@@ -25,18 +27,19 @@ async def render_and_send_po(
     from aeros.agents.po import POAgent
     from aeros.ai.factory import get_chat_provider
     from aeros.models.award import Award
+    from aeros.models.user import Role
     from aeros.security.auth_context import AuthContext
 
     with Session(engine) as session:
         try:
             award = session.exec(
-                select(Award).where(Award.rfx_id == rfx_id).order_by(Award.awarded_at.desc())  # type: ignore[union-attr]
+                select(Award).where(Award.rfx_id == rfx_id).order_by(Award.awarded_at.desc())  # type: ignore[attr-defined]
             ).first()
             if not award:
                 logger.error("po.render.no_award", rfx_id=rfx_id)
                 return False
 
-            caller = AuthContext(user_id=0, org_id=0, role="system")
+            caller = AuthContext(user_id=0, org_id=0, role=Role.ADMIN)
             agent = POAgent()
             ctx = AgentContext(
                 session=session,

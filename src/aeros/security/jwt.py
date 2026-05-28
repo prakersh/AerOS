@@ -19,5 +19,5 @@ def create_refresh_token(user_id: int) -> str:
     return jwt.encode(payload, settings.jwt_secret, algorithm=ALGORITHM)
 
 
-def decode_token(token: str) -> dict:
-    return jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])
+def decode_token(token: str) -> dict[str, str]:
+    return jwt.decode(token, settings.jwt_secret, algorithms=[ALGORITHM])  # type: ignore[no-any-return]

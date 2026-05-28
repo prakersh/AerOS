@@ -4,7 +4,7 @@ from aeros.models.sku import SKU, Category
 
 
 def list_categories(session: Session) -> list[Category]:
-    return list(session.exec(select(Category).order_by(Category.sort_order)).all())
+    return list(session.exec(select(Category).order_by(Category.sort_order)).all())  # type: ignore[arg-type]
 
 
 def list_skus(session: Session, org_id: int, category_id: int | None = None) -> list[SKU]:
@@ -22,7 +22,7 @@ def search_skus(session: Session, org_id: int, query: str) -> list[SKU]:
     return list(
         session.exec(
             select(SKU)
-            .where(SKU.org_id == org_id, SKU.name.contains(query))  # type: ignore[union-attr]
+            .where(SKU.org_id == org_id, SKU.name.contains(query))  # type: ignore[attr-defined]
             .order_by(SKU.name)
             .limit(20)
         ).all()

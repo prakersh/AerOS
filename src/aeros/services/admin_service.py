@@ -1,6 +1,7 @@
 """Admin operations — user suspension, org listing, system health."""
 
 from datetime import datetime
+from typing import Any
 
 from sqlmodel import Session, select
 
@@ -86,10 +87,10 @@ def list_organizations(session: Session) -> list[Organization]:
     Returns:
         List of Organization records.
     """
-    return list(session.exec(select(Organization).order_by(Organization.id)).all())
+    return list(session.exec(select(Organization).order_by(Organization.id)).all())  # type: ignore[arg-type]
 
 
-def get_system_health() -> dict:
+def get_system_health() -> dict[str, Any]:
     """Return system health status.
 
     Returns:

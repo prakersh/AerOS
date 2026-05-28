@@ -61,7 +61,7 @@ class IntakeAgent(BaseAgent):
             }
 
         # Get conversation history from metadata
-        history: list[dict] = ctx.metadata.get("history", [])
+        history: list[dict[str, str]] = ctx.metadata.get("history", [])
 
         messages = [
             ChatMessage(role="system", content=INTAKE_SYSTEM_PROMPT),

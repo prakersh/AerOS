@@ -80,7 +80,7 @@ def get_thread_messages(session: Session, thread_id: int) -> list[Message]:
     """
     return list(
         session.exec(
-            select(Message).where(Message.thread_id == thread_id).order_by(Message.created_at)
+            select(Message).where(Message.thread_id == thread_id).order_by(Message.created_at)  # type: ignore[arg-type]
         ).all()
     )
 
@@ -101,6 +101,6 @@ def get_thread_attachments(session: Session, thread_id: int) -> list[Attachment]
         return []
     return list(
         session.exec(
-            select(Attachment).where(Attachment.message_id.in_(msg_ids))  # type: ignore[union-attr]
+            select(Attachment).where(Attachment.message_id.in_(msg_ids))  # type: ignore[attr-defined]
         ).all()
     )

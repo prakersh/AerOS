@@ -2,9 +2,10 @@
 
 import csv
 import io
+from typing import Any
 
 
-async def extract_spreadsheet(file_path: str, **kwargs) -> str:
+async def extract_spreadsheet(file_path: str, **kwargs: Any) -> str:
     if file_path.endswith((".csv", ".tsv")):
         return await _extract_csv(file_path)
     return await _extract_excel(file_path)
@@ -36,7 +37,7 @@ async def _extract_csv(file_path: str) -> str:
     try:
         dialect = csv.Sniffer().sniff(content[:2048])
     except csv.Error:
-        dialect = None  # type: ignore[assignment]
+        dialect = None
 
     stream = io.StringIO(content)
     reader = csv.reader(stream, dialect) if dialect else csv.reader(stream)

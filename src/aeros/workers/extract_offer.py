@@ -37,6 +37,7 @@ async def extract_offer_from_attachment(
     from aeros.agents.base import AgentContext
     from aeros.agents.evaluation import EvaluationAgent
     from aeros.ai.factory import get_chat_provider, get_vision_provider
+    from aeros.models.user import Role
     from aeros.security.auth_context import AuthContext
 
     with Session(engine) as session:
@@ -51,7 +52,7 @@ async def extract_offer_from_attachment(
         session.commit()
 
         try:
-            caller = AuthContext(user_id=0, org_id=0, role="system")
+            caller = AuthContext(user_id=0, org_id=0, role=Role.ADMIN)
             agent = EvaluationAgent()
             ctx = AgentContext(
                 session=session,

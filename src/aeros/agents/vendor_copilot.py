@@ -40,7 +40,7 @@ class VendorCopilotAgent(BaseAgent):
             AgentResult with parsed JSON data containing message,
             suggestions, and status.
         """
-        history: list[dict] = ctx.metadata.get("history", [])
+        history: list[dict[str, str]] = ctx.metadata.get("history", [])
         rfx_context: str = ctx.metadata.get("rfx_context", "")
 
         messages: list[ChatMessage] = [

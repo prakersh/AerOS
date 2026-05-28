@@ -1,6 +1,7 @@
 """PO download and listing API."""
 
 import os
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
@@ -19,7 +20,7 @@ def get_po(
     po_id: int,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-) -> dict:
+) -> dict[str, Any]:
     """Get PO details by ID."""
     po = session.get(PurchaseOrder, po_id)
     if not po:
@@ -65,7 +66,7 @@ def list_pos_for_rfx(
     rfx_id: int,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """List all POs for a given RFx."""
     awards = list(session.exec(select(Award).where(Award.rfx_id == rfx_id)).all())
     result = []

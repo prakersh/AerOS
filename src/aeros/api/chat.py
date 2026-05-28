@@ -7,6 +7,7 @@ import os
 import re
 import traceback
 from datetime import datetime
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -32,16 +33,16 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 class ChatRequest(BaseModel):
     message: str
     rfx_id: int | None = None
-    history: list[dict] = []
+    history: list[dict[str, Any]] = []
 
 
 class CreateRFxRequest(BaseModel):
-    draft: dict
+    draft: dict[str, Any]
 
 
 class DispatchConfirmRequest(BaseModel):
     rfx_id: int
-    dispatch_plan: list[dict]
+    dispatch_plan: list[dict[str, Any]]
 
 
 @router.post("")
@@ -49,7 +50,7 @@ async def chat(
     body: ChatRequest,
     session: Session = Depends(get_session),
     caller: AuthContext = Depends(get_current_user),
-):
+) -> JSONResponse:
     if caller.role not in (Role.BUYER, Role.VENDOR):
         raise HTTPException(403, "Chat not available for this role")
 
@@ -110,7 +111,7 @@ async def create_rfx_from_draft(
     body: CreateRFxRequest,
     session: Session = Depends(get_session),
     caller: AuthContext = Depends(get_current_user),
-):
+) -> JSONResponse:
     if caller.role != Role.BUYER:
         raise HTTPException(403, "Only buyers can create RFx")
 
@@ -170,7 +171,7 @@ async def create_rfx_from_draft(
                 sku = session.exec(select(SKU).where(SKU.name == sku_name)).first()
             if not sku and sku_name:
                 sku = session.exec(
-                    select(SKU).where(SKU.name.ilike(f"%{sku_name}%"))  # type: ignore[union-attr]
+                    select(SKU).where(SKU.name.ilike(f"%{sku_name}%"))  # type: ignore[attr-defined]
                 ).first()
             if sku:
                 li_records.append(
@@ -244,7 +245,7 @@ async def dispatch_rfx(
     body: DispatchConfirmRequest,
     session: Session = Depends(get_session),
     caller: AuthContext = Depends(get_current_user),
-):
+) -> JSONResponse:
     if caller.role != Role.BUYER:
         raise HTTPException(403, "Only buyers can dispatch RFx")
 
@@ -290,7 +291,7 @@ async def dispatch_rfx(
 async def chat_upload(
     file: UploadFile = File(...),
     caller: AuthContext = Depends(get_current_user),
-):
+) -> dict[str, Any]:
     """Upload a file from the buyer chat for AI extraction."""
     if caller.role != Role.BUYER:
         raise HTTPException(403, "Only buyers can upload via chat")

@@ -1,13 +1,13 @@
 """Provider protocols for AI backends."""
 
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 from pydantic import BaseModel
 
 
 class ChatMessage(BaseModel):
     role: str  # system, user, assistant
-    content: str | list[dict]
+    content: str | list[dict[str, Any]]
 
 
 class ChatResponse(BaseModel):
@@ -46,7 +46,7 @@ class ChatProvider(Protocol):
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
-        response_format: dict | None = None,
+        response_format: dict[str, Any] | None = None,
     ) -> ChatResponse: ...
 
 

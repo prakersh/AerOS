@@ -70,7 +70,7 @@ class PipelineStep:
     start_time: float = 0.0
     end_time: float = 0.0
     status: str = "pending"
-    details: dict = field(default_factory=dict)
+    details: dict[str, Any] = field(default_factory=dict)
 
     @property
     def duration_ms(self) -> float:
@@ -392,7 +392,7 @@ class ProcurementAgent(BaseAgent):
                         ChatMessage(role="user", content=safe_input),
                     ],
                     temperature=0.8,
-                    max_tokens=STAGE_TOKEN_LIMITS["greeting"]["max_output"],
+                    max_tokens=int(STAGE_TOKEN_LIMITS["greeting"]["max_output"]),
                 )
                 llm_calls += 1
                 total_input_tokens += greeting_resp.input_tokens
@@ -455,7 +455,7 @@ class ProcurementAgent(BaseAgent):
                 selection_resp = await ctx.chat_provider.chat(
                     [ChatMessage(role="user", content=selection_prompt)],
                     temperature=0.2,
-                    max_tokens=STAGE_TOKEN_LIMITS["tool_selection"]["max_output"],
+                    max_tokens=int(STAGE_TOKEN_LIMITS["tool_selection"]["max_output"]),
                     response_format={"type": "json_object"},
                 )
                 llm_calls += 1
@@ -501,7 +501,7 @@ class ProcurementAgent(BaseAgent):
                             ChatMessage(role="user", content=safe_input),
                         ],
                         temperature=0.7,
-                        max_tokens=STAGE_TOKEN_LIMITS["greeting"]["max_output"],
+                        max_tokens=int(STAGE_TOKEN_LIMITS["greeting"]["max_output"]),
                     )
                     llm_calls += 1
                     total_input_tokens += converse_resp.input_tokens
@@ -551,7 +551,7 @@ class ProcurementAgent(BaseAgent):
                 response_resp = await ctx.chat_provider.chat(
                     [ChatMessage(role="user", content=response_prompt)],
                     temperature=0.4,
-                    max_tokens=STAGE_TOKEN_LIMITS["response"]["max_output"],
+                    max_tokens=int(STAGE_TOKEN_LIMITS["response"]["max_output"]),
                 )
                 llm_calls += 1
                 total_input_tokens += response_resp.input_tokens
@@ -637,7 +637,7 @@ class ProcurementAgent(BaseAgent):
         )
 
 
-def _format_results_for_prompt(results: list[ToolResult]) -> list[dict]:
+def _format_results_for_prompt(results: list[ToolResult]) -> list[dict[str, Any]]:
     formatted = []
     for r in results:
         if r.success:
@@ -647,7 +647,7 @@ def _format_results_for_prompt(results: list[ToolResult]) -> list[dict]:
     return formatted
 
 
-def _parse_tool_selections(content: str) -> list[tuple[str, dict]]:
+def _parse_tool_selections(content: str) -> list[tuple[str, dict[str, Any]]]:
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError:

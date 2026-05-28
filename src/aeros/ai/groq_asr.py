@@ -1,6 +1,7 @@
 """Groq Whisper ASR provider."""
 
 import io
+from typing import Any
 
 from openai import AsyncOpenAI
 
@@ -25,7 +26,7 @@ class GroqASRProvider:
         audio_file = io.BytesIO(audio_data)
         audio_file.name = "audio.webm"
 
-        kwargs: dict = {
+        kwargs: dict[str, Any] = {
             "model": model or self._default_model,
             "file": audio_file,
         }

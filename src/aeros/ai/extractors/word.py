@@ -1,11 +1,12 @@
 """Word document extractor."""
 
+from typing import Any
 from zipfile import BadZipFile
 
 from docx import Document
 
 
-async def extract_word(file_path: str, **kwargs) -> str:
+async def extract_word(file_path: str, **kwargs: Any) -> str:
     try:
         doc = Document(file_path)
     except BadZipFile:

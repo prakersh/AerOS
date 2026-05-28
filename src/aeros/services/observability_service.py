@@ -1,6 +1,7 @@
 """Observability service for dashboard aggregations and trace lookups."""
 
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlmodel import Session, func, select
 
@@ -11,7 +12,11 @@ from aeros.models.observability import (
 )
 
 
-def get_summary_cards(session: Session, days: int = 7, user_id: int | None = None) -> dict:
+def get_summary_cards(
+    session: Session,
+    days: int = 7,
+    user_id: int | None = None,
+) -> dict[str, Any]:
     """Aggregate telemetry data into summary cards for the dashboard.
 
     Args:
@@ -24,17 +29,17 @@ def get_summary_cards(session: Session, days: int = 7, user_id: int | None = Non
     """
     since = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=days)
 
-    llm_base = select(func.count(LLMCallLog.id)).where(LLMCallLog.created_at >= since)
+    llm_base = select(func.count(LLMCallLog.id)).where(LLMCallLog.created_at >= since)  # type: ignore[arg-type]
     tokens_base = select(func.sum(LLMCallLog.total_tokens)).where(LLMCallLog.created_at >= since)
     cost_base = select(func.sum(LLMCallLog.estimated_cost_usd)).where(
         LLMCallLog.created_at >= since
     )
-    agent_base = select(func.count(AgentRunLog.id)).where(AgentRunLog.started_at >= since)
+    agent_base = select(func.count(AgentRunLog.id)).where(AgentRunLog.started_at >= since)  # type: ignore[arg-type]
     latency_base = select(func.avg(LLMCallLog.latency_ms)).where(LLMCallLog.created_at >= since)
-    error_base = select(func.count(LLMCallLog.id)).where(
+    error_base = select(func.count(LLMCallLog.id)).where(  # type: ignore[arg-type]
         LLMCallLog.created_at >= since, LLMCallLog.status == "error"
     )
-    channel_base = select(func.count(ChannelEventLog.id)).where(ChannelEventLog.created_at >= since)
+    channel_base = select(func.count(ChannelEventLog.id)).where(ChannelEventLog.created_at >= since)  # type: ignore[arg-type]
 
     # Note: LLM calls are logged at the provider layer without user_id,
     # so we don't filter by user_id for summary cards — buyers see all
@@ -61,7 +66,11 @@ def get_summary_cards(session: Session, days: int = 7, user_id: int | None = Non
     }
 
 
-def get_recent_calls(session: Session, limit: int = 50, user_id: int | None = None) -> list[dict]:
+def get_recent_calls(
+    session: Session,
+    limit: int = 50,
+    user_id: int | None = None,
+) -> list[dict[str, Any]]:
     """Get the most recent LLM call logs.
 
     Args:
@@ -75,7 +84,7 @@ def get_recent_calls(session: Session, limit: int = 50, user_id: int | None = No
     query = (
         select(LLMCallLog)
         .order_by(
-            LLMCallLog.created_at.desc()  # type: ignore[union-attr]
+            LLMCallLog.created_at.desc()  # type: ignore[attr-defined]
         )
         .limit(limit)
     )
@@ -98,7 +107,7 @@ def get_recent_calls(session: Session, limit: int = 50, user_id: int | None = No
     ]
 
 
-def get_timeline(session: Session, rfx_id: int) -> list[dict]:
+def get_timeline(session: Session, rfx_id: int) -> list[dict[str, Any]]:
     """Get a chronological timeline of events for a specific RFx.
 
     Args:
@@ -108,11 +117,11 @@ def get_timeline(session: Session, rfx_id: int) -> list[dict]:
     Returns:
         Sorted list of agent run and channel event dicts.
     """
-    events: list[dict] = []
+    events: list[dict[str, Any]] = []
 
     agent_runs = list(
         session.exec(
-            select(AgentRunLog).where(AgentRunLog.rfx_id == rfx_id).order_by(AgentRunLog.started_at)
+            select(AgentRunLog).where(AgentRunLog.rfx_id == rfx_id).order_by(AgentRunLog.started_at)  # type: ignore[arg-type]
         ).all()
     )
     for r in agent_runs:
@@ -132,7 +141,7 @@ def get_timeline(session: Session, rfx_id: int) -> list[dict]:
         session.exec(
             select(ChannelEventLog)
             .where(ChannelEventLog.rfx_id == rfx_id)
-            .order_by(ChannelEventLog.created_at)
+            .order_by(ChannelEventLog.created_at)  # type: ignore[arg-type]
         ).all()
     )
     for e in channel_events:
@@ -152,7 +161,7 @@ def get_timeline(session: Session, rfx_id: int) -> list[dict]:
     return events
 
 
-def get_trace(session: Session, trace_id: str) -> dict:
+def get_trace(session: Session, trace_id: str) -> dict[str, Any]:
     """Get all telemetry events correlated by a trace ID.
 
     Args:

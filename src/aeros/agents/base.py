@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from typing import Any
 
 from sqlmodel import Session
 
@@ -17,14 +18,14 @@ class AgentContext:
     vision_provider: OpenAICompatibleProvider | None = None
     rfx_id: int | None = None
     thread_id: int | None = None
-    metadata: dict = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class AgentResult:
     message: str
-    data: dict = field(default_factory=dict)
-    tool_calls: list[dict] = field(default_factory=list)
+    data: dict[str, Any] = field(default_factory=dict)
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
     success: bool = True
 
 

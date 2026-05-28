@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 from fastapi import Cookie, Depends, HTTPException
 from sqlmodel import Session
@@ -39,7 +40,7 @@ def get_current_user(
     )
 
 
-def require_role(*roles: Role):
+def require_role(*roles: Role) -> Any:
     def dependency(current_user: AuthContext = Depends(get_current_user)) -> AuthContext:
         if current_user.role not in roles:
             raise HTTPException(status_code=403, detail="Insufficient permissions")

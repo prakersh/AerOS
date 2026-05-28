@@ -1,7 +1,9 @@
 """Image extractor — uses vision model to read photographed rate cards."""
 
+from typing import Any
 
-async def extract_image(file_path: str, *, vision_provider=None, **kwargs) -> str:
+
+async def extract_image(file_path: str, *, vision_provider: Any = None, **kwargs: Any) -> str:
     if not vision_provider:
         return "[Image extraction requires a vision provider]"
 
@@ -22,4 +24,4 @@ async def extract_image(file_path: str, *, vision_provider=None, **kwargs) -> st
     )
 
     result = await vision_provider.vision(image_data, prompt, mime_type=mime_type)
-    return result.content
+    return str(result.content)

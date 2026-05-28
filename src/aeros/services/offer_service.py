@@ -2,6 +2,7 @@
 
 import json
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlmodel import Session, select
 
@@ -13,7 +14,7 @@ def create_offer_from_extraction(
     session: Session,
     rfx_id: int,
     vendor_id: int,
-    extraction_data: dict,
+    extraction_data: dict[str, Any],
     source_message_ids: list[int],
     is_late: bool = False,
 ) -> Offer:
@@ -28,7 +29,7 @@ def create_offer_from_extraction(
             Offer.vendor_id == vendor_id,
             Offer.superseded_by_offer_id == None,  # noqa: E711
         )
-        .order_by(Offer.revision_no.desc())  # type: ignore[union-attr]
+        .order_by(Offer.revision_no.desc())  # type: ignore[attr-defined]
     ).first()
 
     revision_no = 1
@@ -43,7 +44,7 @@ def create_offer_from_extraction(
     for rli in rfx_line_items:
         sku = session.get(SKU, rli.sku_id)
         if sku:
-            li_lookup[sku.name.lower()] = rli.id  # type: ignore[arg-type]
+            li_lookup[sku.name.lower()] = rli.id  # type: ignore[assignment]
 
     raw_items = extraction_data.get("line_items", [])
     mapped_items = []
@@ -102,7 +103,7 @@ def get_offers_for_rfx(session: Session, rfx_id: int) -> list[Offer]:
         session.exec(
             select(Offer)
             .where(Offer.rfx_id == rfx_id, Offer.superseded_by_offer_id == None)  # noqa: E711
-            .order_by(Offer.vendor_id)
+            .order_by(Offer.vendor_id)  # type: ignore[arg-type]
         ).all()
     )
 
@@ -112,7 +113,7 @@ def get_offer_history(session: Session, rfx_id: int, vendor_id: int) -> list[Off
         session.exec(
             select(Offer)
             .where(Offer.rfx_id == rfx_id, Offer.vendor_id == vendor_id)
-            .order_by(Offer.revision_no)
+            .order_by(Offer.revision_no)  # type: ignore[arg-type]
         ).all()
     )
 

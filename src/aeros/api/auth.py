@@ -1,3 +1,5 @@
+from typing import Any
+
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response
 from pydantic import BaseModel, EmailStr
 from sqlmodel import Session
@@ -48,7 +50,11 @@ def _set_auth_cookies(response: Response, access: str, refresh: str) -> None:
 
 
 @router.post("/login")
-def login(body: LoginRequest, response: Response, session: Session = Depends(get_session)):
+def login(
+    body: LoginRequest,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> UserResponse:
     user = auth_service.authenticate(session, body.email, body.password)
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -67,7 +73,11 @@ def login(body: LoginRequest, response: Response, session: Session = Depends(get
 
 
 @router.post("/register")
-def register(body: RegisterRequest, response: Response, session: Session = Depends(get_session)):
+def register(
+    body: RegisterRequest,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> UserResponse:
     if body.role not in ("buyer", "vendor"):
         raise HTTPException(status_code=400, detail="Invalid role")
     try:
@@ -91,7 +101,7 @@ def register(body: RegisterRequest, response: Response, session: Session = Depen
 
 
 @router.post("/logout")
-def logout(response: Response):
+def logout(response: Response) -> dict[str, Any]:
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
     return {"ok": True}
@@ -101,7 +111,7 @@ def logout(response: Response):
 def me(
     current_user: AuthContext = Depends(get_current_user),
     session: Session = Depends(get_session),
-):
+) -> UserResponse:
     user = auth_service.get_user_by_id(session, current_user.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -115,11 +125,11 @@ def me(
 
 
 @router.get("/demo-accounts")
-def demo_accounts():
+def demo_accounts() -> list[dict[str, Any]]:
     if not settings.show_demo_credentials:
         raise HTTPException(status_code=404, detail="Demo credentials disabled")
 
-    def _acct(role, email, pw, label):
+    def _acct(role: str, email: str, pw: str, label: str) -> dict[str, Any]:
         return {"role": role, "email": email, "password": pw, "label": label}
 
     return [
@@ -141,7 +151,7 @@ def refresh(
     response: Response,
     session: Session = Depends(get_session),
     refresh_token: str | None = Cookie(default=None),
-):
+) -> dict[str, Any]:
     if not refresh_token:
         raise HTTPException(status_code=401, detail="No refresh token")
     try:
@@ -158,7 +168,7 @@ def refresh(
     if user.status != UserStatus.ACTIVE:
         raise HTTPException(status_code=403, detail="Account suspended")
 
-    access = create_access_token(user_id, user.role.value)  # type: ignore[arg-type]
+    access = create_access_token(user_id, user.role.value)
     new_refresh = create_refresh_token(user_id)
     _set_auth_cookies(response, access, new_refresh)
     return {"ok": True}

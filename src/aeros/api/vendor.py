@@ -2,6 +2,7 @@ import hashlib
 import os
 import re
 import traceback
+from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -32,7 +33,7 @@ router = APIRouter(prefix="/api/vendor", tags=["vendor"])
 def vendor_inbox(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
-):
+) -> list[dict[str, Any]]:
     vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         return []
@@ -44,7 +45,7 @@ def get_thread(
     rfx_id: int,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
-):
+) -> dict[str, Any]:
     vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         raise HTTPException(403, "No vendor profile")
@@ -61,7 +62,7 @@ def get_thread(
 
     messages = list(
         session.exec(
-            select(Message).where(Message.thread_id == thread.id).order_by(Message.created_at)
+            select(Message).where(Message.thread_id == thread.id).order_by(Message.created_at)  # type: ignore[arg-type]
         ).all()
     )
 
@@ -86,7 +87,7 @@ def get_thread(
         list(
             session.exec(
                 select(Attachment).where(
-                    Attachment.message_id.in_(  # type: ignore[union-attr]
+                    Attachment.message_id.in_(  # type: ignore[attr-defined]
                         [m.id for m in messages]
                     )
                 )
@@ -156,7 +157,7 @@ def reply_to_rfx(
     body: ReplyRequest,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
-):
+) -> Any:
     vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         raise HTTPException(403, "No vendor profile")
@@ -167,7 +168,7 @@ def reply_to_rfx(
         raise HTTPException(404, "Thread not found")
 
     msg = Message(
-        thread_id=thread.id,  # type: ignore[arg-type]
+        thread_id=thread.id,
         sender_user_id=caller.user_id,
         sender_kind="vendor",
         channel="in_app",
@@ -185,7 +186,7 @@ async def upload_file(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
-):
+) -> dict[str, Any]:
     vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         raise HTTPException(403, "No vendor profile")
@@ -209,7 +210,7 @@ async def upload_file(
         f.write(content)
 
     msg = Message(
-        thread_id=thread.id,  # type: ignore[arg-type]
+        thread_id=thread.id,
         sender_user_id=caller.user_id,
         sender_kind="vendor",
         channel="in_app",
@@ -220,7 +221,7 @@ async def upload_file(
     session.refresh(msg)
 
     attachment = Attachment(
-        message_id=msg.id,  # type: ignore[arg-type]
+        message_id=msg.id,
         filename=filename,
         mime_type=file.content_type or "application/octet-stream",
         storage_path=storage_path,
@@ -277,7 +278,7 @@ def list_uploads(
     rfx_id: int,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
-):
+) -> list[dict[str, Any]]:
     vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         return []
@@ -291,7 +292,7 @@ def list_uploads(
     if not msg_ids:
         return []
     attachments = list(
-        session.exec(select(Attachment).where(Attachment.message_id.in_(msg_ids))).all()  # type: ignore[union-attr]
+        session.exec(select(Attachment).where(Attachment.message_id.in_(msg_ids))).all()  # type: ignore[attr-defined]
     )
     return [
         {
@@ -325,7 +326,7 @@ def submit_quote(
     body: SubmitQuoteRequest,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
-):
+) -> dict[str, Any]:
     vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         raise HTTPException(403, "No vendor profile")
@@ -368,7 +369,7 @@ def submit_quote(
         f"Item #{li.line_item_id}: {li.unit_price}/unit" for li in body.line_items
     )
     msg = Message(
-        thread_id=thread.id,  # type: ignore[arg-type]
+        thread_id=thread.id,
         sender_user_id=caller.user_id,
         sender_kind="vendor",
         channel="in_app",
@@ -414,7 +415,7 @@ def decline_rfx(
     body: DeclineRequest,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
-):
+) -> Any:
     vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
         raise HTTPException(403, "No vendor profile")

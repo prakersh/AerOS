@@ -3,6 +3,7 @@
 import base64
 import time
 import uuid
+from typing import Any
 
 import structlog
 from openai import AsyncOpenAI
@@ -28,7 +29,7 @@ def _log_llm_call(
     error_message: str | None = None,
     rfx_id: int | None = None,
     user_id: int | None = None,
-):
+) -> None:
     try:
         from sqlmodel import Session
 
@@ -75,13 +76,13 @@ class OpenAICompatibleProvider:
         model: str | None = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
-        response_format: dict | None = None,
+        response_format: dict[str, Any] | None = None,
         user_id: int | None = None,
         rfx_id: int | None = None,
     ) -> ChatResponse:
         _uid = user_id if user_id is not None else self.user_id
         _rfx = rfx_id if rfx_id is not None else self.rfx_id
-        kwargs: dict = {
+        kwargs: dict[str, Any] = {
             "model": model or self._default_model,
             "messages": [m.model_dump() for m in messages],
             "temperature": temperature,
@@ -151,7 +152,7 @@ class OpenAICompatibleProvider:
         b64 = base64.b64encode(image_data).decode()
         data_url = f"data:{mime_type};base64,{b64}"
 
-        messages = [
+        vision_messages: list[dict[str, Any]] = [
             {
                 "role": "user",
                 "content": [
@@ -168,7 +169,7 @@ class OpenAICompatibleProvider:
         try:
             resp = await self._client.chat.completions.create(
                 model=used_model,
-                messages=messages,
+                messages=vision_messages,  # type: ignore[arg-type]
                 max_tokens=4096,
                 temperature=0.1,
             )

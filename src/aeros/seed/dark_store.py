@@ -117,7 +117,7 @@ def seed() -> None:
         )
         session.add(buyer)
         session.flush()
-        session.add(UserDefaults(user_id=buyer.id))  # type: ignore[arg-type]
+        session.add(UserDefaults(user_id=buyer.id))
 
         # Admin user
         admin = User(
@@ -128,7 +128,7 @@ def seed() -> None:
         )
         session.add(admin)
         session.flush()
-        session.add(UserDefaults(user_id=admin.id))  # type: ignore[arg-type]
+        session.add(UserDefaults(user_id=admin.id))
 
         # Categories
         cat_map: dict[str, Category] = {}
@@ -141,10 +141,10 @@ def seed() -> None:
         # SKUs
         for code, name, cat_name, unit, price in SKUS:
             sku = SKU(
-                org_id=buyer_org.id,  # type: ignore[arg-type]
+                org_id=buyer_org.id,
                 code=code,
                 name=name,
-                category_id=cat_map[cat_name].id,  # type: ignore[arg-type]
+                category_id=cat_map[cat_name].id,
                 unit=unit,
                 last_price=price,
             )
@@ -165,13 +165,13 @@ def seed() -> None:
             )
             session.add(vuser)
             session.flush()
-            session.add(UserDefaults(user_id=vuser.id))  # type: ignore[arg-type]
+            session.add(UserDefaults(user_id=vuser.id))
 
             cat_ids = ",".join(
                 str(cat_map[c.strip()].id) for c in vcats.split(",") if c.strip() in cat_map
             )
             vendor = Vendor(
-                owning_buyer_org_id=buyer_org.id,  # type: ignore[arg-type]
+                owning_buyer_org_id=buyer_org.id,
                 vendor_user_id=vuser.id,
                 vendor_org_id=vorg.id,
                 name=vname,
@@ -206,11 +206,11 @@ def seed() -> None:
         ]
         sku_map = {}
         for code, qty, unit, target in sku_items:
-            sku = session.exec(select(SKU).where(SKU.code == code)).first()
-            if sku:
+            sku_found = session.exec(select(SKU).where(SKU.code == code)).first()
+            if sku_found:
                 li = RFxLineItem(
                     rfx_id=rfx.id,
-                    sku_id=sku.id,
+                    sku_id=sku_found.id,
                     qty=qty,
                     unit_override=unit,
                     target_price=target,
@@ -221,7 +221,7 @@ def seed() -> None:
 
         vendors_to_invite = session.exec(
             select(Vendor).where(
-                Vendor.primary_email.in_(
+                Vendor.primary_email.in_(  # type: ignore[attr-defined]
                     ["freshfarm@vendor.demo", "sabzi@vendor.demo", "kirana@vendor.demo"]
                 )
             )

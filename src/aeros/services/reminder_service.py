@@ -1,6 +1,7 @@
 """Service-level reminder management for RFx vendor reminders."""
 
 import json
+from typing import Any
 
 from sqlmodel import Session, select
 
@@ -17,7 +18,8 @@ def get_reminders_sent(rv: RFxVendor) -> list[str]:
         List of slot name strings (e.g. ["T-24h", "T-2h"]).
     """
     try:
-        return json.loads(rv.reminders_sent_json or "[]")
+        result: list[str] = json.loads(rv.reminders_sent_json or "[]")
+        return result
     except json.JSONDecodeError:
         return []
 
@@ -48,7 +50,7 @@ def mark_reminder_sent(
 def get_pending_reminders(
     session: Session,
     rfx_id: int,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Get reminder status for all vendors in an RFx.
 
     Args:
@@ -59,7 +61,7 @@ def get_pending_reminders(
         List of dicts with vendor_id, status, and reminders_sent.
     """
     vendors = list(session.exec(select(RFxVendor).where(RFxVendor.rfx_id == rfx_id)).all())
-    result: list[dict] = []
+    result: list[dict[str, Any]] = []
     for rv in vendors:
         sent = get_reminders_sent(rv)
         result.append(

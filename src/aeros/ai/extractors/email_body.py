@@ -1,9 +1,10 @@
 """Email body extractor — handles HTML, plaintext, and forwarded chains."""
 
 import re
+from typing import Any
 
 
-async def extract_email_body(file_path: str, **kwargs) -> str:
+async def extract_email_body(file_path: str, **kwargs: Any) -> str:
     with open(file_path, encoding="utf-8", errors="replace") as f:
         content = f.read()
 

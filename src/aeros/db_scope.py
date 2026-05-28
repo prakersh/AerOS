@@ -41,11 +41,11 @@ def for_user(
     role = caller.role
 
     # Admin sees everything
-    if role == Role.ADMIN or role == Role.ADMIN.value:
+    if role == Role.ADMIN or role == Role.ADMIN.value:  # type: ignore[comparison-overlap]
         return statement
 
     # Buyer — optionally filter by org
-    if role == Role.BUYER or role == Role.BUYER.value:
+    if role == Role.BUYER or role == Role.BUYER.value:  # type: ignore[comparison-overlap]
         if buyer_org_field:
             entity = statement.column_descriptions[0]["entity"]
             return statement.where(getattr(entity, buyer_org_field) == caller.org_id)

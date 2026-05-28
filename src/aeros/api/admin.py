@@ -1,5 +1,6 @@
 import contextlib
 import json
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -21,12 +22,12 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 def get_stats(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.ADMIN),
-):
-    total_users = session.exec(select(func.count(User.id))).one()
-    total_rfx = session.exec(select(func.count(RFxRun.id))).one()
-    total_vendors = session.exec(select(func.count(Vendor.id))).one()
-    total_offers = session.exec(select(func.count(Offer.id))).one()
-    total_extractions = session.exec(select(func.count(Attachment.id))).one()
+) -> dict[str, Any]:
+    total_users = session.exec(select(func.count(User.id))).one()  # type: ignore[arg-type]
+    total_rfx = session.exec(select(func.count(RFxRun.id))).one()  # type: ignore[arg-type]
+    total_vendors = session.exec(select(func.count(Vendor.id))).one()  # type: ignore[arg-type]
+    total_offers = session.exec(select(func.count(Offer.id))).one()  # type: ignore[arg-type]
+    total_extractions = session.exec(select(func.count(Attachment.id))).one()  # type: ignore[arg-type]
 
     return {
         "total_users": total_users,
@@ -41,8 +42,8 @@ def get_stats(
 def list_users(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.ADMIN),
-):
-    users = list(session.exec(select(User).order_by(User.id)).all())
+) -> list[dict[str, Any]]:
+    users = list(session.exec(select(User).order_by(User.id)).all())  # type: ignore[arg-type]
     return [
         {
             "id": u.id,
@@ -61,11 +62,11 @@ def list_audit(
     limit: int = Query(default=100, ge=1, le=500),
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.ADMIN),
-):
+) -> list[dict[str, Any]]:
     logs = list(
         session.exec(
             select(AuditLog)
-            .order_by(AuditLog.created_at.desc())  # type: ignore[union-attr]
+            .order_by(AuditLog.created_at.desc())  # type: ignore[attr-defined]
             .limit(limit)
         ).all()
     )
@@ -106,7 +107,7 @@ def suspend_user(
     body: SuspendRequest,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.ADMIN),
-) -> dict:
+) -> dict[str, Any]:
     """Suspend a user account."""
     try:
         user = admin_service.suspend_user(session, user_id, caller.user_id, reason=body.reason)
@@ -125,7 +126,7 @@ def reactivate_user(
     user_id: int,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.ADMIN),
-) -> dict:
+) -> dict[str, Any]:
     """Reactivate a suspended user account."""
     try:
         user = admin_service.reactivate_user(session, user_id, caller.user_id)
@@ -147,7 +148,7 @@ def reactivate_user(
 def list_orgs(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.ADMIN),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """List all organizations."""
     orgs = admin_service.list_organizations(session)
     return [
@@ -170,7 +171,7 @@ def list_orgs(
 def list_ai_providers(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.ADMIN),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """List configured AI providers."""
     return ai_config_service.list_providers(session)
 
@@ -183,7 +184,7 @@ class TestProviderRequest(BaseModel):
 def test_ai_provider(
     body: TestProviderRequest,
     caller: AuthContext = require_role(Role.ADMIN),
-) -> dict:
+) -> dict[str, Any]:
     """Test connectivity to an AI provider."""
     return ai_config_service.test_provider_connection(body.provider_name)
 
@@ -197,7 +198,7 @@ def test_ai_provider(
 def get_settings(
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.ADMIN),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Get all system settings."""
     return system_settings_service.get_all_settings(session)
 
@@ -212,7 +213,7 @@ def update_setting(
     body: UpdateSettingRequest,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.ADMIN),
-) -> dict:
+) -> dict[str, Any]:
     """Update a system setting."""
     return system_settings_service.update_setting(session, key, body.value, caller.user_id)
 
@@ -225,6 +226,6 @@ def update_setting(
 @router.get("/health")
 def system_health(
     caller: AuthContext = require_role(Role.ADMIN),
-) -> dict:
+) -> dict[str, Any]:
     """Get system health status."""
     return admin_service.get_system_health()

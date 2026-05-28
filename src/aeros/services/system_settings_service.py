@@ -1,6 +1,7 @@
 """System settings management with DB storage and defaults fallback."""
 
 from datetime import datetime
+from typing import Any
 
 from sqlmodel import Session, select
 
@@ -62,7 +63,7 @@ def get_setting(session: Session, key: str) -> str | None:
     return default["value"] if default else None
 
 
-def get_all_settings(session: Session) -> list[dict]:
+def get_all_settings(session: Session) -> list[dict[str, Any]]:
     """Get all settings, merging DB values with defaults.
 
     Args:
@@ -71,13 +72,13 @@ def get_all_settings(session: Session) -> list[dict]:
     Returns:
         List of setting dicts with key, value, type, description, source.
     """
-    result: list[dict] = []
+    result: list[dict[str, Any]] = []
     try:
         from aeros.models.system_setting import SystemSetting
 
         db_settings = {s.key: s for s in session.exec(select(SystemSetting)).all()}
     except Exception:
-        db_settings: dict = {}  # type: ignore[no-redef]
+        db_settings: dict[str, Any] = {}  # type: ignore[no-redef]
 
     for key, default in DEFAULT_SETTINGS.items():
         db = db_settings.get(key)
@@ -93,7 +94,7 @@ def get_all_settings(session: Session) -> list[dict]:
     return result
 
 
-def update_setting(session: Session, key: str, value: str, user_id: int) -> dict:
+def update_setting(session: Session, key: str, value: str, user_id: int) -> dict[str, Any]:
     """Update a setting value.
 
     Attempts DB storage; falls back to memory-only response if model unavailable.

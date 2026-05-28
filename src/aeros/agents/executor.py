@@ -209,6 +209,7 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
         vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == user_id)).first()
         if not vendor:
             raise ValueError("No vendor profile found")
+        assert vendor.id is not None
 
         extraction_data = {
             "line_items": [
@@ -245,6 +246,7 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
         session.add(msg)
         session.commit()
         session.refresh(msg)
+        assert msg.id is not None
 
         offer = offer_service.create_offer_from_extraction(
             session=session,
@@ -254,15 +256,15 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
             source_message_ids=[msg.id],
         )
 
-        rv = session.exec(
+        rv_record = session.exec(
             select(RFxVendor).where(
                 RFxVendor.rfx_id == params["rfx_id"],
                 RFxVendor.vendor_id == vendor.id,
             )
         ).first()
-        if rv:
-            rv.status = RFxVendorStatus.QUOTED
-            session.add(rv)
+        if rv_record:
+            rv_record.status = RFxVendorStatus.QUOTED
+            session.add(rv_record)
             session.commit()
 
         return {"offer_id": offer.id, "revision": offer.revision_no}
@@ -275,6 +277,7 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
         vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == user_id)).first()
         if not vendor:
             raise ValueError("No vendor profile found")
+        assert vendor.id is not None
         rv = rfx_service.decline_rfx_vendor(session, params["rfx_id"], vendor.id, params["reason"])
         return {"status": rv.status.value}
 

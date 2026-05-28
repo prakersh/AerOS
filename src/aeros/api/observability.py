@@ -1,5 +1,7 @@
 """Observability API endpoints for buyer and admin dashboards."""
 
+from typing import Any
+
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session
 
@@ -16,7 +18,7 @@ def get_summary(
     days: int = Query(default=7, ge=1, le=365),
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-) -> dict:
+) -> dict[str, Any]:
     """Get aggregated summary cards for the observability dashboard.
 
     Args:
@@ -36,7 +38,7 @@ def get_calls(
     limit: int = Query(default=50, ge=1, le=500),
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Get recent LLM call logs.
 
     Args:
@@ -56,7 +58,7 @@ def get_timeline(
     rfx_id: int,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Get chronological timeline of events for an RFx.
 
     Args:
@@ -75,7 +77,7 @@ def get_trace(
     trace_id: str,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.BUYER, Role.ADMIN),
-) -> dict:
+) -> dict[str, Any]:
     """Get all telemetry events correlated by trace ID.
 
     Args:

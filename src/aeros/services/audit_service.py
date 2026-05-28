@@ -1,4 +1,5 @@
 import json
+from typing import Any
 
 from sqlmodel import Session
 
@@ -13,8 +14,8 @@ def log_action(
     action: str,
     entity_type: str,
     entity_id: str,
-    before: dict | None = None,
-    after: dict | None = None,
+    before: dict[str, Any] | None = None,
+    after: dict[str, Any] | None = None,
     ip_address: str | None = None,
     user_agent: str | None = None,
 ) -> AuditLog:

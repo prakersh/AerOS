@@ -88,7 +88,7 @@ def get_unread_count(
         session.exec(
             select(Message).where(
                 Message.thread_id == thread_id,
-                Message.id > last_seen_message_id,
+                Message.id > last_seen_message_id,  # type: ignore[operator]
             )
         ).all()
     )

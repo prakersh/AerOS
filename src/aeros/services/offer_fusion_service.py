@@ -7,7 +7,10 @@ import structlog
 logger = structlog.get_logger()
 
 
-def fuse_extractions(extractions: list[dict], rfx_line_items: list[dict]) -> dict:
+def fuse_extractions(
+    extractions: list[dict[str, Any]],
+    rfx_line_items: list[dict[str, Any]],
+) -> dict[str, Any]:
     """Merge extraction results from multiple attachments into one unified offer.
 
     Strategy:
@@ -22,7 +25,7 @@ def fuse_extractions(extractions: list[dict], rfx_line_items: list[dict]) -> dic
     Returns:
         Fused result dict with line_items and metadata.
     """
-    fused_items: dict[str, dict] = {}
+    fused_items: dict[str, dict[str, Any]] = {}
     meta: dict[str, Any] = {
         "payment_terms": None,
         "delivery_terms": None,
@@ -62,7 +65,7 @@ def fuse_extractions(extractions: list[dict], rfx_line_items: list[dict]) -> dic
     }
 
 
-def _match_key(item: dict, rfx_line_items: list[dict]) -> str | None:
+def _match_key(item: dict[str, Any], rfx_line_items: list[dict[str, Any]]) -> str | None:
     """Match an extracted item to an RFx line item by code or name.
 
     Args:

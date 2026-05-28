@@ -22,7 +22,7 @@ async def send_message(
     chat_id: str,
     text: str,
     parse_mode: str = "HTML",
-) -> dict | None:
+) -> dict[str, object] | None:
     """Send a text message to a Telegram chat.
 
     Args:
@@ -43,7 +43,7 @@ async def send_message(
             json={"chat_id": chat_id, "text": text, "parse_mode": parse_mode},
         )
         if resp.status_code == 200:
-            return resp.json()
+            return resp.json()  # type: ignore[no-any-return]
         logger.error("telegram.send_failed", status=resp.status_code, body=resp.text)
         return None
 

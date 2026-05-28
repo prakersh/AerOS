@@ -8,7 +8,7 @@ def list_vendors(session: Session, buyer_org_id: int) -> list[Vendor]:
         session.exec(
             select(Vendor)
             .where(Vendor.owning_buyer_org_id == buyer_org_id)
-            .order_by(Vendor.preferred_rank, Vendor.name)
+            .order_by(Vendor.preferred_rank, Vendor.name)  # type: ignore[arg-type]
         ).all()
     )
 

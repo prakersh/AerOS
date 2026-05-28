@@ -35,8 +35,8 @@ async def check_and_send_reminders() -> int:
         active_rfx = list(
             session.exec(
                 select(RFxRun).where(
-                    RFxRun.status.in_([RFxStatus.DISPATCHED, RFxStatus.COLLECTING]),
-                    RFxRun.response_deadline.is_not(None),
+                    RFxRun.status.in_([RFxStatus.DISPATCHED, RFxStatus.COLLECTING]),  # type: ignore[attr-defined]
+                    RFxRun.response_deadline.is_not(None),  # type: ignore[union-attr]
                 )
             ).all()
         )
@@ -51,7 +51,7 @@ async def check_and_send_reminders() -> int:
                 session.exec(
                     select(RFxVendor).where(
                         RFxVendor.rfx_id == rfx.id,
-                        RFxVendor.status.in_([RFxVendorStatus.INVITED, RFxVendorStatus.VIEWED]),
+                        RFxVendor.status.in_([RFxVendorStatus.INVITED, RFxVendorStatus.VIEWED]),  # type: ignore[attr-defined]
                     )
                 ).all()
             )
@@ -63,7 +63,8 @@ async def check_and_send_reminders() -> int:
                     if slot["name"] in sent_slots:
                         continue
 
-                    trigger_time = rfx.response_deadline - timedelta(hours=slot["hours_before"])
+                    hours = float(slot["hours_before"])  # type: ignore[arg-type]
+                    trigger_time = rfx.response_deadline - timedelta(hours=hours)
                     if now >= trigger_time:
                         vendor = session.get(Vendor, rv.vendor_id)
                         if not vendor:

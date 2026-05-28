@@ -65,15 +65,15 @@ def parse_email_message(raw_bytes: bytes) -> dict[str, Any]:
                     )
             elif content_type == "text/plain" and not result["body_text"]:
                 payload = part.get_payload(decode=True)
-                if payload:
+                if isinstance(payload, bytes):
                     result["body_text"] = payload.decode("utf-8", errors="replace")
             elif content_type == "text/html" and not result["body_html"]:
                 payload = part.get_payload(decode=True)
-                if payload:
+                if isinstance(payload, bytes):
                     result["body_html"] = payload.decode("utf-8", errors="replace")
     else:
         payload = msg.get_payload(decode=True)
-        if payload:
+        if isinstance(payload, bytes):
             if msg.get_content_type() == "text/html":
                 result["body_html"] = payload.decode("utf-8", errors="replace")
             else:
@@ -83,10 +83,10 @@ def parse_email_message(raw_bytes: bytes) -> dict[str, Any]:
 
 
 def save_attachments(
-    attachments: list[dict],
+    attachments: list[dict[str, Any]],
     rfx_id: int,
     vendor_id: int,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Save attachment data to disk under the upload directory.
 
     Args:
@@ -97,7 +97,7 @@ def save_attachments(
     Returns:
         List of dicts with filename, mime_type, storage_path, size_bytes, sha256.
     """
-    saved: list[dict] = []
+    saved: list[dict[str, Any]] = []
     upload_dir = os.path.join(settings.upload_dir, str(rfx_id), str(vendor_id))
     os.makedirs(upload_dir, exist_ok=True)
 
@@ -120,7 +120,7 @@ def save_attachments(
     return saved
 
 
-async def poll_imap_once() -> list[dict]:
+async def poll_imap_once() -> list[dict[str, object]]:
     """Poll IMAP for new messages. Returns list of parsed emails.
 
     Uses imaplib to connect to the configured IMAP server and fetch
@@ -138,7 +138,7 @@ async def poll_imap_once() -> list[dict]:
         mail.select("INBOX")
         _, message_ids = mail.search(None, "UNSEEN")
 
-        results: list[dict] = []
+        results: list[dict[str, object]] = []
         for msg_id in message_ids[0].split():
             if not msg_id:
                 continue

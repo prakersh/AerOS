@@ -4,6 +4,7 @@ import asyncio
 import importlib
 import signal
 import time
+from typing import Any
 
 import structlog
 
@@ -15,13 +16,13 @@ TELEMETRY_INTERVAL = 3600
 _running = True
 
 
-def _shutdown(signum, frame):
+def _shutdown(signum: int, frame: Any) -> None:
     global _running
     logger.info("worker.shutdown_signal", signal=signum)
     _running = False
 
 
-def main():
+def main() -> None:
     signal.signal(signal.SIGTERM, _shutdown)
     signal.signal(signal.SIGINT, _shutdown)
 

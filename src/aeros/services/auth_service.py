@@ -52,7 +52,7 @@ def register_user(
     session.commit()
     session.refresh(user)
 
-    defaults = UserDefaults(user_id=user.id)  # type: ignore[arg-type]
+    defaults = UserDefaults(user_id=user.id)
     session.add(defaults)
     session.commit()
 

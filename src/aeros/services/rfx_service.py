@@ -1,5 +1,6 @@
 import json
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlmodel import Session, select
 
@@ -15,7 +16,7 @@ from aeros.models.rfx import (
 from aeros.services.audit_service import log_action
 
 
-def create_rfx(session: Session, buyer_id: int, title: str, **kwargs) -> RFxRun:
+def create_rfx(session: Session, buyer_id: int, title: str, **kwargs: Any) -> RFxRun:
     rfx = RFxRun(buyer_id=buyer_id, title=title, **kwargs)
     session.add(rfx)
     session.commit()
@@ -33,7 +34,7 @@ def create_rfx(session: Session, buyer_id: int, title: str, **kwargs) -> RFxRun:
     return rfx
 
 
-def add_line_items(session: Session, rfx_id: int, items: list[dict]) -> list[RFxLineItem]:
+def add_line_items(session: Session, rfx_id: int, items: list[dict[str, Any]]) -> list[RFxLineItem]:
     line_items = []
     for item in items:
         li = RFxLineItem(rfx_id=rfx_id, **item)
@@ -135,12 +136,12 @@ def cancel_rfx(session: Session, rfx_id: int, user_id: int, reason: str) -> RFxR
     return rfx
 
 
-def list_rfx_for_buyer(session: Session, buyer_id: int) -> list[dict]:
+def list_rfx_for_buyer(session: Session, buyer_id: int) -> list[dict[str, Any]]:
     from aeros.models.sku import SKU
 
     rfx_list = list(
         session.exec(
-            select(RFxRun).where(RFxRun.buyer_id == buyer_id).order_by(RFxRun.created_at.desc())  # type: ignore[union-attr]
+            select(RFxRun).where(RFxRun.buyer_id == buyer_id).order_by(RFxRun.created_at.desc())  # type: ignore[attr-defined]
         ).all()
     )
     results = []
@@ -176,7 +177,7 @@ def list_rfx_for_buyer(session: Session, buyer_id: int) -> list[dict]:
     return results
 
 
-def list_rfx_for_vendor(session: Session, vendor_id: int) -> list[dict]:
+def list_rfx_for_vendor(session: Session, vendor_id: int) -> list[dict[str, Any]]:
     from aeros.models.user import User
 
     rv_list = session.exec(select(RFxVendor).where(RFxVendor.vendor_id == vendor_id)).all()
@@ -204,7 +205,7 @@ def list_rfx_for_vendor(session: Session, vendor_id: int) -> list[dict]:
     return results
 
 
-def get_rfx_with_details(session: Session, rfx_id: int) -> dict | None:
+def get_rfx_with_details(session: Session, rfx_id: int) -> dict[str, Any] | None:
     from aeros.models.sku import SKU
     from aeros.models.vendor import Vendor as VendorModel
 
@@ -236,7 +237,7 @@ def get_rfx_with_details(session: Session, rfx_id: int) -> dict | None:
 
     offer_lookup: dict[int, Offer] = {o.vendor_id: o for o in offers}
     vendor_offers = []
-    dispatch_plan: list[dict] = []
+    dispatch_plan: list[dict[str, Any]] = []
     for rv in vendors:
         vendor = session.get(VendorModel, rv.vendor_id)
         offer = offer_lookup.get(rv.vendor_id)
@@ -249,7 +250,7 @@ def get_rfx_with_details(session: Session, rfx_id: int) -> dict | None:
             except (json.JSONDecodeError, TypeError):
                 assigned_ids = None
 
-        vo: dict = {
+        vo: dict[str, Any] = {
             "vendor_id": rv.vendor_id,
             "vendor_name": vendor.name if vendor else f"Vendor #{rv.vendor_id}",
             "status": rv.status.value,
@@ -319,7 +320,12 @@ def decline_rfx_vendor(session: Session, rfx_id: int, vendor_id: int, reason: st
     return rv
 
 
-def award_rfx(session: Session, rfx_id: int, buyer_id: int, decisions: list[dict]) -> RFxRun:
+def award_rfx(
+    session: Session,
+    rfx_id: int,
+    buyer_id: int,
+    decisions: list[dict[str, Any]],
+) -> RFxRun:
     from aeros.models.award import Award
 
     rfx = session.get(RFxRun, rfx_id)
@@ -353,7 +359,7 @@ def award_rfx(session: Session, rfx_id: int, buyer_id: int, decisions: list[dict
     return rfx
 
 
-def get_vendor_suggestions(session: Session, rfx_id: int, buyer_org_id: int) -> dict:
+def get_vendor_suggestions(session: Session, rfx_id: int, buyer_org_id: int) -> dict[str, Any]:
     """Suggest vendors for each line item based on category matching and performance."""
     from aeros.models.sku import SKU
     from aeros.models.vendor import Vendor
@@ -367,7 +373,7 @@ def get_vendor_suggestions(session: Session, rfx_id: int, buyer_org_id: int) -> 
         return {"suggestions": [], "unassigned_items": []}
 
     # Build line item info with category IDs
-    li_info: list[dict] = []
+    li_info: list[dict[str, Any]] = []
     for li in line_items:
         sku = session.get(SKU, li.sku_id)
         li_info.append(
@@ -386,12 +392,12 @@ def get_vendor_suggestions(session: Session, rfx_id: int, buyer_org_id: int) -> 
         session.exec(
             select(Vendor)
             .where(Vendor.owning_buyer_org_id == buyer_org_id)
-            .order_by(Vendor.preferred_rank, Vendor.name)
+            .order_by(Vendor.preferred_rank, Vendor.name)  # type: ignore[arg-type]
         ).all()
     )
 
     # For each vendor, find matching items
-    suggestions: list[dict] = []
+    suggestions: list[dict[str, Any]] = []
     all_assigned_item_ids: set[int] = set()
 
     for vendor in all_vendors:
@@ -402,16 +408,16 @@ def get_vendor_suggestions(session: Session, rfx_id: int, buyer_org_id: int) -> 
                 if cid.isdigit():
                     vendor_cat_ids.add(int(cid))
 
-        matching_items: list[dict] = []
-        for li in li_info:
-            if li["category_id"] is not None and li["category_id"] in vendor_cat_ids:
+        matching_items: list[dict[str, Any]] = []
+        for li_d in li_info:
+            if li_d["category_id"] is not None and li_d["category_id"] in vendor_cat_ids:
                 matching_items.append(
                     {
-                        "line_item_id": li["line_item_id"],
-                        "sku_code": li["sku_code"],
-                        "sku_name": li["sku_name"],
-                        "qty": li["qty"],
-                        "unit": li["unit"],
+                        "line_item_id": li_d["line_item_id"],
+                        "sku_code": li_d["sku_code"],
+                        "sku_name": li_d["sku_name"],
+                        "qty": li_d["qty"],
+                        "unit": li_d["unit"],
                     }
                 )
 
@@ -442,14 +448,14 @@ def get_vendor_suggestions(session: Session, rfx_id: int, buyer_org_id: int) -> 
     suggestions.sort(key=lambda s: s["match_score"], reverse=True)
 
     # Find unassigned items
-    unassigned_items: list[dict] = []
-    for li in li_info:
-        if li["line_item_id"] not in all_assigned_item_ids:
+    unassigned_items: list[dict[str, Any]] = []
+    for li_d in li_info:
+        if li_d["line_item_id"] not in all_assigned_item_ids:
             unassigned_items.append(
                 {
-                    "line_item_id": li["line_item_id"],
-                    "sku_code": li["sku_code"],
-                    "sku_name": li["sku_name"],
+                    "line_item_id": li_d["line_item_id"],
+                    "sku_code": li_d["sku_code"],
+                    "sku_name": li_d["sku_name"],
                 }
             )
 
@@ -460,8 +466,8 @@ def assign_vendors_to_items(
     session: Session,
     rfx_id: int,
     buyer_id: int,
-    assignments: list[dict],
-) -> dict:
+    assignments: list[dict[str, Any]],
+) -> dict[str, Any]:
     """Assign specific line items to vendors. Creates/updates RFxVendor records."""
     rfx = session.get(RFxRun, rfx_id)
     if not rfx:
@@ -472,7 +478,7 @@ def assign_vendors_to_items(
         li.id for li in session.exec(select(RFxLineItem).where(RFxLineItem.rfx_id == rfx_id)).all()
     }
 
-    result_assignments: list[dict] = []
+    result_assignments: list[dict[str, Any]] = []
     for assignment in assignments:
         vendor_id = assignment["vendor_id"]
         line_item_ids = assignment["line_item_ids"]

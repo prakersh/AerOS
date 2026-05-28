@@ -4,6 +4,7 @@ import json
 import re
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 import structlog
 from sqlmodel import Session
@@ -203,7 +204,7 @@ def log_channel_event(
     direction: str = "outbound",
     status: str = "success",
     error_message: str | None = None,
-    metadata: dict | None = None,
+    metadata: dict[str, Any] | None = None,
 ) -> ChannelEventLog:
     """Log a communication channel event (email, telegram, in-app).
 
@@ -245,7 +246,7 @@ def create_pipeline_report(
     trace_id: str = "",
     rfx_id: int | None = None,
     pipeline_type: str = "",
-    summary: dict | None = None,
+    summary: dict[str, Any] | None = None,
     total_steps: int = 0,
     total_duration_ms: int = 0,
     total_tokens: int = 0,
