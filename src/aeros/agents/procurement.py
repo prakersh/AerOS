@@ -83,30 +83,67 @@ class PipelineStep:
 # DETERMINISTIC INTENT DETECTION
 # ============================================
 
+_QTY = (
+    r"(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|"
+    r"twenty|thirty|forty|fifty|hundred|thousand)"
+)
+_UNIT = (
+    r"(?:kg|kgs|g|gm|gram|grams|ltr|ltrs|litre|litres|liter|liters|ml|"
+    r"pcs|pieces|dozen|units?|ton|tons|tonne|quintal|quintals|"
+    r"packet|packets|box|boxes|carton|cartons|bag|bags|sack|sacks|"
+    r"bottle|bottles|can|cans|pair|pairs|set|sets|roll|rolls)"
+)
+
 PROCUREMENT_PATTERNS = [
+    # Bare quantity + unit (most natural: "Ashirwad aata 5kg 10 pcs")
+    (rf"{_QTY}\s*{_UNIT}\b", "create_rfx"),
+    # Trigger word + quantity
     (
-        r"(?:i need|mujhe|chahiye|order|kharid).*"
-        r"\d+\s*(?:kg|ltr|pcs|dozen|units?|ton|quintal|packet|box|carton)",
+        rf"(?:i need|we need|mujhe|chahiye|order|kharid|mangwao|bhejdo).*{_QTY}\s*{_UNIT}",
         "create_rfx",
     ),
+    # Reverse: quantity before chahiye
+    (rf"{_QTY}\s*{_UNIT}.*(?:chahiye|chaiye|mangwao)", "create_rfx"),
+    # Trigger word + known items (no quantity needed)
     (
-        r"\d+\s*(?:kg|ltr|pcs|dozen|units?|ton|quintal).*(?:chahiye|chaiye)",
+        r"(?:i need|we need|mujhe|chahiye|buy|purchase|procure).*"
+        r"(?:rice|wheat|dal|atta|aata|oil|sugar|flour|vegetable|"
+        r"onion|tomato|potato|salt|masala|milk|ghee|paneer|curd)",
         "create_rfx",
     ),
+    # Dispatch
     (
-        r"(?:i need|mujhe|chahiye|buy|purchase|procure).*"
-        r"(?:rice|wheat|dal|atta|oil|sugar|flour|vegetable|onion|tomato|potato)",
-        "create_rfx",
+        r"\b(?:dispatch|send\s+(?:out|to|this|rfx)|bhejo|bhejdo)\b",
+        "dispatch_rfx",
     ),
-    (r"\b(?:dispatch|send out|send to vendors|bhejo|send rfx?)\b", "dispatch_rfx"),
-    (r"\b(?:cancel|withdraw|abort|band karo)\b.*\brfx?\b", "cancel_rfx"),
-    (r"\b(?:compare|evaluate|best price|sabse sasta|cheapest)\b", "evaluate_offers"),
+    # Cancel
+    (r"\b(?:cancel|withdraw|abort|band karo)\b.*\b(?:rfx?|order)", "cancel_rfx"),
+    # Evaluate
+    (
+        r"\b(?:compare|evaluate|best price|sabse sasta|cheapest|"
+        r"lowest|who\s+(?:gave|quoted|offered))\b",
+        "evaluate_offers",
+    ),
+    # Award
     (r"\b(?:award|finalize|select vendor|accept quote)\b", "award_rfx"),
-    (r"\b(?:decline|reject|can'?t supply|nahi de sakte)\b", "decline_rfx"),
-    (r"\b(?:quote|bid|submit price|daam|rate)\b.*\d+", "submit_quote"),
-    (r"\b(?:show|list|mere|my)\b.*\b(?:rfx?|order|request)\b", "list_rfx"),
-    (r"\b(?:show|list)\b.*\b(?:vendor|supplier)", "list_vendors"),
-    (r"\b(?:summary|today|aaj|overview|dashboard)\b", "daily_summary"),
+    # Decline
+    (
+        r"\b(?:decline|reject|can'?t supply|nahi de sakte|"
+        r"out of stock|not available)\b",
+        "decline_rfx",
+    ),
+    # Quote
+    (rf"\b(?:quote|bid|submit price|daam|rate)\b.*{_QTY}", "submit_quote"),
+    # List RFx
+    (
+        r"\b(?:show|list|mere|my|kya|status)\b.*\b(?:rfx?|orders?|requests?)\b",
+        "list_rfx",
+    ),
+    # List vendors
+    (r"\b(?:show|list)\b.*\b(?:vendors?|suppliers?)", "list_vendors"),
+    # Summary (only when it's the primary intent, not embedded in other context)
+    (r"\b(?:summary|overview|dashboard)\b", "daily_summary"),
+    (r"(?:^|\.\s*)(?:aaj|today)(?:\s+(?:kya|what)|\?)", "daily_summary"),
 ]
 
 _GREETING_RE = re.compile(
