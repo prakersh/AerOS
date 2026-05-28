@@ -1,20 +1,23 @@
 """Chat API — conversational AI for buyer + vendor co-pilots, plus RFx actions."""
 
 import contextlib
+import hashlib
 import json
+import os
+import re
 import traceback
 from datetime import datetime
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from aeros.agents.base import AgentContext
-from aeros.agents.intake import IntakeAgent
 from aeros.agents.sourcing import SourcingAgent
 from aeros.ai.factory import get_chat_provider, get_vision_provider
+from aeros.config import settings
 from aeros.db import get_session
 from aeros.models.sku import SKU
 from aeros.models.user import Role
@@ -47,79 +50,44 @@ async def chat(
     session: Session = Depends(get_session),
     caller: AuthContext = Depends(get_current_user),
 ):
-    if caller.role == Role.BUYER:
-        agent = IntakeAgent()
-        chat_provider = get_chat_provider()
-        chat_provider.user_id = caller.user_id
-        chat_provider.rfx_id = body.rfx_id
-        vision_provider = get_vision_provider()
-        if vision_provider:
-            vision_provider.user_id = caller.user_id
-            vision_provider.rfx_id = body.rfx_id
+    if caller.role not in (Role.BUYER, Role.VENDOR):
+        raise HTTPException(403, "Chat not available for this role")
 
-        ctx = AgentContext(
-            session=session,
-            caller=caller,
-            chat_provider=chat_provider,
-            vision_provider=vision_provider,
-            rfx_id=body.rfx_id,
-            metadata={"history": body.history},
+    from aeros.agents.procurement import ProcurementAgent
+
+    agent = ProcurementAgent()
+    chat_provider = get_chat_provider()
+    chat_provider.user_id = caller.user_id
+    chat_provider.rfx_id = body.rfx_id
+    vision_provider = get_vision_provider()
+    if vision_provider:
+        vision_provider.user_id = caller.user_id
+        vision_provider.rfx_id = body.rfx_id
+
+    ctx = AgentContext(
+        session=session,
+        caller=caller,
+        chat_provider=chat_provider,
+        vision_provider=vision_provider,
+        rfx_id=body.rfx_id,
+        metadata={"history": body.history},
+    )
+
+    try:
+        result = await agent.run(ctx, body.message)
+        return JSONResponse(
+            content={
+                "message": result.message,
+                "data": result.data,
+                "success": result.success,
+            }
         )
-
-        try:
-            result = await agent.run(ctx, body.message)
-            return JSONResponse(
-                content={
-                    "message": result.message,
-                    "data": result.data,
-                    "success": result.success,
-                }
-            )
-        except Exception as e:
-            logger.error("chat.error", error=str(e), traceback=traceback.format_exc())
-            return JSONResponse(
-                status_code=500,
-                content={"message": f"AI error: {e}", "data": {}, "success": False},
-            )
-
-    elif caller.role == Role.VENDOR:
-        from aeros.agents.vendor_copilot import VendorCopilotAgent
-
-        agent = VendorCopilotAgent()
-        chat_provider = get_chat_provider()
-        chat_provider.user_id = caller.user_id
-        chat_provider.rfx_id = body.rfx_id
-        vision_provider = get_vision_provider()
-        if vision_provider:
-            vision_provider.user_id = caller.user_id
-            vision_provider.rfx_id = body.rfx_id
-
-        ctx = AgentContext(
-            session=session,
-            caller=caller,
-            chat_provider=chat_provider,
-            vision_provider=vision_provider,
-            rfx_id=body.rfx_id,
-            metadata={"history": body.history},
+    except Exception as e:
+        logger.error("chat.error", error=str(e), traceback=traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"message": f"AI error: {e}", "data": {}, "success": False},
         )
-
-        try:
-            result = await agent.run(ctx, body.message)
-            return JSONResponse(
-                content={
-                    "message": result.message,
-                    "data": result.data,
-                    "success": result.success,
-                }
-            )
-        except Exception as e:
-            logger.error("vendor_chat.error", error=str(e), traceback=traceback.format_exc())
-            return JSONResponse(
-                status_code=500,
-                content={"message": f"AI error: {e}", "data": {}, "success": False},
-            )
-
-    raise HTTPException(403, "Chat not available for this role")
 
 
 @router.post("/create-rfx")
@@ -301,3 +269,32 @@ async def dispatch_rfx(
             status_code=500,
             content={"message": f"Dispatch failed: {e}", "data": {}, "success": False},
         )
+
+
+@router.post("/upload")
+async def chat_upload(
+    file: UploadFile = File(...),
+    caller: AuthContext = Depends(get_current_user),
+):
+    """Upload a file from the buyer chat for AI extraction."""
+    if caller.role != Role.BUYER:
+        raise HTTPException(403, "Only buyers can upload via chat")
+
+    content = await file.read()
+    if len(content) > settings.max_upload_size_mb * 1024 * 1024:
+        raise HTTPException(413, "File too large")
+
+    sha = hashlib.sha256(content).hexdigest()[:12]
+    upload_dir = os.path.join(settings.upload_dir, "chat", str(caller.user_id))
+    os.makedirs(upload_dir, exist_ok=True)
+    raw_name = os.path.basename(file.filename or "upload")
+    filename = re.sub(r"[^\w.\-]", "_", raw_name)[:255]
+    storage_path = os.path.join(upload_dir, f"{sha}_{filename}")
+    with open(storage_path, "wb") as f:
+        f.write(content)
+
+    return {
+        "url": f"/uploads/chat/{caller.user_id}/{sha}_{filename}",
+        "file_url": storage_path,
+        "name": filename,
+    }

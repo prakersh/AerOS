@@ -53,21 +53,97 @@ def get_thread(
     ).first()
     if not thread:
         raise HTTPException(404, "Thread not found")
+
+    from aeros.models.rfx import RFxLineItem, RFxRun
+    from aeros.models.sku import SKU
+
+    rfx = session.get(RFxRun, rfx_id)
+
     messages = list(
         session.exec(
             select(Message).where(Message.thread_id == thread.id).order_by(Message.created_at)
         ).all()
     )
-    return [
-        {
-            "id": m.id,
-            "body_text": m.body_text,
-            "sender_kind": m.sender_kind,
-            "channel": m.channel,
-            "created_at": m.created_at.isoformat() if m.created_at else "",
-        }
-        for m in messages
-    ]
+
+    line_items_raw = list(
+        session.exec(select(RFxLineItem).where(RFxLineItem.rfx_id == rfx_id)).all()
+    )
+    line_items = []
+    for li in line_items_raw:
+        sku = session.get(SKU, li.sku_id)
+        line_items.append(
+            {
+                "id": li.id,
+                "sku": sku.code if sku else "",
+                "description": sku.name if sku else "",
+                "quantity": li.qty,
+                "unit": li.unit_override or (sku.unit if sku else ""),
+                "target_price": li.target_price,
+            }
+        )
+
+    attachments = (
+        list(
+            session.exec(
+                select(Attachment).where(
+                    Attachment.message_id.in_(  # type: ignore[union-attr]
+                        [m.id for m in messages]
+                    )
+                )
+            ).all()
+        )
+        if messages
+        else []
+    )
+
+    # Mark vendor lane as VIEWED on first thread access
+    rv = session.exec(
+        select(RFxVendor).where(
+            RFxVendor.rfx_id == rfx_id,
+            RFxVendor.vendor_id == vendor.id,
+        )
+    ).first()
+    if rv and rv.status == RFxVendorStatus.INVITED:
+        rv.status = RFxVendorStatus.VIEWED
+        session.add(rv)
+        session.commit()
+
+    return {
+        "rfx_id": str(rfx_id),
+        "rfx_title": rfx.title if rfx else "",
+        "rfx_status": rfx.status.value
+        if rfx and hasattr(rfx.status, "value")
+        else str(rfx.status)
+        if rfx
+        else "",
+        "deadline": rfx.response_deadline.isoformat() if rfx and rfx.response_deadline else None,
+        "currency": rfx.currency_for_this_rfx if rfx else "INR",
+        "payment_terms": rfx.payment_terms_for_this_rfx if rfx else None,
+        "delivery_terms": rfx.delivery_terms_for_this_rfx if rfx else None,
+        "tax_terms": rfx.tax_treatment_for_this_rfx if rfx else None,
+        "line_items": line_items,
+        "messages": [
+            {
+                "id": m.id,
+                "body_text": m.body_text,
+                "sender_kind": m.sender_kind,
+                "channel": m.channel,
+                "created_at": m.created_at.isoformat() if m.created_at else "",
+            }
+            for m in messages
+        ],
+        "attachments": [
+            {
+                "id": a.id,
+                "filename": a.filename,
+                "size_bytes": a.size_bytes,
+                "extraction_status": a.extraction_status.value
+                if hasattr(a.extraction_status, "value")
+                else str(a.extraction_status),
+            }
+            for a in attachments
+        ],
+    }
 
 
 class ReplyRequest(BaseModel):
@@ -226,6 +302,98 @@ def list_uploads(
         }
         for a in attachments
     ]
+
+
+class QuoteLineItem(BaseModel):
+    line_item_id: int
+    unit_price: float
+    lead_time_days: int | None = None
+    notes: str | None = None
+
+
+class SubmitQuoteRequest(BaseModel):
+    line_items: list[QuoteLineItem]
+    payment_terms: str | None = None
+    delivery_terms: str | None = None
+    validity_until: str | None = None
+    vendor_remarks: str | None = None
+
+
+@router.post("/rfx/{rfx_id}/submit-quote")
+def submit_quote(
+    rfx_id: int,
+    body: SubmitQuoteRequest,
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.VENDOR),
+):
+    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
+    if not vendor:
+        raise HTTPException(403, "No vendor profile")
+    thread = session.exec(
+        select(Thread).where(Thread.rfx_id == rfx_id, Thread.vendor_id == vendor.id)
+    ).first()
+    if not thread:
+        raise HTTPException(404, "Thread not found")
+
+    total = sum(li.unit_price * 1 for li in body.line_items)
+
+    extraction_data = {
+        "line_items": [
+            {
+                "line_item_id": li.line_item_id,
+                "unit_price": li.unit_price,
+                "lead_time_days": li.lead_time_days,
+                "notes": li.notes,
+                "confidence": 1.0,
+            }
+            for li in body.line_items
+        ],
+        "total_quote": total,
+        "payment_terms": body.payment_terms,
+        "delivery_terms": body.delivery_terms,
+        "vendor_remarks": body.vendor_remarks,
+        "confidence_overall": 1.0,
+    }
+
+    # Record the quote as a message in the thread
+    items_text = ", ".join(
+        f"Item #{li.line_item_id}: {li.unit_price}/unit" for li in body.line_items
+    )
+    msg = Message(
+        thread_id=thread.id,  # type: ignore[arg-type]
+        sender_user_id=caller.user_id,
+        sender_kind="vendor",
+        channel="in_app",
+        body_text=f"Structured quote submitted: {items_text}",
+    )
+    session.add(msg)
+    session.commit()
+    session.refresh(msg)
+
+    offer = offer_service.create_offer_from_extraction(
+        session=session,
+        rfx_id=rfx_id,
+        vendor_id=vendor.id,  # type: ignore[arg-type]
+        extraction_data=extraction_data,
+        source_message_ids=[msg.id],  # type: ignore[list-item]
+    )
+
+    rv = session.exec(
+        select(RFxVendor).where(
+            RFxVendor.rfx_id == rfx_id,
+            RFxVendor.vendor_id == vendor.id,
+        )
+    ).first()
+    if rv:
+        rv.status = RFxVendorStatus.QUOTED
+        session.add(rv)
+        session.commit()
+
+    return {
+        "offer_id": offer.id,
+        "revision_no": offer.revision_no,
+        "message": "Quote submitted successfully",
+    }
 
 
 class DeclineRequest(BaseModel):

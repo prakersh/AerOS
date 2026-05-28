@@ -1,0 +1,649 @@
+"""Agentic Procurement Agent — multi-step reasoning with TOON-formatted tool calls.
+
+Inspired by memo.sbs MemoAgent architecture:
+1. Gather user context (inventory, RFx state, vendors)
+2. Deterministic intent detection (no LLM for common patterns)
+3. Agentic loop: select tools → execute → respond → check → continue
+4. TOON format for tool catalogs (40% token savings vs JSON)
+"""
+
+import json
+import re
+import time
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
+from typing import Any
+
+import structlog
+from sqlmodel import Session, select
+from toon_format import encode as toon_encode
+
+from aeros.agents.base import AgentContext, AgentResult, BaseAgent
+from aeros.agents.executor import execute_tool
+from aeros.agents.tools import (
+    ToolResult,
+    filter_tools_by_keywords,
+    get_tools_for_role,
+    tools_to_toon,
+)
+from aeros.ai.base import ChatMessage
+from aeros.models.user_defaults import UserDefaults
+
+logger = structlog.get_logger()
+
+AGENT_CONFIG = {
+    "max_llm_calls": 6,
+    "max_iterations": 3,
+    "llm_calls_per_iteration": 2,
+}
+
+STAGE_TOKEN_LIMITS = {
+    "tool_selection": {"max_output": 1024, "input_pct": 0.40},
+    "greeting": {"max_output": 256, "input_pct": 0.25},
+    "response": {"max_output": 1024, "input_pct": 0.50},
+}
+
+CONTEXT_LIMITS = {
+    "skus": 30,
+    "vendors": 20,
+    "rfx": 10,
+    "history_messages": 8,
+    "history_char_limit": 150,
+}
+
+_INJECTION_RE = re.compile(
+    r"(?:ignore\s+(?:previous|above|all)\s+instructions|"
+    r"you\s+are\s+now|act\s+as|system\s*:|"
+    r"forget\s+(?:everything|your\s+instructions)|"
+    r"new\s+instructions\s*:)",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_for_prompt(text: str) -> str:
+    return _INJECTION_RE.sub("[redacted]", text)
+
+
+@dataclass
+class PipelineStep:
+    name: str
+    start_time: float = 0.0
+    end_time: float = 0.0
+    status: str = "pending"
+    details: dict = field(default_factory=dict)
+
+    @property
+    def duration_ms(self) -> float:
+        if self.end_time and self.start_time:
+            return (self.end_time - self.start_time) * 1000
+        return 0.0
+
+
+# ============================================
+# DETERMINISTIC INTENT DETECTION
+# ============================================
+
+PROCUREMENT_PATTERNS = [
+    (
+        r"(?:i need|mujhe|chahiye|order|kharid).*"
+        r"\d+\s*(?:kg|ltr|pcs|dozen|units?|ton|quintal|packet|box|carton)",
+        "create_rfx",
+    ),
+    (
+        r"\d+\s*(?:kg|ltr|pcs|dozen|units?|ton|quintal).*(?:chahiye|chaiye)",
+        "create_rfx",
+    ),
+    (
+        r"(?:i need|mujhe|chahiye|buy|purchase|procure).*"
+        r"(?:rice|wheat|dal|atta|oil|sugar|flour|vegetable|onion|tomato|potato)",
+        "create_rfx",
+    ),
+    (r"\b(?:dispatch|send out|send to vendors|bhejo|send rfx?)\b", "dispatch_rfx"),
+    (r"\b(?:cancel|withdraw|abort|band karo)\b.*\brfx?\b", "cancel_rfx"),
+    (r"\b(?:compare|evaluate|best price|sabse sasta|cheapest)\b", "evaluate_offers"),
+    (r"\b(?:award|finalize|select vendor|accept quote)\b", "award_rfx"),
+    (r"\b(?:decline|reject|can'?t supply|nahi de sakte)\b", "decline_rfx"),
+    (r"\b(?:quote|bid|submit price|daam|rate)\b.*\d+", "submit_quote"),
+    (r"\b(?:show|list|mere|my)\b.*\b(?:rfx?|order|request)\b", "list_rfx"),
+    (r"\b(?:show|list)\b.*\b(?:vendor|supplier)", "list_vendors"),
+    (r"\b(?:summary|today|aaj|overview|dashboard)\b", "daily_summary"),
+]
+
+_GREETING_RE = re.compile(
+    r"^\s*(?:hi|hello|hey|namaste|good\s+(?:morning|afternoon|evening)|howdy|sup)\b",
+    re.IGNORECASE,
+)
+
+
+def detect_intent(message: str) -> list[str]:
+    msg_lower = message.lower()
+    if _GREETING_RE.match(msg_lower):
+        return ["__greeting__"]
+    intents: list[str] = []
+    seen: set[str] = set()
+    for pattern, tool_name in PROCUREMENT_PATTERNS:
+        if tool_name not in seen and re.search(pattern, msg_lower):
+            intents.append(tool_name)
+            seen.add(tool_name)
+    return intents
+
+
+# ============================================
+# CONTEXT BUILDER
+# ============================================
+
+
+def _build_user_context(session: Session, caller: Any, message: str = "") -> str:
+    from aeros.services import inventory_service, rfx_service, vendor_service
+
+    org_id = caller.org_id or 0
+    parts = []
+
+    skus = inventory_service.list_skus(session, org_id)
+    if skus:
+        sku_data = [
+            {"id": s.id, "code": s.code, "name": s.name, "unit": s.unit, "price": s.last_price}
+            for s in skus[: CONTEXT_LIMITS["skus"]]
+        ]
+        parts.append(f"<inventory>\n{toon_encode(sku_data)}\n</inventory>")
+
+    vendors = vendor_service.list_vendors(session, org_id)
+    if vendors:
+        v_data = [
+            {
+                "id": v.id,
+                "name": v.name,
+                "categories": v.category_ids_csv or "",
+                "score": v.performance_score,
+                "channel": (
+                    "portal" if v.vendor_user_id else "email" if v.primary_email else "telegram"
+                ),
+            }
+            for v in vendors[: CONTEXT_LIMITS["vendors"]]
+        ]
+        parts.append(f"<vendors>\n{toon_encode(v_data)}\n</vendors>")
+
+    rfx_list = rfx_service.list_rfx_for_buyer(session, caller.user_id)
+    if rfx_list:
+        rfx_data = [
+            {
+                "id": r["id"],
+                "title": r["title"],
+                "status": r["status"],
+                "vendors": r.get("vendor_count", 0),
+            }
+            for r in rfx_list[: CONTEXT_LIMITS["rfx"]]
+        ]
+        parts.append(f"<active_rfx>\n{toon_encode(rfx_data)}\n</active_rfx>")
+
+    defaults = session.exec(
+        select(UserDefaults).where(UserDefaults.user_id == caller.user_id)
+    ).first()
+    if defaults:
+        d = {
+            "payment": defaults.payment_terms_default,
+            "delivery": defaults.delivery_terms_default,
+            "currency": defaults.currency_default,
+        }
+        parts.append(f"<defaults>\n{toon_encode(d)}\n</defaults>")
+
+    return "\n\n".join(parts) if parts else "No data yet."
+
+
+def _build_vendor_context(session: Session, caller: Any, rfx_id: int | None) -> str:
+    if not rfx_id:
+        return "No RFx context."
+
+    from aeros.models.rfx import RFxLineItem, RFxRun
+    from aeros.models.sku import SKU
+
+    rfx = session.get(RFxRun, rfx_id)
+    if not rfx:
+        return "RFx not found."
+
+    items = list(session.exec(select(RFxLineItem).where(RFxLineItem.rfx_id == rfx_id)).all())
+    item_data = []
+    for li in items:
+        sku = session.get(SKU, li.sku_id)
+        item_data.append(
+            {
+                "id": li.id,
+                "item": sku.name if sku else f"SKU#{li.sku_id}",
+                "qty": li.qty,
+                "unit": li.unit_override or (sku.unit if sku else ""),
+                "target": li.target_price,
+            }
+        )
+
+    rfx_info = {
+        "title": rfx.title,
+        "status": str(rfx.status),
+        "deadline": str(rfx.response_deadline) if rfx.response_deadline else "none",
+        "payment": rfx.payment_terms_for_this_rfx,
+        "delivery": rfx.delivery_terms_for_this_rfx,
+        "currency": rfx.currency_for_this_rfx,
+    }
+
+    parts = [
+        f"RFx Details:\n{toon_encode(rfx_info)}",
+        f"Line Items:\n{toon_encode(item_data)}",
+    ]
+    return "\n\n".join(parts)
+
+
+# ============================================
+# AGENTIC PROCUREMENT AGENT
+# ============================================
+
+TOOL_SELECTION_PROMPT = """\
+You are AEROS procurement AI. Select the best tool(s) for this request.
+
+Current time: {now}
+
+<user_data>
+{context}
+</user_data>
+
+Chat History:
+{history}
+
+User's Message: "{message}"
+
+{intent_hints}
+
+Available Tools (TOON):
+{tools_toon}
+
+RULES:
+1. Greetings (hi, hello, hey) → Return EMPTY {{}}
+2. Procurement need ("I need X") → create_rfx with title; add_line_items if quantities given
+3. "send/dispatch" → dispatch_rfx
+4. "compare/evaluate" → evaluate_offers
+5. Match item names to <inventory> SKUs — use exact IDs
+6. Multiple actions → multiple tools in one array
+7. ALWAYS reference user's existing IDs from <user_data>
+8. Support English, Hindi, Hinglish
+
+Return ONLY JSON:
+[{{"tool": "name", "params": {{...}}}}]
+Or {{}} for greetings.
+"""
+
+RESPONSE_PROMPT = """\
+You are AEROS procurement AI. Respond based ONLY on these tool results.
+
+<tool_results>
+{results_toon}
+</tool_results>
+
+User: "{message}"
+History: {history}
+
+RULES:
+1. Be CONCISE — 1-2 sentences for confirmations. Never explain what you did.
+2. On tool failure, say what went wrong in one line.
+3. RFx created → mention ID + one next step.
+4. SAME language as user (English/Hindi/Hinglish).
+5. Tables: compact, no filler text around them.
+6. Suggest ONE logical next action, not a list.
+7. Never start with "Sure!" / "Of course!" / "Great news!". Be direct.
+8. Max 3 sentences for any response. Data tables don't count.
+"""
+
+
+class ProcurementAgent(BaseAgent):
+    name = "procurement"
+
+    async def run(self, ctx: AgentContext, user_input: str) -> AgentResult:
+        start_time = time.monotonic()
+        steps: list[PipelineStep] = []
+        llm_calls = 0
+        total_input_tokens = 0
+        total_output_tokens = 0
+        all_tool_results: list[ToolResult] = []
+        all_tools_called: list[str] = []
+
+        safe_input = _sanitize_for_prompt(user_input)
+        role = ctx.caller.role.value if hasattr(ctx.caller.role, "value") else str(ctx.caller.role)
+        history = ctx.metadata.get("history", [])
+        climit = CONTEXT_LIMITS["history_char_limit"]
+        history_str = (
+            "\n".join(
+                f"- {h['role'].title()}: {_sanitize_for_prompt(h['content'][:climit])}"
+                for h in history[-CONTEXT_LIMITS["history_messages"] :]
+            )
+            if history
+            else "(none)"
+        )
+
+        # Step 1: Gather context
+        step = PipelineStep(name="context", start_time=time.monotonic())
+        try:
+            if role == "vendor":
+                context_str = _build_vendor_context(ctx.session, ctx.caller, ctx.rfx_id)
+            else:
+                context_str = _build_user_context(ctx.session, ctx.caller, safe_input)
+        except Exception as e:
+            logger.warning("agent.context.error", error=str(e))
+            context_str = "Context unavailable."
+        step.end_time = time.monotonic()
+        step.status = "success"
+        steps.append(step)
+
+        # Step 2: Deterministic intent detection
+        detected = detect_intent(safe_input)
+
+        # Fast-path: pure greeting — skip tool selection LLM call entirely
+        if detected == ["__greeting__"]:
+            step = PipelineStep(name="greeting", start_time=time.monotonic())
+            try:
+                greeting_resp = await ctx.chat_provider.chat(
+                    [
+                        ChatMessage(
+                            role="system",
+                            content=(
+                                "You are AEROS, a procurement AI. "
+                                "Keep greetings under 20 words. Be warm but direct. "
+                                "Respond in the user's language."
+                            ),
+                        ),
+                        *[
+                            ChatMessage(role=h["role"], content=h["content"][:100])
+                            for h in history[-4:]
+                        ],
+                        ChatMessage(role="user", content=safe_input),
+                    ],
+                    temperature=0.8,
+                    max_tokens=STAGE_TOKEN_LIMITS["greeting"]["max_output"],
+                )
+                llm_calls += 1
+                total_input_tokens += greeting_resp.input_tokens
+                total_output_tokens += greeting_resp.output_tokens
+                final_response = greeting_resp.content
+            except Exception:
+                final_response = "Hello! How can I help with your procurement today?"
+            step.end_time = time.monotonic()
+            step.status = "success"
+            steps.append(step)
+
+            return self._build_result(
+                final_response,
+                all_tools_called,
+                all_tool_results,
+                steps,
+                start_time,
+                llm_calls,
+                total_input_tokens,
+                total_output_tokens,
+            )
+
+        intent_hints = ""
+        if detected:
+            intent_hints = "HINTS: " + ", ".join(detected)
+
+        # Step 3: Get role-appropriate tools
+        available_tools = get_tools_for_role(role)
+        keyword_filtered = filter_tools_by_keywords(safe_input, available_tools)
+        tools_toon = tools_to_toon(keyword_filtered)
+
+        # Agentic loop
+        iteration = 0
+        final_response = ""
+
+        while (
+            iteration < AGENT_CONFIG["max_iterations"] and llm_calls < AGENT_CONFIG["max_llm_calls"]
+        ):
+            iteration += 1
+
+            # Step 4: LLM selects tools
+            step = PipelineStep(name=f"select_tools_{iteration}", start_time=time.monotonic())
+            selection_prompt = TOOL_SELECTION_PROMPT.format(
+                now=datetime.now(UTC).strftime("%A, %Y-%m-%d %H:%M UTC"),
+                context=context_str,
+                history=history_str,
+                message=safe_input,
+                intent_hints=intent_hints,
+                tools_toon=tools_toon,
+            )
+
+            try:
+                selection_resp = await ctx.chat_provider.chat(
+                    [ChatMessage(role="user", content=selection_prompt)],
+                    temperature=0.2,
+                    max_tokens=STAGE_TOKEN_LIMITS["tool_selection"]["max_output"],
+                    response_format={"type": "json_object"},
+                )
+                llm_calls += 1
+                total_input_tokens += selection_resp.input_tokens
+                total_output_tokens += selection_resp.output_tokens
+            except Exception as e:
+                logger.error("agent.select.error", error=str(e))
+                step.end_time = time.monotonic()
+                step.status = "error"
+                steps.append(step)
+                final_response = "I had trouble understanding that. Could you rephrase?"
+                break
+
+            step.end_time = time.monotonic()
+            step.status = "success"
+            step.details = {
+                "input_tokens": selection_resp.input_tokens,
+                "output_tokens": selection_resp.output_tokens,
+            }
+            steps.append(step)
+
+            # Parse tool selections
+            selected = _parse_tool_selections(selection_resp.content)
+
+            if not selected:
+                # No tools needed — generate conversational response
+                step = PipelineStep(name=f"converse_{iteration}", start_time=time.monotonic())
+                try:
+                    converse_resp = await ctx.chat_provider.chat(
+                        [
+                            ChatMessage(
+                                role="system",
+                                content=(
+                                    "You are AEROS, a procurement AI. "
+                                    "Be concise (1-2 sentences max). "
+                                    "Respond in the user's language."
+                                ),
+                            ),
+                            *[
+                                ChatMessage(role=h["role"], content=h["content"][:100])
+                                for h in history[-4:]
+                            ],
+                            ChatMessage(role="user", content=safe_input),
+                        ],
+                        temperature=0.7,
+                        max_tokens=STAGE_TOKEN_LIMITS["greeting"]["max_output"],
+                    )
+                    llm_calls += 1
+                    total_input_tokens += converse_resp.input_tokens
+                    total_output_tokens += converse_resp.output_tokens
+                    final_response = converse_resp.content
+                except Exception:
+                    final_response = (
+                        "I can help with procurement — RFx, vendors, quotes. What do you need?"
+                    )
+                step.end_time = time.monotonic()
+                step.status = "success"
+                steps.append(step)
+                break
+
+            # Step 5: Execute tools
+            step = PipelineStep(name=f"execute_{iteration}", start_time=time.monotonic())
+            iteration_results: list[ToolResult] = []
+            for tool_name, params in selected:
+                result = execute_tool(tool_name, params, ctx.session, ctx.caller)
+                iteration_results.append(result)
+                all_tool_results.append(result)
+                all_tools_called.append(tool_name)
+            step.end_time = time.monotonic()
+            step.status = "success"
+            step.details = {
+                "executed": len(iteration_results),
+                "successful": sum(1 for r in iteration_results if r.success),
+            }
+            steps.append(step)
+
+            # Step 6: Generate response from results
+            step = PipelineStep(name=f"respond_{iteration}", start_time=time.monotonic())
+            results_for_prompt = _format_results_for_prompt(iteration_results)
+
+            try:
+                results_toon = toon_encode(results_for_prompt)
+            except Exception:
+                results_toon = json.dumps(results_for_prompt, default=str)
+
+            response_prompt = RESPONSE_PROMPT.format(
+                results_toon=results_toon,
+                message=safe_input,
+                history=history_str,
+            )
+
+            try:
+                response_resp = await ctx.chat_provider.chat(
+                    [ChatMessage(role="user", content=response_prompt)],
+                    temperature=0.4,
+                    max_tokens=STAGE_TOKEN_LIMITS["response"]["max_output"],
+                )
+                llm_calls += 1
+                total_input_tokens += response_resp.input_tokens
+                total_output_tokens += response_resp.output_tokens
+                final_response = response_resp.content
+            except Exception as e:
+                logger.error("agent.respond.error", error=str(e))
+                ok = [r for r in iteration_results if r.success]
+                if ok:
+                    final_response = f"Done. Tools executed: {', '.join(r.tool for r in ok)}."
+                else:
+                    final_response = "Something went wrong processing your request."
+
+            step.end_time = time.monotonic()
+            step.status = "success"
+            step.details = {
+                "input_tokens": total_input_tokens,
+                "output_tokens": total_output_tokens,
+            }
+            steps.append(step)
+
+            # Step 7: Check if we need continuation
+            if not _check_continuation(iteration_results, final_response):
+                break
+
+        return self._build_result(
+            final_response,
+            all_tools_called,
+            all_tool_results,
+            steps,
+            start_time,
+            llm_calls,
+            total_input_tokens,
+            total_output_tokens,
+        )
+
+    def _build_result(
+        self,
+        message: str,
+        tools_called: list[str],
+        tool_results: list[ToolResult],
+        steps: list[PipelineStep],
+        start_time: float,
+        llm_calls: int,
+        input_tokens: int,
+        output_tokens: int,
+    ) -> AgentResult:
+        total_ms = (time.monotonic() - start_time) * 1000
+        iterations = sum(1 for s in steps if s.name.startswith("select_tools_"))
+
+        logger.info(
+            "agent.complete",
+            iterations=iterations,
+            llm_calls=llm_calls,
+            tools=tools_called,
+            total_ms=round(total_ms),
+            tokens=input_tokens + output_tokens,
+        )
+
+        return AgentResult(
+            message=message,
+            data={
+                "tools_called": tools_called,
+                "tool_results": [
+                    {
+                        "tool": r.tool,
+                        "success": r.success,
+                        "data": r.data,
+                        "ms": round(r.latency_ms),
+                    }
+                    for r in tool_results
+                ],
+                "performance": {
+                    "iterations": iterations,
+                    "llm_calls": llm_calls,
+                    "total_ms": round(total_ms),
+                    "input_tokens": input_tokens,
+                    "output_tokens": output_tokens,
+                },
+            },
+            tool_calls=[{"tool": t, "params": {}} for t in tools_called],
+            success=True,
+        )
+
+
+def _format_results_for_prompt(results: list[ToolResult]) -> list[dict]:
+    formatted = []
+    for r in results:
+        if r.success:
+            formatted.append({"tool": r.tool, "status": "ok", "data": r.data})
+        else:
+            formatted.append({"tool": r.tool, "status": "error", "message": r.message})
+    return formatted
+
+
+def _parse_tool_selections(content: str) -> list[tuple[str, dict]]:
+    try:
+        parsed = json.loads(content)
+    except json.JSONDecodeError:
+        json_match = re.search(r"[\[{].*[}\]]", content, re.DOTALL)
+        if json_match:
+            try:
+                parsed = json.loads(json_match.group())
+            except json.JSONDecodeError:
+                return []
+        else:
+            return []
+
+    if isinstance(parsed, dict):
+        if not parsed:
+            return []
+        if "tool" in parsed:
+            return [(parsed["tool"], parsed.get("params", {}))]
+        results = []
+        for key, val in parsed.items():
+            if isinstance(val, dict):
+                results.append((key, val))
+            else:
+                results.append((key, {"value": val}))
+        return results
+
+    if isinstance(parsed, list):
+        results = []
+        seen = set()
+        for item in parsed:
+            if isinstance(item, dict) and "tool" in item:
+                key = (item["tool"], json.dumps(item.get("params", {}), sort_keys=True))
+                if key not in seen:
+                    seen.add(key)
+                    results.append((item["tool"], item.get("params", {})))
+        return results
+
+    return []
+
+
+def _check_continuation(results: list[ToolResult], response: str) -> bool:
+    if any(not r.success for r in results):
+        return False
+    has_create = any(r.tool == "create_rfx" and r.success for r in results)
+    return bool(has_create and "dispatch" not in response.lower())

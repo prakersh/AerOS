@@ -409,11 +409,11 @@ function QuoteFormTab({
 
   const submitMutation = useMutation({
     mutationFn: () =>
-      api.post(`/api/vendor/rfx/${rfxId}/reply`, {
+      api.post(`/api/vendor/rfx/${rfxId}/submit-quote`, {
         line_items: lineQuotes
           .filter((lq) => lq.unit_price.trim() !== "")
           .map((lq) => ({
-            line_item_id: lq.line_item_id,
+            line_item_id: parseInt(lq.line_item_id, 10) || 0,
             unit_price: parseFloat(lq.unit_price) || 0,
             lead_time_days: parseInt(lq.lead_time_days, 10) || null,
             notes: lq.notes || undefined,

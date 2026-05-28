@@ -230,6 +230,26 @@ def test_decline_rfx_vendor_not_invited(session, buyer, vendor_record):
         rfx_service.decline_rfx_vendor(session, rfx.id, vendor_record.id, reason="test")
 
 
+def test_list_rfx_for_vendor(session, buyer, skus, vendor_record):
+    """list_rfx_for_vendor should return dicts with buyer_name and item_count."""
+    rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Vendor List Test")
+    rfx_service.add_line_items(
+        session,
+        rfx.id,
+        [{"sku_id": skus[0].id, "qty": 25}, {"sku_id": skus[1].id, "qty": 50}],
+    )
+    rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="vlist_h")  # noqa: S106
+
+    results = rfx_service.list_rfx_for_vendor(session, vendor_record.id)
+
+    assert len(results) == 1
+    row = results[0]
+    assert row["rfx_id"] == rfx.id
+    assert row["title"] == "Vendor List Test"
+    assert row["buyer_name"] == "Svc Buyer"
+    assert row["item_count"] == 2
+
+
 def test_award_rfx(session, buyer, vendor_record):
     """award_rfx should create an Award and set RFx status to AWARDED."""
     rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Award Test")

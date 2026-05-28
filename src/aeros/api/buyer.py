@@ -183,7 +183,7 @@ class AwardRequest(BaseModel):
 
 
 @router.post("/rfx/{rfx_id}/award")
-def award_rfx(
+async def award_rfx(
     rfx_id: int,
     body: AwardRequest,
     session: Session = Depends(get_session),
@@ -191,12 +191,22 @@ def award_rfx(
 ):
     _verify_rfx_ownership(session, rfx_id, caller)
     try:
-        return rfx_service.award_rfx(session, rfx_id, caller.user_id, body.decisions)
+        rfx = rfx_service.award_rfx(session, rfx_id, caller.user_id, body.decisions)
     except ValueError as e:
         msg = str(e)
         if "not found" in msg.lower():
             raise HTTPException(404, msg) from None
         raise HTTPException(400, msg) from None
+
+    # Trigger PO generation after successful award
+    try:
+        from aeros.workers.po_render import render_and_send_po
+
+        await render_and_send_po(rfx_id, body.decisions)
+    except Exception:  # noqa: S110
+        pass
+
+    return rfx
 
 
 # --- Activity ---

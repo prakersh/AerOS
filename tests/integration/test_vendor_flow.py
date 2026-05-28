@@ -155,11 +155,15 @@ class TestVendorUploadFlow:
         assert item["title"] == "Milk Procurement Q3"
 
     def test_vendor_can_view_thread(self, vendor_auth_client, rfx_with_thread):
-        """Vendor should be able to see the thread."""
+        """Vendor should be able to see the thread with full RFx context."""
         resp = vendor_auth_client.get(f"/api/vendor/rfx/{rfx_with_thread.id}/thread")
         assert resp.status_code == 200
-        messages = resp.json()
-        assert isinstance(messages, list)
+        data = resp.json()
+        assert isinstance(data, dict)
+        assert data["rfx_title"] == "Milk Procurement Q3"
+        assert isinstance(data["messages"], list)
+        assert isinstance(data["line_items"], list)
+        assert len(data["line_items"]) >= 1
 
     def test_vendor_upload_triggers_extraction_and_offer(
         self, vendor_auth_client, rfx_with_thread, vendor_user_record, sku_milk
@@ -321,8 +325,8 @@ class TestVendorUploadFlow:
         # Verify message appears in thread
         thread_resp = vendor_auth_client.get(f"/api/vendor/rfx/{rfx_with_thread.id}/thread")
         assert thread_resp.status_code == 200
-        messages = thread_resp.json()
-        texts = [m["body_text"] for m in messages]
+        data = thread_resp.json()
+        texts = [m["body_text"] for m in data["messages"]]
         assert "We can deliver by tomorrow morning." in texts
 
     def test_vendor_can_decline_rfx(self, vendor_auth_client, rfx_with_thread):

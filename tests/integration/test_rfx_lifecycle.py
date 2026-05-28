@@ -121,26 +121,30 @@ class TestRFxLifecycle:
     """Full RFx lifecycle integration tests — draft, create, list, detail, dispatch."""
 
     def test_chat_draft_rfx_via_llm(self, auth_client, skus):
-        """POST /api/chat should return an AI-drafted RFx JSON when LLM is mocked."""
-        draft_response = json.dumps(
-            {
-                "message": "Here is your RFx draft for grains procurement.",
-                "status": "draft_ready",
-                "draft": {
-                    "title": "Weekly Grains Order",
-                    "line_items": [
-                        {"sku_name": "Basmati Rice", "qty": 100, "unit": "kg", "target_price": 80},
-                        {"sku_name": "Wheat Flour", "qty": 50, "unit": "kg", "target_price": 35},
-                    ],
-                    "payment_terms": "NET15",
-                    "currency": "INR",
-                    "response_deadline": "2026-06-10T23:59:00",
-                },
-            }
+        """POST /api/chat should use the agentic ProcurementAgent with tool calls."""
+        # The agentic ProcurementAgent makes 2 LLM calls per iteration:
+        # Call 1: tool selection (JSON), Call 2: response generation (text)
+        # It may continue for more iterations, so provide enough responses.
+        tool_selection = json.dumps([
+            {"tool": "create_rfx", "params": {"title": "Weekly Grains Order"}},
+        ])
+        human_response = (
+            "I've created RFx 'Weekly Grains Order' for you. "
+            "You can now add line items and dispatch to vendors."
         )
+        # Continuation iteration: no more tools needed
+        no_tools = json.dumps({})
+        greeting = "Anything else you need?"
 
         mock_provider = AsyncMock()
-        mock_provider.chat.return_value = _mock_chat_response(draft_response)
+        mock_provider.chat.side_effect = [
+            _mock_chat_response(tool_selection),
+            _mock_chat_response(human_response),
+            _mock_chat_response(no_tools),
+            _mock_chat_response(greeting),
+            _mock_chat_response(no_tools),
+            _mock_chat_response(greeting),
+        ]
 
         with (
             patch("aeros.api.chat.get_chat_provider", return_value=mock_provider),
@@ -157,7 +161,7 @@ class TestRFxLifecycle:
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
-        assert "draft" in data["data"] or "draft_ready" in data["data"].get("status", "")
+        assert "create_rfx" in data["data"].get("tools_called", [])
         assert "Weekly Grains" in data["message"] or "grains" in data["message"].lower()
 
     def test_create_rfx_from_draft(self, auth_client, skus):

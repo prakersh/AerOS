@@ -173,18 +173,28 @@ def list_rfx_for_buyer(session: Session, buyer_id: int) -> list[dict]:
 
 
 def list_rfx_for_vendor(session: Session, vendor_id: int) -> list[dict]:
+    from aeros.models.user import User
+
     rv_list = session.exec(select(RFxVendor).where(RFxVendor.vendor_id == vendor_id)).all()
     results = []
     for rv in rv_list:
         rfx = session.get(RFxRun, rv.rfx_id)
         if rfx:
+            buyer = session.get(User, rfx.buyer_id)
+            item_count = len(
+                list(session.exec(select(RFxLineItem).where(RFxLineItem.rfx_id == rfx.id)).all())
+            )
             results.append(
                 {
                     "rfx_id": rfx.id,
                     "title": rfx.title,
                     "status": rv.status.value,
+                    "buyer_name": buyer.display_name if buyer else None,
+                    "item_count": item_count,
                     "dispatched_at": rv.dispatched_at.isoformat() if rv.dispatched_at else "",
-                    "deadline": rfx.response_deadline.isoformat() if rfx.response_deadline else "",
+                    "deadline": (
+                        rfx.response_deadline.isoformat() if rfx.response_deadline else ""
+                    ),
                 }
             )
     return results
