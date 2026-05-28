@@ -77,16 +77,36 @@ interface QuoteDraft {
   vendor_remarks: string;
 }
 
+interface ExistingQuoteLineItem {
+  line_item_id: number | null;
+  unit_price: number;
+  lead_time_days: number | null;
+  notes: string | null;
+}
+
+interface ExistingQuote {
+  offer_id: number;
+  revision_no: number;
+  line_items: ExistingQuoteLineItem[];
+  total_quote: number | null;
+  payment_terms: string | null;
+  delivery_terms: string | null;
+  validity_until: string | null;
+  vendor_remarks: string | null;
+}
+
 interface RfxThreadResponse {
   rfx_id: string;
   rfx_title: string;
   rfx_status: string;
+  vendor_status: string;
   deadline: string | null;
   currency: string;
   payment_terms: string | null;
   delivery_terms: string | null;
   tax_terms: string | null;
   line_items: LineItem[];
+  existing_quote: ExistingQuote | null;
   messages: ThreadMessage[];
   attachments: UploadedFile[];
 }
@@ -229,6 +249,9 @@ function RfxContextPanel({
               {rfx.rfx_title || `RFx #${rfx.rfx_id}`}
             </h2>
             <StatusBadge status={rfx.rfx_status} variant="rfx" />
+            {rfx.vendor_status && rfx.vendor_status !== rfx.rfx_status && (
+              <StatusBadge status={rfx.vendor_status} variant="lane" />
+            )}
           </div>
         </div>
 
@@ -381,9 +404,26 @@ function QuoteFormTab({
   rfxId: string;
 }) {
   const savedDraft = useMemo(() => loadDraft(rfxId), [rfxId]);
+  const eq = rfx.existing_quote;
 
   const [lineQuotes, setLineQuotes] = useState<LineItemQuote[]>(() => {
     if (savedDraft?.line_items?.length) return savedDraft.line_items;
+    // Pre-fill from existing submitted quote
+    if (eq?.line_items?.length) {
+      const offerByLineItem = new Map<number, ExistingQuoteLineItem>();
+      for (const oli of eq.line_items) {
+        if (oli.line_item_id != null) offerByLineItem.set(oli.line_item_id, oli);
+      }
+      return rfx.line_items.map((li) => {
+        const match = offerByLineItem.get(parseInt(li.id, 10));
+        return {
+          line_item_id: li.id,
+          unit_price: match ? String(match.unit_price) : "",
+          lead_time_days: match?.lead_time_days != null ? String(match.lead_time_days) : "",
+          notes: match?.notes ?? "",
+        };
+      });
+    }
     return rfx.line_items.map((li) => ({
       line_item_id: li.id,
       unit_price: "",
@@ -393,17 +433,19 @@ function QuoteFormTab({
   });
 
   const [paymentTerms, setPaymentTerms] = useState(
-    () => savedDraft?.payment_terms ?? "",
+    () => savedDraft?.payment_terms ?? eq?.payment_terms ?? "",
   );
   const [deliveryTerms, setDeliveryTerms] = useState(
-    () => savedDraft?.delivery_terms ?? "",
+    () => savedDraft?.delivery_terms ?? eq?.delivery_terms ?? "",
   );
   const [validityUntil, setValidityUntil] = useState(
-    () => savedDraft?.validity_until ?? "",
+    () => savedDraft?.validity_until ?? eq?.validity_until ?? "",
   );
   const [vendorRemarks, setVendorRemarks] = useState(
-    () => savedDraft?.vendor_remarks ?? "",
+    () => savedDraft?.vendor_remarks ?? eq?.vendor_remarks ?? "",
   );
+
+  const isRfxClosed = ["cancelled", "awarded", "closed", "expired"].includes(rfx.rfx_status);
 
   const queryClient = useQueryClient();
 
@@ -476,6 +518,16 @@ function QuoteFormTab({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+      {isRfxClosed && (
+        <div className="rounded-lg border border-amber-800/50 bg-amber-900/20 px-4 py-3 text-sm text-amber-400">
+          This RFx is <span className="font-semibold">{rfx.rfx_status}</span> — quote submission is disabled.
+        </div>
+      )}
+      {eq && !isRfxClosed && (
+        <div className="rounded-lg border border-indigo-800/50 bg-indigo-900/20 px-4 py-3 text-sm text-indigo-400">
+          Showing your submitted quote (revision {eq.revision_no}). Edit and resubmit to update.
+        </div>
+      )}
       {/* Line items table */}
       <div className="overflow-x-auto rounded-xl border border-zinc-800">
         <table className="w-full text-sm">
@@ -639,10 +691,14 @@ function QuoteFormTab({
         </button>
         <button
           type="submit"
-          disabled={submitMutation.isPending}
+          disabled={submitMutation.isPending || isRfxClosed}
           className="rounded-lg bg-indigo-600 px-6 py-2.5 text-sm font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
         >
-          {submitMutation.isPending ? "Submitting..." : "Submit Quote"}
+          {submitMutation.isPending
+            ? "Submitting..."
+            : eq
+              ? "Resubmit Quote"
+              : "Submit Quote"}
         </button>
       </div>
     </form>

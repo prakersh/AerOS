@@ -1,9 +1,11 @@
 export type RfxStatus =
   | "drafting"
+  | "awaiting_approval"
   | "dispatched"
   | "collecting"
   | "comparing"
   | "awarded"
+  | "closed"
   | "cancelled";
 
 export type KycStatus = "approved" | "pending" | "rejected";

@@ -34,6 +34,8 @@ class ChatRequest(BaseModel):
     message: str
     rfx_id: int | None = None
     history: list[dict[str, Any]] = []
+    attachment_url: str | None = None
+    attachment_name: str | None = None
 
 
 class CreateRFxRequest(BaseModel):
@@ -65,13 +67,18 @@ async def chat(
         vision_provider.user_id = caller.user_id
         vision_provider.rfx_id = body.rfx_id
 
+    metadata: dict[str, Any] = {"history": body.history}
+    if body.attachment_url:
+        metadata["attachment_url"] = body.attachment_url
+        metadata["attachment_name"] = body.attachment_name
+
     ctx = AgentContext(
         session=session,
         caller=caller,
         chat_provider=chat_provider,
         vision_provider=vision_provider,
         rfx_id=body.rfx_id,
-        metadata={"history": body.history},
+        metadata=metadata,
     )
 
     try:

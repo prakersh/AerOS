@@ -8,6 +8,7 @@ export interface ApiError {
 
 class ApiClient {
   private baseUrl: string;
+  private refreshing: Promise<boolean> | null = null;
 
   constructor(baseUrl: string = "") {
     this.baseUrl = baseUrl;
@@ -18,10 +19,25 @@ class ApiClient {
     return match ? decodeURIComponent(match[1]) : "";
   }
 
+  private async tryRefreshToken(): Promise<boolean> {
+    if (this.refreshing) return this.refreshing;
+    this.refreshing = fetch(`${this.baseUrl}/api/auth/refresh`, {
+      method: "POST",
+      credentials: "include",
+    })
+      .then((res) => res.ok)
+      .catch(() => false)
+      .finally(() => {
+        this.refreshing = null;
+      });
+    return this.refreshing;
+  }
+
   private async request<T>(
     method: string,
     path: string,
     body?: unknown,
+    _retry = true,
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const headers: Record<string, string> = {
@@ -38,6 +54,13 @@ class ApiClient {
       credentials: "include",
       body: body != null ? JSON.stringify(body) : undefined,
     });
+
+    if (res.status === 401 && _retry && !path.includes("/auth/")) {
+      const refreshed = await this.tryRefreshToken();
+      if (refreshed) {
+        return this.request<T>(method, path, body, false);
+      }
+    }
 
     if (!res.ok) {
       const errorBody = await res.json().catch(() => ({}));
@@ -77,7 +100,7 @@ class ApiClient {
     return this.request<T>("DELETE", path);
   }
 
-  async upload<T>(path: string, file: File): Promise<T> {
+  async upload<T>(path: string, file: File, _retry = true): Promise<T> {
     const formData = new FormData();
     formData.append("file", file);
     const url = `${this.baseUrl}${path}`;
@@ -90,6 +113,10 @@ class ApiClient {
       headers,
       body: formData,
     });
+    if (res.status === 401 && _retry) {
+      const refreshed = await this.tryRefreshToken();
+      if (refreshed) return this.upload<T>(path, file, false);
+    }
     if (!res.ok) {
       const errorBody = await res.json().catch(() => ({}));
       const error: ApiError = {

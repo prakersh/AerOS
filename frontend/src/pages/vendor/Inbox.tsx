@@ -25,6 +25,7 @@ interface InboxItem {
   title: string;
   buyer_name?: string;
   status: InboxStatus;
+  rfx_status?: string;
   dispatched_at: string;
   deadline: string;
   item_count?: number;
@@ -296,7 +297,15 @@ export default function VendorInbox() {
                 </div>
 
                 {/* Status badge */}
-                <StatusBadge status={item.status} variant="lane" />
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <StatusBadge status={item.status} variant="lane" />
+                  {item.rfx_status &&
+                    ["cancelled", "awarded", "expired"].includes(item.rfx_status) && (
+                      <span className="rounded-full bg-zinc-700/50 px-2 py-0.5 text-[10px] font-medium text-zinc-400">
+                        RFx {item.rfx_status}
+                      </span>
+                    )}
+                </div>
 
                 {/* Deadline / countdown */}
                 <div className="shrink-0 text-right">

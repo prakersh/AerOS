@@ -194,6 +194,9 @@ def list_rfx_for_vendor(session: Session, vendor_id: int) -> list[dict[str, Any]
                     "rfx_id": rfx.id,
                     "title": rfx.title,
                     "status": rv.status.value,
+                    "rfx_status": (
+                        rfx.status.value if hasattr(rfx.status, "value") else str(rfx.status)
+                    ),
                     "buyer_name": buyer.display_name if buyer else None,
                     "item_count": item_count,
                     "dispatched_at": rv.dispatched_at.isoformat() if rv.dispatched_at else "",
@@ -299,6 +302,11 @@ def get_rfx_with_details(session: Session, rfx_id: int) -> dict[str, Any] | None
         "delivery_window": delivery_window,
         "deadline": rfx.response_deadline.isoformat() if rfx.response_deadline else "",
         "created_at": rfx.created_at.isoformat() if rfx.created_at else "",
+        "payment_terms": rfx.payment_terms_for_this_rfx,
+        "delivery_terms": rfx.delivery_terms_for_this_rfx,
+        "currency": rfx.currency_for_this_rfx,
+        "tax_treatment": rfx.tax_treatment_for_this_rfx,
+        "notes_for_vendors": rfx.notes_for_vendors,
         "line_items": li_dicts,
         "vendor_offers": vendor_offers,
         "dispatch_plan": dispatch_plan,

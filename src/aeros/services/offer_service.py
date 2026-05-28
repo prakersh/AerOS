@@ -49,12 +49,13 @@ def create_offer_from_extraction(
     raw_items = extraction_data.get("line_items", [])
     mapped_items = []
     for item in raw_items:
-        sku_name = (item.get("sku_name") or "").lower()
-        line_item_id = None
-        for name, lid in li_lookup.items():
-            if name in sku_name or sku_name in name:
-                line_item_id = lid
-                break
+        line_item_id = item.get("line_item_id")
+        if not line_item_id:
+            sku_name = (item.get("sku_name") or "").lower()
+            for name, lid in li_lookup.items():
+                if name in sku_name or sku_name in name:
+                    line_item_id = lid
+                    break
         confidence_per_field = item.get("confidence_per_field", {})
         mapped_items.append(
             {

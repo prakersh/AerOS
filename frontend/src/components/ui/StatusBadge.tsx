@@ -1,10 +1,12 @@
 const BADGE_VARIANTS = {
   rfx: {
     drafting: "bg-zinc-700/50 text-zinc-300",
+    awaiting_approval: "bg-purple-900/40 text-purple-400",
     dispatched: "bg-blue-900/40 text-blue-400",
     collecting: "bg-amber-900/40 text-amber-400",
     comparing: "bg-indigo-900/40 text-indigo-400",
     awarded: "bg-green-900/40 text-green-400",
+    closed: "bg-zinc-700/50 text-zinc-400",
     cancelled: "bg-red-900/40 text-red-400",
   } as Record<string, string>,
   kyc: {

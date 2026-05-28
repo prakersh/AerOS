@@ -185,31 +185,90 @@ def seed() -> None:
 
         session.flush()
 
-        # --- Demo RFx: dispatched with vendor invitations + one quoted offer ---
+        import hashlib
+        import json
+
         now = datetime.now(UTC)
-        rfx = RFxRun(
+
+        def _invite_vendors(
+            sess: Session,
+            rfx_run: RFxRun,
+            vendor_emails: list[str],
+            ts: datetime,
+        ) -> list[Vendor]:
+            invited = list(
+                sess.exec(
+                    select(Vendor).where(
+                        Vendor.primary_email.in_(vendor_emails)  # type: ignore[attr-defined]
+                    )
+                ).all()
+            )
+            for v in invited:
+                tok = hashlib.sha256(f"demo-{rfx_run.id}-{v.id}".encode()).hexdigest()
+                rv = RFxVendor(
+                    rfx_id=rfx_run.id,
+                    vendor_id=v.id,
+                    correlation_token_hash=tok,
+                    dispatched_at=ts,
+                    status=RFxVendorStatus.INVITED,
+                )
+                sess.add(rv)
+                sess.flush()
+                thread = Thread(rfx_id=rfx_run.id, vendor_id=v.id)
+                sess.add(thread)
+                sess.flush()
+                sess.add(
+                    Message(
+                        thread_id=thread.id,
+                        sender_kind="system",
+                        channel="in_app",
+                        body_text=f"You have been invited to quote for: {rfx_run.title}",
+                    )
+                )
+            return invited
+
+        def _offer_li(
+            li_map: dict[str, RFxLineItem],
+            code: str,
+            price: float,
+            days: int,
+            conf: float = 1.0,
+        ) -> dict:
+            return {
+                "line_item_id": li_map[code].id,
+                "unit_price": price,
+                "lead_time_days": days,
+                "confidence": conf,
+            }
+
+        # --- RFx #1: Dispatched, 2 quoted vendors + 1 invited ---
+        rfx1 = RFxRun(
             buyer_id=buyer.id,
             title="Weekly Dairy & Produce Replenishment - W23",
             status=RFxStatus.DISPATCHED,
             response_deadline=now + timedelta(days=2),
             delivery_window_start=now + timedelta(days=3),
             delivery_window_end=now + timedelta(days=4),
+            payment_terms_for_this_rfx="NET30",
+            delivery_terms_for_this_rfx="doorstep",
+            currency_for_this_rfx="INR",
+            tax_treatment_for_this_rfx="exclusive",
         )
-        session.add(rfx)
+        session.add(rfx1)
         session.flush()
 
-        sku_items = [
+        rfx1_items = [
             ("FV001", 200, "kg", 18.0),
             ("FV002", 150, "kg", 22.0),
             ("DE001", 300, "ltr", 56.0),
             ("DE004", 50, "kg", 320.0),
         ]
-        sku_map = {}
-        for code, qty, unit, target in sku_items:
+        rfx1_li_map: dict[str, RFxLineItem] = {}
+        for code, qty, unit, target in rfx1_items:
             sku_found = session.exec(select(SKU).where(SKU.code == code)).first()
             if sku_found:
                 li = RFxLineItem(
-                    rfx_id=rfx.id,
+                    rfx_id=rfx1.id,
                     sku_id=sku_found.id,
                     qty=qty,
                     unit_override=unit,
@@ -217,108 +276,226 @@ def seed() -> None:
                 )
                 session.add(li)
                 session.flush()
-                sku_map[code] = li
+                rfx1_li_map[code] = li
 
-        vendors_to_invite = session.exec(
-            select(Vendor).where(
-                Vendor.primary_email.in_(  # type: ignore[attr-defined]
-                    ["freshfarm@vendor.demo", "sabzi@vendor.demo", "kirana@vendor.demo"]
-                )
-            )
-        ).all()
-
-        import hashlib
-
-        for v in vendors_to_invite:
-            token_hash = hashlib.sha256(f"demo-token-{v.id}".encode()).hexdigest()
-            rv = RFxVendor(
-                rfx_id=rfx.id,
-                vendor_id=v.id,
-                correlation_token_hash=token_hash,
-                dispatched_at=now,
-                status=RFxVendorStatus.INVITED,
-            )
-            session.add(rv)
-            session.flush()
-
-            thread = Thread(rfx_id=rfx.id, vendor_id=v.id)
-            session.add(thread)
-            session.flush()
-
-            msg = Message(
-                thread_id=thread.id,
-                sender_kind="system",
-                channel="in_app",
-                body_text=f"You have been invited to quote for: {rfx.title}",
-            )
-            session.add(msg)
-
-        # Simulate one quoted vendor (FreshFarm Dairy)
-        freshfarm = next(
-            (v for v in vendors_to_invite if v.primary_email == "freshfarm@vendor.demo"),
-            None,
+        rfx1_vendors = _invite_vendors(
+            session,
+            rfx1,
+            ["freshfarm@vendor.demo", "sabzi@vendor.demo", "kirana@vendor.demo"],
+            now - timedelta(hours=6),
         )
-        if freshfarm:
+
+        # FreshFarm Dairy: quoted with competitive prices
+        freshfarm = next((v for v in rfx1_vendors if "freshfarm" in (v.primary_email or "")), None)
+        if freshfarm and rfx1_li_map:
             fv = session.exec(
                 select(RFxVendor).where(
-                    RFxVendor.rfx_id == rfx.id,
-                    RFxVendor.vendor_id == freshfarm.id,
+                    RFxVendor.rfx_id == rfx1.id, RFxVendor.vendor_id == freshfarm.id
                 )
             ).first()
             if fv:
                 fv.status = RFxVendorStatus.QUOTED
                 session.add(fv)
-
-            import json
-
-            line_items_json = json.dumps(
-                [
-                    {
-                        "sku_name": "Tomato",
-                        "unit_price": 16.5,
-                        "qty": 200,
-                        "unit": "kg",
-                        "total": 3300,
-                        "confidence": 0.92,
-                    },
-                    {
-                        "sku_name": "Onion",
-                        "unit_price": 20.0,
-                        "qty": 150,
-                        "unit": "kg",
-                        "total": 3000,
-                        "confidence": 0.88,
-                    },
-                    {
-                        "sku_name": "Full Cream Milk",
-                        "unit_price": 52.0,
-                        "qty": 300,
-                        "unit": "ltr",
-                        "total": 15600,
-                        "confidence": 0.95,
-                    },
-                    {
-                        "sku_name": "Paneer",
-                        "unit_price": 290.0,
-                        "qty": 50,
-                        "unit": "kg",
-                        "total": 14500,
-                        "confidence": 0.85,
-                    },
-                ]
+            ff_thread = session.exec(
+                select(Thread).where(Thread.rfx_id == rfx1.id, Thread.vendor_id == freshfarm.id)
+            ).first()
+            if ff_thread:
+                session.add(
+                    Message(
+                        thread_id=ff_thread.id,
+                        sender_kind="vendor",
+                        channel="in_app",
+                        body_text="Hi, we can supply all items. Prices competitive this week.",
+                        sender_user_id=freshfarm.vendor_user_id,
+                    )
+                )
+            session.add(
+                Offer(
+                    rfx_id=rfx1.id,
+                    vendor_id=freshfarm.id,
+                    total_quote=36400.0,
+                    currency="INR",
+                    payment_terms="NET15",
+                    delivery_terms="doorstep",
+                    lead_time_hours=18,
+                    extraction_confidence_overall=0.95,
+                    line_items_json=json.dumps(
+                        [
+                            _offer_li(rfx1_li_map, "FV001", 16.5, 1, 0.95),
+                            _offer_li(rfx1_li_map, "FV002", 20.0, 1, 0.92),
+                            _offer_li(rfx1_li_map, "DE001", 52.0, 1, 0.97),
+                            _offer_li(rfx1_li_map, "DE004", 290.0, 2, 0.88),
+                        ]
+                    ),
+                )
             )
-            offer = Offer(
-                rfx_id=rfx.id,
-                vendor_id=freshfarm.id,
-                total_quote=36400.0,
-                currency="INR",
-                payment_terms="NET15",
-                delivery_terms="doorstep",
-                lead_time_hours=18,
-                extraction_confidence_overall=0.90,
-                line_items_json=line_items_json,
+
+        # Kirana King: quoted, slightly higher prices but faster delivery
+        kirana = next((v for v in rfx1_vendors if "kirana" in (v.primary_email or "")), None)
+        if kirana and rfx1_li_map:
+            kv = session.exec(
+                select(RFxVendor).where(
+                    RFxVendor.rfx_id == rfx1.id, RFxVendor.vendor_id == kirana.id
+                )
+            ).first()
+            if kv:
+                kv.status = RFxVendorStatus.QUOTED
+                session.add(kv)
+            kr_thread = session.exec(
+                select(Thread).where(Thread.rfx_id == rfx1.id, Thread.vendor_id == kirana.id)
+            ).first()
+            if kr_thread:
+                session.add(
+                    Message(
+                        thread_id=kr_thread.id,
+                        sender_kind="vendor",
+                        channel="in_app",
+                        body_text="We can deliver same day for dairy items. See our quote.",
+                        sender_user_id=kirana.vendor_user_id,
+                    )
+                )
+            session.add(
+                Offer(
+                    rfx_id=rfx1.id,
+                    vendor_id=kirana.id,
+                    total_quote=39750.0,
+                    currency="INR",
+                    payment_terms="NET30",
+                    delivery_terms="doorstep",
+                    lead_time_hours=6,
+                    vendor_remarks="Same-day delivery for dairy. Paneer from our own unit.",
+                    extraction_confidence_overall=1.0,
+                    line_items_json=json.dumps(
+                        [
+                            _offer_li(rfx1_li_map, "FV001", 19.0, 1),
+                            _offer_li(rfx1_li_map, "FV002", 23.0, 1),
+                            _offer_li(rfx1_li_map, "DE001", 54.0, 0),
+                            _offer_li(rfx1_li_map, "DE004", 310.0, 0),
+                        ]
+                    ),
+                )
             )
-            session.add(offer)
+
+        # Sabzi Mandi: still invited (viewed but not yet quoted)
+        sabzi = next((v for v in rfx1_vendors if "sabzi" in (v.primary_email or "")), None)
+        if sabzi:
+            sv = session.exec(
+                select(RFxVendor).where(
+                    RFxVendor.rfx_id == rfx1.id, RFxVendor.vendor_id == sabzi.id
+                )
+            ).first()
+            if sv:
+                sv.status = RFxVendorStatus.VIEWED
+                session.add(sv)
+
+        # --- RFx #2: Awarded (completed lifecycle) ---
+        rfx2 = RFxRun(
+            buyer_id=buyer.id,
+            title="Monthly FMCG Restock - May 2026",
+            status=RFxStatus.AWARDED,
+            response_deadline=now - timedelta(days=5),
+            delivery_window_start=now - timedelta(days=2),
+            delivery_window_end=now - timedelta(days=1),
+            payment_terms_for_this_rfx="NET30",
+            delivery_terms_for_this_rfx="warehouse pickup",
+            currency_for_this_rfx="INR",
+            tax_treatment_for_this_rfx="inclusive",
+        )
+        session.add(rfx2)
+        session.flush()
+
+        rfx2_items = [
+            ("PF001", 100, "pcs", 275.0),
+            ("PF002", 200, "pcs", 140.0),
+            ("PF005", 500, "pcs", 14.0),
+            ("BV002", 300, "pcs", 95.0),
+        ]
+        rfx2_li_map: dict[str, RFxLineItem] = {}
+        for code, qty, unit, target in rfx2_items:
+            sku_found = session.exec(select(SKU).where(SKU.code == code)).first()
+            if sku_found:
+                li = RFxLineItem(
+                    rfx_id=rfx2.id,
+                    sku_id=sku_found.id,
+                    qty=qty,
+                    unit_override=unit,
+                    target_price=target,
+                )
+                session.add(li)
+                session.flush()
+                rfx2_li_map[code] = li
+
+        rfx2_vendors = _invite_vendors(
+            session,
+            rfx2,
+            ["metro@vendor.demo", "daily@vendor.demo"],
+            now - timedelta(days=10),
+        )
+
+        metro = next((v for v in rfx2_vendors if "metro" in (v.primary_email or "")), None)
+        if metro and rfx2_li_map:
+            mv = session.exec(
+                select(RFxVendor).where(
+                    RFxVendor.rfx_id == rfx2.id, RFxVendor.vendor_id == metro.id
+                )
+            ).first()
+            if mv:
+                mv.status = RFxVendorStatus.QUOTED
+                session.add(mv)
+            session.add(
+                Offer(
+                    rfx_id=rfx2.id,
+                    vendor_id=metro.id,
+                    total_quote=62000.0,
+                    currency="INR",
+                    payment_terms="NET30",
+                    delivery_terms="warehouse pickup",
+                    lead_time_hours=48,
+                    extraction_confidence_overall=1.0,
+                    line_items_json=json.dumps(
+                        [
+                            _offer_li(rfx2_li_map, "PF001", 260.0, 2),
+                            _offer_li(rfx2_li_map, "PF002", 132.0, 2),
+                            _offer_li(rfx2_li_map, "PF005", 12.5, 1),
+                            _offer_li(rfx2_li_map, "BV002", 88.0, 3),
+                        ]
+                    ),
+                )
+            )
+
+        # --- RFx #3: Drafting (not yet dispatched) ---
+        rfx3 = RFxRun(
+            buyer_id=buyer.id,
+            title="Bakery Supplies - Weekend Rush",
+            status=RFxStatus.DRAFTING,
+            response_deadline=now + timedelta(days=5),
+            delivery_window_start=now + timedelta(days=6),
+            delivery_window_end=now + timedelta(days=7),
+            payment_terms_for_this_rfx="NET15",
+            delivery_terms_for_this_rfx="doorstep",
+            currency_for_this_rfx="INR",
+            tax_treatment_for_this_rfx="exclusive",
+        )
+        session.add(rfx3)
+        session.flush()
+
+        rfx3_items = [
+            ("BK001", 200, "pcs", 35.0),
+            ("BK003", 300, "pcs", 30.0),
+            ("BK005", 150, "pcs", 40.0),
+        ]
+        for code, qty, unit, target in rfx3_items:
+            sku_found = session.exec(select(SKU).where(SKU.code == code)).first()
+            if sku_found:
+                session.add(
+                    RFxLineItem(
+                        rfx_id=rfx3.id,
+                        sku_id=sku_found.id,
+                        qty=qty,
+                        unit_override=unit,
+                        target_price=target,
+                    )
+                )
 
         session.commit()
 

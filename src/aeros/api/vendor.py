@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 import re
 import traceback
@@ -11,6 +12,7 @@ from sqlmodel import Session, select
 
 from aeros.config import settings
 from aeros.db import get_session
+from aeros.models.offer import Offer
 from aeros.models.rfx import (
     Attachment,
     ExtractionStatus,
@@ -109,6 +111,33 @@ def get_thread(
         session.add(rv)
         session.commit()
 
+    # Load existing offer for this vendor (latest non-superseded)
+    existing_offer = session.exec(
+        select(Offer).where(
+            Offer.rfx_id == rfx_id,
+            Offer.vendor_id == vendor.id,
+            Offer.superseded_by_offer_id == None,  # noqa: E711
+        )
+    ).first()
+
+    existing_quote: dict[str, Any] | None = None
+    if existing_offer:
+        offer_line_items = json.loads(existing_offer.line_items_json or "[]")
+        existing_quote = {
+            "offer_id": existing_offer.id,
+            "revision_no": existing_offer.revision_no,
+            "line_items": offer_line_items,
+            "total_quote": existing_offer.total_quote,
+            "payment_terms": existing_offer.payment_terms,
+            "delivery_terms": existing_offer.delivery_terms,
+            "validity_until": (
+                existing_offer.validity_until.isoformat() if existing_offer.validity_until else None
+            ),
+            "vendor_remarks": existing_offer.vendor_remarks,
+        }
+
+    vendor_lane_status = rv.status.value if rv else "invited"
+
     return {
         "rfx_id": str(rfx_id),
         "rfx_title": rfx.title if rfx else "",
@@ -117,12 +146,14 @@ def get_thread(
         else str(rfx.status)
         if rfx
         else "",
+        "vendor_status": vendor_lane_status,
         "deadline": rfx.response_deadline.isoformat() if rfx and rfx.response_deadline else None,
         "currency": rfx.currency_for_this_rfx if rfx else "INR",
         "payment_terms": rfx.payment_terms_for_this_rfx if rfx else None,
         "delivery_terms": rfx.delivery_terms_for_this_rfx if rfx else None,
         "tax_terms": rfx.tax_treatment_for_this_rfx if rfx else None,
         "line_items": line_items,
+        "existing_quote": existing_quote,
         "messages": [
             {
                 "id": m.id,
@@ -406,7 +437,8 @@ def submit_quote(
 
 
 class DeclineRequest(BaseModel):
-    reason: str
+    reason: str = ""
+    category: str = "other"
 
 
 @router.post("/rfx/{rfx_id}/decline")
