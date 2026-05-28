@@ -299,7 +299,8 @@ RULES:
 5. Match item names to <inventory> SKUs — use exact IDs
 6. Multiple actions → multiple tools in one array
 7. ALWAYS reference user's existing IDs from <user_data>
-8. Support English, Hindi, Hinglish
+8. When "Current RFx ID" is given in hints, use it as rfx_id param
+9. Support English, Hindi, Hinglish
 
 Return ONLY a JSON array — no wrapper keys, no "thoughts", no explanation:
 [{{"tool": "name", "params": {{...}}}}]
@@ -417,6 +418,13 @@ class ProcurementAgent(BaseAgent):
         intent_hints = ""
         if detected:
             intent_hints = "HINTS: " + ", ".join(detected)
+
+        # Inject current rfx_id if available (vendor context)
+        if ctx.rfx_id:
+            if intent_hints:
+                intent_hints += f"\nCurrent RFx ID: {ctx.rfx_id}"
+            else:
+                intent_hints = f"Current RFx ID: {ctx.rfx_id}"
 
         # Step 3: Get role-appropriate tools
         available_tools = get_tools_for_role(role)

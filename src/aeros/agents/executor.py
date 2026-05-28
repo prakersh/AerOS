@@ -30,8 +30,29 @@ def execute_tool(
     session: Session,
     caller: AuthContext,
 ) -> ToolResult:
+    from aeros.agents.tools import TOOL_CATALOG
+
     tool_name = TOOL_ALIASES.get(tool_name, tool_name)
     t0 = time.monotonic()
+
+    tool_def = TOOL_CATALOG.get(tool_name)
+    if tool_def:
+        role = caller.role.value if hasattr(caller.role, "value") else str(caller.role)
+        if tool_def.buyer_only and role != "buyer":
+            return ToolResult(
+                tool=tool_name,
+                success=False,
+                message=f"Tool '{tool_name}' is not available for {role} role",
+                latency_ms=0.0,
+            )
+        if tool_def.vendor_only and role != "vendor":
+            return ToolResult(
+                tool=tool_name,
+                success=False,
+                message=f"Tool '{tool_name}' is not available for {role} role",
+                latency_ms=0.0,
+            )
+
     try:
         data = _dispatch(tool_name, params, session, caller)
         latency = (time.monotonic() - t0) * 1000
