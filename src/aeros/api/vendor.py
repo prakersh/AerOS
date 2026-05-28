@@ -335,7 +335,15 @@ def submit_quote(
     if not thread:
         raise HTTPException(404, "Thread not found")
 
-    total = sum(li.unit_price * 1 for li in body.line_items)
+    # Look up quantities from RFxLineItem for accurate total
+    from aeros.models.rfx import RFxLineItem
+
+    line_item_qty_map = {}
+    for li in body.line_items:
+        if li.line_item_id not in line_item_qty_map:
+            rfx_li = session.get(RFxLineItem, li.line_item_id)
+            line_item_qty_map[li.line_item_id] = rfx_li.qty if rfx_li else 0
+    total = sum(li.unit_price * line_item_qty_map.get(li.line_item_id, 0) for li in body.line_items)
 
     extraction_data = {
         "line_items": [

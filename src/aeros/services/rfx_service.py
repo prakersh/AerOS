@@ -82,6 +82,8 @@ def dispatch_rfx(session: Session, rfx_id: int, buyer_id: int) -> RFxRun:
         raise ValueError("RFx not found")
     if rfx.status == RFxStatus.DISPATCHED:
         return rfx
+    if rfx.status != RFxStatus.DRAFTING:
+        raise ValueError(f"Cannot dispatch RFx in {rfx.status.value} status")
     rfx.status = RFxStatus.DISPATCHED
     rfx.updated_at = datetime.now(UTC)
     session.add(rfx)
@@ -110,6 +112,8 @@ def cancel_rfx(session: Session, rfx_id: int, user_id: int, reason: str) -> RFxR
     rfx = session.get(RFxRun, rfx_id)
     if not rfx:
         raise ValueError("RFx not found")
+    if rfx.status in (RFxStatus.CANCELLED, RFxStatus.AWARDED):
+        raise ValueError(f"Cannot cancel RFx in {rfx.status.value} status")
     rfx.status = RFxStatus.CANCELLED
     rfx.cancelled_at = datetime.now(UTC)
     rfx.cancelled_by_user_id = user_id
@@ -321,6 +325,8 @@ def award_rfx(session: Session, rfx_id: int, buyer_id: int, decisions: list[dict
     rfx = session.get(RFxRun, rfx_id)
     if not rfx:
         raise ValueError("RFx not found")
+    if rfx.status in (RFxStatus.DRAFTING, RFxStatus.CANCELLED, RFxStatus.AWARDED):
+        raise ValueError(f"Cannot award RFx in {rfx.status.value} status")
     rfx.status = RFxStatus.AWARDED
     rfx.updated_at = datetime.now(UTC)
     session.add(rfx)

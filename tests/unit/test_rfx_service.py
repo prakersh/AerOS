@@ -1,4 +1,5 @@
 import pytest
+from sqlmodel import select
 
 from aeros.models.organization import Organization, OrgType
 from aeros.models.rfx import RFxStatus, RFxVendorStatus, Thread
@@ -254,12 +255,12 @@ def test_award_rfx(session, buyer, vendor_record):
     """award_rfx should create an Award and set RFx status to AWARDED."""
     rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Award Test")
     rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="award_hash")  # noqa: S106
+    rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
 
     decisions = [{"vendor_id": vendor_record.id, "items": [1, 2]}]
     result = rfx_service.award_rfx(session, rfx.id, buyer.id, decisions)
 
     assert result.status == RFxStatus.AWARDED
-    # Check award was created
     from sqlmodel import select
 
     from aeros.models.award import Award
@@ -267,3 +268,266 @@ def test_award_rfx(session, buyer, vendor_record):
     award = session.exec(select(Award).where(Award.rfx_id == rfx.id)).first()
     assert award is not None
     assert award.awarded_by_user_id == buyer.id
+
+
+# ---- State machine validation tests (Bug #3) ----
+
+
+class TestStateMachineValidation:
+    """Tests that enforce valid RFx status transitions.
+
+    These tests define the contract: invalid transitions must raise ValueError.
+    The service code must be patched to add validation.
+    """
+
+    def test_dispatch_from_draft_succeeds(self, session, buyer, vendor_record):
+        """drafting -> dispatched is the happy path."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="sm1")  # noqa: S106
+        result = rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
+        assert result.status == RFxStatus.DISPATCHED
+
+    def test_dispatch_from_dispatched_is_idempotent(self, session, buyer, vendor_record):
+        """dispatching an already-dispatched RFx returns without error."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="sm2")  # noqa: S106
+        rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
+        result = rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
+        assert result.status == RFxStatus.DISPATCHED
+
+    def test_dispatch_from_awarded_raises(self, session, buyer, vendor_record):
+        """awarded -> dispatched must be rejected."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="sm_da")  # noqa: S106
+        rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
+        rfx_service.award_rfx(
+            session, rfx.id, buyer.id, [{"vendor_id": vendor_record.id, "items": []}]
+        )
+        with pytest.raises(ValueError, match="Cannot dispatch"):
+            rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
+
+    def test_dispatch_from_cancelled_raises(self, session, buyer):
+        """cancelled -> dispatched must be rejected."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        rfx_service.cancel_rfx(session, rfx.id, buyer.id, reason="test")
+        with pytest.raises(ValueError, match="Cannot dispatch"):
+            rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
+
+    def test_cancel_from_draft_succeeds(self, session, buyer):
+        """drafting -> cancelled is allowed."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        result = rfx_service.cancel_rfx(session, rfx.id, buyer.id, reason="Changed mind")
+        assert result.status == RFxStatus.CANCELLED
+
+    def test_cancel_from_dispatched_succeeds(self, session, buyer, vendor_record):
+        """dispatched -> cancelled is allowed."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="sm3")  # noqa: S106
+        rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
+        result = rfx_service.cancel_rfx(session, rfx.id, buyer.id, reason="Budget cut")
+        assert result.status == RFxStatus.CANCELLED
+
+    def test_cancel_from_awarded_raises(self, session, buyer, vendor_record):
+        """awarded -> cancelled must be rejected."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="sm4")  # noqa: S106
+        rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
+        rfx_service.award_rfx(
+            session, rfx.id, buyer.id, [{"vendor_id": vendor_record.id, "items": []}]
+        )
+        with pytest.raises(ValueError, match="Cannot cancel"):
+            rfx_service.cancel_rfx(session, rfx.id, buyer.id, reason="Too late")
+
+    def test_cancel_from_cancelled_raises(self, session, buyer):
+        """cancelled -> cancelled must be rejected."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        rfx_service.cancel_rfx(session, rfx.id, buyer.id, reason="First cancel")
+        with pytest.raises(ValueError, match="Cannot cancel"):
+            rfx_service.cancel_rfx(session, rfx.id, buyer.id, reason="Second cancel")
+
+    def test_award_from_dispatched_succeeds(self, session, buyer, vendor_record):
+        """dispatched -> awarded is the happy path."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="sm5")  # noqa: S106
+        rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
+        result = rfx_service.award_rfx(
+            session, rfx.id, buyer.id, [{"vendor_id": vendor_record.id, "items": []}]
+        )
+        assert result.status == RFxStatus.AWARDED
+
+    def test_award_from_draft_raises(self, session, buyer, vendor_record):
+        """drafting -> awarded must be rejected."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="sm6")  # noqa: S106
+        with pytest.raises(ValueError, match="Cannot award"):
+            rfx_service.award_rfx(
+                session, rfx.id, buyer.id, [{"vendor_id": vendor_record.id, "items": []}]
+            )
+
+    def test_award_from_cancelled_raises(self, session, buyer, vendor_record):
+        """cancelled -> awarded must be rejected."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="sm7")  # noqa: S106
+        rfx_service.cancel_rfx(session, rfx.id, buyer.id, reason="Budget")
+        with pytest.raises(ValueError, match="Cannot award"):
+            rfx_service.award_rfx(
+                session, rfx.id, buyer.id, [{"vendor_id": vendor_record.id, "items": []}]
+            )
+
+    def test_award_from_awarded_raises(self, session, buyer, vendor_record):
+        """awarded -> awarded must be rejected (idempotency guard, Bug #6)."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="SM Test")
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="sm8")  # noqa: S106
+        rfx_service.dispatch_rfx(session, rfx.id, buyer.id)
+        rfx_service.award_rfx(
+            session, rfx.id, buyer.id, [{"vendor_id": vendor_record.id, "items": []}]
+        )
+        with pytest.raises(ValueError, match="Cannot award"):
+            rfx_service.award_rfx(
+                session, rfx.id, buyer.id, [{"vendor_id": vendor_record.id, "items": []}]
+            )
+
+
+# ---- RFx CRUD edge cases ----
+
+
+class TestRfxCrudEdgeCases:
+    """Edge cases for RFx CRUD operations."""
+
+    def test_create_rfx_with_deadline(self, session, buyer):
+        """Deadline should be persisted and returned."""
+        from datetime import UTC, datetime
+
+        deadline = datetime(2026, 6, 15, tzinfo=UTC)
+        rfx = rfx_service.create_rfx(
+            session, buyer_id=buyer.id, title="Deadline Test", response_deadline=deadline
+        )
+        assert rfx.response_deadline is not None
+
+    def test_add_line_items_to_nonexistent_rfx(self, session, skus):
+        """Adding items to nonexistent RFx creates records (SQLite lacks FK enforcement)."""
+        result = rfx_service.add_line_items(session, 99999, [{"sku_id": skus[0].id, "qty": 10}])
+        assert len(result) == 1
+        assert result[0].rfx_id == 99999
+
+    def test_add_line_items_empty_list(self, session, buyer):
+        """Empty items list should return empty."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Empty LI Test")
+        result = rfx_service.add_line_items(session, rfx.id, [])
+        assert result == []
+
+    def test_add_line_items_with_target_price(self, session, buyer, skus):
+        """Target price should be persisted."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Price Test")
+        items = [{"sku_id": skus[0].id, "qty": 100, "target_price": 25.0}]
+        result = rfx_service.add_line_items(session, rfx.id, items)
+        assert result[0].target_price == 25.0
+
+    def test_invite_vendor_duplicate_returns_existing(self, session, buyer, vendor_record):
+        """Inviting the same vendor twice should return existing record."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Dup Invite")
+        rv1 = rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="dup1")  # noqa: S106
+        rv2 = rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="dup1")  # noqa: S106
+        assert rv1.id == rv2.id
+
+    def test_invite_vendor_creates_thread(self, session, buyer, vendor_record):
+        """Inviting a vendor should auto-create a thread."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Thread Test")
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="th1")  # noqa: S106
+        thread = session.exec(
+            select(Thread).where(Thread.rfx_id == rfx.id, Thread.vendor_id == vendor_record.id)
+        ).first()
+        assert thread is not None
+
+    def test_get_rfx_with_details_nonexistent_returns_none(self, session):
+        """Getting details for nonexistent RFx should return None."""
+        result = rfx_service.get_rfx_with_details(session, 99999)
+        assert result is None
+
+    def test_get_rfx_with_details_includes_dispatch_plan(self, session, buyer, skus, vendor_record):
+        """Details should include dispatch_plan."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="DP Test")
+        rfx_service.add_line_items(session, rfx.id, [{"sku_id": skus[0].id, "qty": 10}])
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="dp1")  # noqa: S106
+        details = rfx_service.get_rfx_with_details(session, rfx.id)
+        assert "dispatch_plan" in details
+        assert len(details["dispatch_plan"]) == 1
+
+    def test_list_rfx_for_buyer_empty(self, session, buyer):
+        """New buyer should see empty list."""
+        results = rfx_service.list_rfx_for_buyer(session, buyer.id)
+        assert results == []
+
+    def test_list_rfx_for_vendor_empty(self, session, vendor_record):
+        """Vendor with no invites should see empty list."""
+        results = rfx_service.list_rfx_for_vendor(session, vendor_record.id)
+        assert results == []
+
+    def test_list_rfx_for_vendor_includes_buyer_name(self, session, buyer, skus, vendor_record):
+        """Vendor list should include buyer_name."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="BN Test")
+        rfx_service.invite_vendor(session, rfx.id, vendor_record.id, token_hash="bn1")  # noqa: S106
+        results = rfx_service.list_rfx_for_vendor(session, vendor_record.id)
+        assert len(results) == 1
+        assert results[0]["buyer_name"] == "Svc Buyer"
+
+
+# ---- Vendor suggestions and assignment ----
+
+
+class TestVendorSuggestions:
+    """Tests for vendor suggestion and assignment."""
+
+    def test_get_vendor_suggestions_category_match(self, session, buyer, vendor_record, skus):
+        """Vendors should be matched by category."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Suggest Test")
+        rfx_service.add_line_items(session, rfx.id, [{"sku_id": skus[0].id, "qty": 10}])
+        suggestions = rfx_service.get_vendor_suggestions(session, rfx.id, buyer.org_id)
+        assert "suggestions" in suggestions
+        assert "unassigned_items" in suggestions
+
+    def test_get_vendor_suggestions_no_line_items(self, session, buyer):
+        """RFx with no line items should return empty suggestions."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="No LI Suggest")
+        suggestions = rfx_service.get_vendor_suggestions(session, rfx.id, buyer.org_id)
+        assert suggestions["suggestions"] == []
+        assert suggestions["unassigned_items"] == []
+
+    def test_assign_vendors_to_items_valid(self, session, buyer, vendor_record, skus):
+        """Valid assignment should create/update RFxVendor records."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Assign Test")
+        items = rfx_service.add_line_items(session, rfx.id, [{"sku_id": skus[0].id, "qty": 10}])
+        result = rfx_service.assign_vendors_to_items(
+            session,
+            rfx.id,
+            buyer.id,
+            [{"vendor_id": vendor_record.id, "line_item_ids": [items[0].id]}],
+        )
+        assert len(result["assignments"]) == 1
+        assert result["assignments"][0]["vendor_id"] == vendor_record.id
+
+    def test_assign_vendors_invalid_line_item_ids_raises(self, session, buyer, vendor_record):
+        """Invalid line item IDs should raise ValueError."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Invalid Assign")
+        with pytest.raises(ValueError, match="do not belong"):
+            rfx_service.assign_vendors_to_items(
+                session,
+                rfx.id,
+                buyer.id,
+                [{"vendor_id": vendor_record.id, "line_item_ids": [999]}],
+            )
+
+    def test_assign_vendors_creates_thread(self, session, buyer, vendor_record, skus):
+        """Assigning a vendor should create a thread if needed."""
+        rfx = rfx_service.create_rfx(session, buyer_id=buyer.id, title="Thread Assign")
+        items = rfx_service.add_line_items(session, rfx.id, [{"sku_id": skus[0].id, "qty": 10}])
+        rfx_service.assign_vendors_to_items(
+            session,
+            rfx.id,
+            buyer.id,
+            [{"vendor_id": vendor_record.id, "line_item_ids": [items[0].id]}],
+        )
+        thread = session.exec(
+            select(Thread).where(Thread.rfx_id == rfx.id, Thread.vendor_id == vendor_record.id)
+        ).first()
+        assert thread is not None

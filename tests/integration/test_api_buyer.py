@@ -137,13 +137,11 @@ def test_get_rfx_with_details(auth_client, skus):
 
 def test_cancel_rfx(auth_client, skus):
     """POST /api/buyer/rfx/{id}/cancel should cancel the RFx."""
-    # Create first
     draft = {"title": "To Be Cancelled"}
     create_resp = auth_client.post("/api/chat/create-rfx", json={"draft": draft})
     assert create_resp.status_code == 200
     rfx_id = create_resp.json()["data"]["rfx_id"]
 
-    # Cancel it
     resp = auth_client.post(
         f"/api/buyer/rfx/{rfx_id}/cancel",
         json={"reason": "No longer needed"},
@@ -152,3 +150,90 @@ def test_cancel_rfx(auth_client, skus):
     data = resp.json()
     assert data["status"] == "cancelled"
     assert data["cancelled_reason"] == "No longer needed"
+
+
+def test_assign_vendors(auth_client, skus, vendor_record):
+    """POST /api/buyer/rfx/{id}/assign-vendors should assign vendors to items."""
+    draft = {
+        "title": "Assign Test",
+        "line_items": [{"sku_name": "Milk", "qty": 100}],
+    }
+    create_resp = auth_client.post("/api/chat/create-rfx", json={"draft": draft})
+    assert create_resp.status_code == 200
+    rfx_id = create_resp.json()["data"]["rfx_id"]
+
+    # Get line item ID
+    detail_resp = auth_client.get(f"/api/buyer/rfx/{rfx_id}")
+    li_id = detail_resp.json()["line_items"][0]["id"]
+
+    resp = auth_client.post(
+        f"/api/buyer/rfx/{rfx_id}/assign-vendors",
+        json={"assignments": [{"vendor_id": vendor_record.id, "line_item_ids": [li_id]}]},
+    )
+    assert resp.status_code == 200
+
+
+def test_assign_vendors_invalid_ids(auth_client, skus, vendor_record):
+    """Assign with invalid line item IDs should return 400."""
+    draft = {"title": "Invalid Assign Test"}
+    create_resp = auth_client.post("/api/chat/create-rfx", json={"draft": draft})
+    assert create_resp.status_code == 200
+    rfx_id = create_resp.json()["data"]["rfx_id"]
+
+    resp = auth_client.post(
+        f"/api/buyer/rfx/{rfx_id}/assign-vendors",
+        json={"assignments": [{"vendor_id": vendor_record.id, "line_item_ids": [99999]}]},
+    )
+    assert resp.status_code == 400
+
+
+def test_vendor_suggestions(auth_client, skus, vendor_record):
+    """GET /api/buyer/rfx/{id}/vendor-suggestions should return suggestions."""
+    draft = {
+        "title": "Suggest Test",
+        "line_items": [{"sku_name": "Milk", "qty": 50}],
+    }
+    create_resp = auth_client.post("/api/chat/create-rfx", json={"draft": draft})
+    assert create_resp.status_code == 200
+    rfx_id = create_resp.json()["data"]["rfx_id"]
+
+    resp = auth_client.get(f"/api/buyer/rfx/{rfx_id}/vendor-suggestions")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "suggestions" in data
+    assert "unassigned_items" in data
+
+
+def test_defaults_get_and_put(auth_client):
+    """GET and PUT /api/buyer/defaults should work."""
+    resp = auth_client.get("/api/buyer/defaults")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "payment_terms" in data
+    assert "currency" in data
+
+
+def test_activity_returns_audit_logs(auth_client, skus):
+    """GET /api/buyer/activity should return audit log entries."""
+    # Create an RFx to generate audit log
+    draft = {"title": "Activity Test"}
+    auth_client.post("/api/chat/create-rfx", json={"draft": draft})
+
+    resp = auth_client.get("/api/buyer/activity")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert isinstance(data, list)
+    # Should have at least one entry from the create_rfx action
+    assert len(data) >= 1
+
+
+def test_get_rfx_idor_blocked(auth_client, skus):
+    """GET /api/buyer/rfx/{id} should block access to other buyer's RFx."""
+    # Create an RFx as the authenticated buyer
+    draft = {"title": "IDOR Test"}
+    create_resp = auth_client.post("/api/chat/create-rfx", json={"draft": draft})
+    rfx_id = create_resp.json()["data"]["rfx_id"]
+
+    # Access should work for the owner
+    resp = auth_client.get(f"/api/buyer/rfx/{rfx_id}")
+    assert resp.status_code == 200

@@ -1,432 +1,535 @@
-# AEROS Testing Plan — Procurement Agent & Full Platform
+# AEROS Testing Plan — Quality-First, Workflow-Driven
 
 ## Overview
 
-AEROS currently has 560 tests at 81% coverage. The reference project (memo.sbs) has 3,441 unit/integration + 468 E2E tests (3,909 total). This plan closes the gap by targeting every component with the same rigor.
+AEROS has 560 existing tests at 29% measured coverage. The previous plan targeted
+2,500+ tests organized by code layer. This plan reorients around **business
+workflows** — the flows that directly affect customers — and targets ~200 new
+high-quality tests that protect core use cases and catch 7 confirmed bugs.
 
-**Goal**: ~2,500+ tests covering every service, agent, API endpoint, model, and workflow — with edge cases, error paths, and cross-role isolation.
-
----
-
-## Phase 1: Agent Unit Tests (Priority: Critical)
-
-### 1.1 Intent Detection (`src/aeros/agents/procurement.py :: detect_intent`)
-
-**File**: `tests/unit/test_agent_intent.py`
-
-Test each pattern independently:
-- `create_rfx` — "I need 100kg rice", "mujhe 50kg atta chahiye", "order 200 pcs screws"
-- `create_rfx` (item names) — "I need rice and dal", "buy wheat flour"
-- `dispatch_rfx` — "dispatch the RFx", "send to vendors", "bhejo"
-- `cancel_rfx` — "cancel RFx #5", "withdraw the rice order", "band karo rfx"
-- `evaluate_offers` — "compare quotes", "best price", "sabse sasta", "cheapest"
-- `award_rfx` — "award to vendor #2", "finalize", "accept quote"
-- `decline_rfx` — "decline this RFx", "can't supply", "nahi de sakte"
-- `submit_quote` — "quote 78/kg", "bid 5000", "rate 45"
-- `list_rfx` — "show my rfx", "list orders", "mere requests"
-- `list_vendors` — "show vendors", "list suppliers"
-- `daily_summary` — "what happened today", "aaj ka summary", "overview"
-
-Edge cases:
-- Greetings: "hi", "hello", "namaste", "good morning" → `["__greeting__"]`
-- No match: "the weather is nice" → `[]`
-- Mixed: "I need 100kg rice, dispatch to vendors" → `["create_rfx", "dispatch_rfx"]`
-- Case insensitive: "I NEED 100KG RICE" → `["create_rfx"]`
-- Deduplication: patterns that could match twice → only one entry
-- Hindi numerals and units: "50 किलो" (future)
-- Empty string → `[]`
-- Very long string (1000+ chars) → no crash
-
-**Expected**: ~40 tests
-
-### 1.2 Tool Selection Parsing (`_parse_tool_selections`)
-
-**File**: `tests/unit/test_agent_parsing.py`
-
-- Valid JSON array: `[{"tool": "create_rfx", "params": {"title": "Test"}}]`
-- Valid single dict: `{"tool": "list_rfx", "params": {}}`
-- Empty object: `{}` → `[]`
-- Empty array: `[]` → `[]`
-- Wrapped in markdown: `` ```json [...] ``` ``
-- LLM preamble: `"Here are the tools:\n[{...}]"`
-- Multiple tools with deduplication
-- Legacy dict format: `{"create_rfx": {"title": "X"}, "list_vendors": {}}`
-- Invalid JSON → `[]`
-- Nested JSON → correct extraction
-- Non-dict items in array → skipped
-- Missing "tool" key → skipped
-- Unicode content in params
-
-**Expected**: ~25 tests
-
-### 1.3 Tool Registry (`src/aeros/agents/tools.py`)
-
-**File**: `tests/unit/test_tool_registry.py`
-
-- `get_tools_for_role("buyer")` → no vendor_only tools
-- `get_tools_for_role("vendor")` → no buyer_only tools
-- `get_tools_for_role("admin")` → all tools
-- Every tool has: name, description, tool_type, keywords (non-empty)
-- No duplicate tool names
-- All tool names in TOOL_CATALOG match their `.name` field
-- `tools_to_toon()` returns valid TOON (can be decoded)
-- TOON output is shorter than JSON equivalent
-- `filter_tools_by_keywords` with exact keyword match
-- `filter_tools_by_keywords` with multi-word keyword
-- `filter_tools_by_keywords` no match → fallback
-- `filter_tools_by_keywords` max_tools limit respected
-- `to_compact()` format validation
-- `to_catalog_row()` structure validation
-
-**Expected**: ~30 tests
-
-### 1.4 Tool Executor (`src/aeros/agents/executor.py`)
-
-**File**: `tests/unit/test_tool_executor.py`
-
-For each of the 20 tools:
-- Happy path with valid params (using real DB session)
-- Missing required param → error ToolResult
-- Tool alias resolution: "search" → "search_inventory"
-- Unknown tool name → ValueError
-- Timing: latency_ms > 0
-- Error handling: service raises → ToolResult(success=False)
-
-Specific tool tests:
-- `search_inventory` — returns list of dicts with correct keys
-- `create_rfx` — creates RFx in DB, returns rfx_id
-- `create_rfx` — deadline parsing (valid ISO, invalid, None)
-- `add_line_items` — items added to correct RFx
-- `list_rfx` — returns only caller's RFx
-- `get_rfx_details` — not found → error
-- `cancel_rfx` — status changes, reason recorded
-- `list_vendors` — returns correct structure
-- `invite_vendor` — creates correlation token
-- `dispatch_rfx` — status transitions
-- `evaluate_offers` — with quotes, without quotes
-- `award_rfx` — creates awards
-- `submit_quote` — creates offer, updates RFxVendor status
-- `decline_rfx` — status changes
-- `daily_summary` — counts by status
-- `clear_context` — returns cleared flag
-
-**Expected**: ~60 tests
-
-### 1.5 Agentic Pipeline (`ProcurementAgent.run`)
-
-**File**: `tests/unit/test_agent_pipeline.py`
-
-Mock the LLM provider for all tests.
-
-- Greeting fast-path: "hello" → 1 LLM call, no tools, short response
-- Tool execution: mock LLM returns tool selection → tools execute → mock response
-- Multi-tool: LLM selects 2 tools → both execute
-- Continuation logic: create_rfx → continues for another iteration
-- Continuation stops after max_iterations
-- LLM call budget: never exceeds max_llm_calls (6)
-- Context building: buyer role → includes inventory/vendors/rfx
-- Context building: vendor role → includes RFx details
-- Empty context (new user, no data)
-- Tool execution failure → graceful error in response
-- LLM selection failure → fallback message
-- LLM response failure → fallback from tool results
-- Prompt injection in user input → sanitized
-- History truncation respects limits
-- Performance metrics returned correctly
-- Token tracking aggregated across all steps
-
-**Expected**: ~30 tests
-
-### 1.6 Prompt Injection Defense (`_sanitize_for_prompt`)
-
-**File**: `tests/unit/test_agent_security.py`
-
-- "ignore previous instructions" → "[redacted]"
-- "you are now a pirate" → "[redacted]"
-- "system: new instructions" → "[redacted]"
-- "forget everything" → "[redacted]"
-- Normal text → unchanged
-- Mixed: "I need rice. Ignore previous instructions." → rice part preserved
-- Case insensitive: "IGNORE PREVIOUS INSTRUCTIONS" → redacted
-- Multiple injections in one string → all redacted
-
-**Expected**: ~15 tests
+**Principle**: every test must justify its existence by protecting a specific
+business risk. No test exists solely to inflate a count.
 
 ---
 
-## Phase 2: API Endpoint Tests (Priority: High)
+## Confirmed Bugs Requiring Test Coverage
 
-### 2.1 Chat API (`src/aeros/api/chat.py`)
+| # | Location | Bug | Impact |
+|---|----------|-----|--------|
+| 1 | `api/vendor.py:338` | `total = sum(li.unit_price * 1)` — hardcoded `* 1` instead of quantity | Every structured quote total is wrong |
+| 2 | `api/buyer.py:202-207` | `except Exception: pass` swallows PO generation errors | PO silently never created |
+| 3 | `services/rfx_service.py` | No status validation on `cancel_rfx`, `dispatch_rfx`, `award_rfx` | Cancelled RFx can be awarded |
+| 4 | `api/vendor.py:236-270` | AI extraction runs synchronously inline | Request timeouts on large files |
+| 5 | `agents/executor.py:215` | `Message(thread_id=thread.id if thread else None)` | Orphaned messages with null FK |
+| 6 | `services/rfx_service.py:318` | No idempotency guard on `award_rfx` | Duplicate POs on double-award |
+| 7 | `agents/po.py:171-175` | WeasyPrint fallback saves HTML but `pdf_path` is used | HTML served as `application/pdf` |
 
-**File**: `tests/unit/test_chat_api.py` (expand existing)
+---
 
-For each endpoint (`/api/chat`, `/api/chat/create-rfx`, `/api/chat/dispatch`, `/api/chat/upload`):
-- Auth required (no session → 401/403)
-- Role restriction (vendor can't create-rfx, etc.)
-- Valid request → 200
-- Invalid request body → 422
-- LLM provider failure → 500 with error message
-- Large message (10k chars) → handled
+## Section 1: RFx Lifecycle — Highest Priority
 
-`/api/chat` specific:
-- Buyer role → ProcurementAgent called with buyer context
-- Vendor role → ProcurementAgent called with vendor context
-- rfx_id passed to agent context
-- History passed through
-- Response shape: {message, data, success}
+**What this protects**: The RFx lifecycle is the core product. A buyer creates an
+RFx, adds items, assigns vendors, dispatches, collects quotes, awards, and gets
+a PO. Broken state transitions or missing validation here directly block
+customers.
 
-`/api/chat/create-rfx` specific:
-- Line items resolved by sku_name (exact match)
-- Line items resolved by fuzzy match (ilike)
-- Line items with sku_id (direct lookup)
-- Missing SKU → skipped gracefully
-- Multiple field name conventions: qty/quantity, unit/unit_override
-- Suggested vendors returned
-- Dispatch plan generated
+**File**: `tests/unit/test_rfx_service.py` (expand — currently 8% coverage)
 
-`/api/chat/dispatch` specific:
-- SourcingAgent invoked (not ProcurementAgent)
-- dispatch_plan forwarded
-- Email sending mocked
+### 1a. State Machine Validation — targets Bug #3
 
-`/api/chat/upload` specific:
-- File size limit enforced
-- Filename sanitized
-- SHA hash in stored filename
-- Correct upload path
+Tests enforce valid status transitions. Invalid transitions must raise
+`ValueError`. These tests define the contract; the service code must be patched
+to add validation.
 
-**Expected**: ~45 tests
+| Test | Asserts |
+|------|---------|
+| `test_dispatch_from_draft_succeeds` | drafting -> dispatched |
+| `test_dispatch_from_dispatched_is_idempotent` | Already-dispatched returns without error |
+| `test_cancel_from_draft_succeeds` | drafting -> cancelled |
+| `test_cancel_from_dispatched_succeeds` | dispatched -> cancelled allowed |
+| `test_cancel_from_awarded_raises` | awarded -> cancelled rejected |
+| `test_cancel_from_cancelled_raises` | cancelled -> cancelled rejected |
+| `test_award_from_dispatched_succeeds` | dispatched -> awarded |
+| `test_award_from_draft_raises` | drafting -> awarded rejected |
+| `test_award_from_cancelled_raises` | cancelled -> awarded rejected |
+| `test_award_from_awarded_raises` | awarded -> awarded rejected (Bug #6) |
 
-### 2.2 Buyer API (`src/aeros/api/buyer.py`)
+### 1b. RFx CRUD Edge Cases
 
-**File**: `tests/unit/test_buyer_api.py` (expand)
+| Test | Asserts |
+|------|---------|
+| `test_create_rfx_with_deadline` | Deadline persisted and returned |
+| `test_create_rfx_with_delivery_window` | Window dates persisted |
+| `test_add_line_items_to_nonexistent_rfx_raises` | ValueError on missing RFx |
+| `test_add_line_items_empty_list` | Empty list returns empty |
+| `test_add_line_items_with_target_price` | Target price persisted |
+| `test_invite_vendor_duplicate_returns_existing` | Idempotent invite |
+| `test_invite_vendor_creates_thread` | Thread auto-created |
+| `test_get_rfx_with_details_nonexistent_returns_none` | None for missing RFx |
+| `test_get_rfx_with_details_includes_dispatch_plan` | Dispatch plan shape |
+| `test_list_rfx_for_buyer_empty` | New buyer sees empty list |
+| `test_list_rfx_for_vendor_empty` | Vendor with no invites sees empty |
+| `test_list_rfx_for_vendor_includes_buyer_name` | Buyer name resolved |
 
-- `GET /api/buyer/rfx` — list shape, empty list for new buyer
-- `GET /api/buyer/rfx/{id}` — detail shape, 404 for missing
-- `POST /api/buyer/rfx/{id}/award` — valid award, PO generation triggered
-- `GET /api/buyer/vendors` — vendor list
-- `PUT /api/buyer/defaults` — updates user defaults
-- `GET /api/buyer/defaults` — returns defaults
-- Cross-user isolation: buyer A can't see buyer B's RFx
-- Role check on every endpoint
+### 1c. Vendor Suggestions and Assignment
 
-**Expected**: ~25 tests
+| Test | Asserts |
+|------|---------|
+| `test_get_vendor_suggestions_category_match` | Vendors matched by category |
+| `test_get_vendor_suggestions_no_line_items` | Returns empty suggestions |
+| `test_get_vendor_suggestions_scoring_order` | Sorted by composite score |
+| `test_assign_vendors_to_items_valid` | Creates/updates RFxVendor |
+| `test_assign_vendors_invalid_line_item_ids_raises` | Rejects bad IDs |
+| `test_assign_vendors_creates_thread_for_new_vendor` | Thread auto-created |
 
-### 2.3 Vendor API (`src/aeros/api/vendor.py`)
+**New tests**: ~28
+
+---
+
+## Section 2: Vendor Quote Submission
+
+**What this protects**: Vendors submitting quotes is the second most critical
+flow. Bug #1 means every structured quote total is wrong — directly affecting
+procurement decisions and financial accuracy.
 
 **File**: `tests/unit/test_vendor_api.py` (expand)
 
-- `GET /api/vendor/rfx` — list with buyer_name, item_count
-- `GET /api/vendor/rfx/{id}/thread` — full context shape
-- VIEWED status transition on first access
-- `POST /api/vendor/rfx/{id}/submit-quote` — creates offer
-- `POST /api/vendor/rfx/{id}/decline` — status change
-- `POST /api/vendor/rfx/{id}/thread/reply` — message creation
-- Cross-vendor isolation
+### 2a. Quote Total Calculation — targets Bug #1
 
-**Expected**: ~20 tests
+| Test | Asserts |
+|------|---------|
+| `test_submit_quote_total_uses_quantity` | qty=100, price=50 -> total=5000, not 50 |
+| `test_submit_quote_single_item_total` | qty=10, price=25 -> total=250 |
+| `test_submit_quote_multiple_items_total` | Two items with different qty/price |
+| `test_submit_quote_zero_quantity` | qty=0 -> total contribution is 0 |
 
-### 2.4 Admin API (`src/aeros/api/admin.py`)
+### 2b. Quote Submission Workflow
 
-**File**: `tests/unit/test_admin_api.py`
+| Test | Asserts |
+|------|---------|
+| `test_submit_quote_creates_offer` | Offer persisted with correct fields |
+| `test_submit_quote_updates_vendor_status` | RFxVendor -> QUOTED |
+| `test_submit_quote_creates_message` | Message in thread |
+| `test_submit_quote_no_vendor_profile_returns_403` | Auth check |
+| `test_submit_quote_no_thread_returns_404` | Thread must exist |
+| `test_submit_quote_empty_line_items` | Empty items accepted |
+| `test_submit_quote_revision_increments` | Second quote increments revision |
 
-- Every admin endpoint requires admin role
-- CRUD for organizations, users, system settings, AI models, providers
-- Telemetry endpoints
-- Observability metrics
+### 2c. Vendor Thread and Decline
 
-**Expected**: ~30 tests
+| Test | Asserts |
+|------|---------|
+| `test_get_thread_returns_full_context` | Shape validation |
+| `test_get_thread_marks_viewed` | INVITED -> VIEWED |
+| `test_get_thread_no_vendor_profile_returns_403` | Auth check |
+| `test_decline_sets_status_and_reason` | Status change |
+| `test_decline_nonexistent_rfx_returns_404` | Error path |
+| `test_reply_creates_message` | Message persisted |
+| `test_upload_creates_attachment` | Attachment record |
+| `test_upload_rejects_oversized_file` | 413 on large files |
+| `test_vendor_inbox_returns_list` | Inbox shape |
 
-### 2.5 Auth API (`src/aeros/api/auth.py`)
-
-**File**: `tests/unit/test_auth_api.py`
-
-- Login success, wrong password, unknown email
-- Register with valid/invalid data
-- Session management
-- CSRF validation (non-debug mode)
-- Password hashing
-
-**Expected**: ~15 tests
-
----
-
-## Phase 3: Service Layer Tests (Priority: High)
-
-### 3.1 RFx Service (`src/aeros/services/rfx_service.py`)
-
-**File**: `tests/unit/test_rfx_service.py` (expand — currently 65% coverage)
-
-- `create_rfx` — all params, defaults, deadline handling
-- `add_line_items` — valid items, missing sku_id, duplicate items
-- `list_rfx_for_buyer` — filtering, empty result
-- `list_rfx_for_vendor` — buyer_name, item_count included
-- `get_rfx_with_details` — full shape with vendor_offers
-- `cancel_rfx` — status transition, reason stored
-- `dispatch_rfx` — status transition, can't dispatch cancelled
-- `award_rfx` — creates Award records, status → awarded
-- `invite_vendor` — creates RFxVendor record
-- `decline_rfx_vendor` — status → declined
-- `get_vendor_suggestions` — category-based matching
-- State machine: valid transitions only (draft → dispatched → awarded, not draft → awarded)
-- Concurrent access: two dispatches on same RFx
-
-**Expected**: ~40 tests
-
-### 3.2 Inventory Service (`src/aeros/services/inventory_service.py`)
-
-- `list_skus` — by org, empty, with categories
-- `search_skus` — exact, partial, fuzzy, no results
-- `list_categories` — all categories
-- `bulk_import` — CSV parsing, dedup
-
-**Expected**: ~15 tests
-
-### 3.3 Vendor Service, Offer Service, Thread Service
-
-- Each service method: happy path + error path
-- Cross-org isolation
-
-**Expected**: ~25 tests
+**New tests**: ~20
 
 ---
 
-## Phase 4: Integration Tests (Priority: High)
+## Section 3: Award and PO Generation
 
-### 4.1 Full RFx Lifecycle (expand existing)
+**What this protects**: Award is the money decision. PO generation is the
+contractual output. Bugs #2, #6, #7 mean POs are silently never created,
+duplicated, or delivered as HTML pretending to be PDF.
 
-- Buyer creates RFx → adds items → invites vendors → dispatches → vendor quotes → buyer evaluates → buyer awards → PO generated
-- Multi-vendor award (split award)
-- Vendor declines → buyer sees decline
-- Cancel mid-workflow
-- Re-quote (revision)
+**File**: `tests/unit/test_po_agent.py` (new)
 
-**Expected**: ~15 tests
+### 3a. PO Rendering — targets Bugs #2, #6, #7
 
-### 4.2 Agent Integration
+| Test | Asserts |
+|------|---------|
+| `test_po_agent_generates_html_template` | HTML has vendor name, PO number, items |
+| `test_po_agent_calculates_total` | total = sum(qty * price) |
+| `test_po_agent_creates_purchase_order_record` | PurchaseOrder in DB |
+| `test_po_agent_handles_missing_vendor` | Skips gracefully |
+| `test_po_agent_weasyprint_fallback` | HTML saved when WeasyPrint fails (Bug #7) |
+| `test_po_download_html_fallback_content_type` | text/html, not application/pdf |
+| `test_po_generation_idempotency` | No duplicate POs (Bug #6) |
+| `test_award_endpoint_logs_po_errors` | Not silently swallowed (Bug #2) |
 
-**File**: `tests/integration/test_agent_integration.py`
+### 3b. Award Service
 
-Full agent pipeline with mocked LLM but real DB:
-- Buyer asks to create RFx → agent calls create_rfx tool → RFx exists in DB
-- Vendor views RFx → agent returns details from real DB
-- Multi-turn conversation: create → add items → dispatch (3 sequential chats)
-- Agent with empty DB (new user, no inventory)
-- Agent with 100+ SKUs (context truncation works)
+| Test | Asserts |
+|------|---------|
+| `test_award_rfx_creates_award_record` | Award persisted |
+| `test_award_rfx_sets_status` | RFx -> AWARDED |
+| `test_award_rfx_logs_action` | Audit log created |
+| `test_award_nonexistent_rfx_raises` | ValueError |
+| `test_po_service_create_award` | po_service works |
+| `test_po_service_create_po` | po_service works |
+| `test_po_service_list_pos_for_rfx` | Lists POs |
+| `test_po_service_get_po_by_award` | Lookup by award_id |
 
-**Expected**: ~15 tests
+### 3c. PO API Endpoint
 
-### 4.3 Channel Integration
+| Test | Asserts |
+|------|---------|
+| `test_get_po_details` | PO shape |
+| `test_get_po_not_found_returns_404` | Missing PO |
+| `test_download_po_returns_file` | FileResponse |
+| `test_download_po_missing_file_returns_404` | File not on disk |
+| `test_list_pos_for_rfx_endpoint` | Lists POs |
+| `test_po_requires_buyer_role` | Vendor cannot access |
 
-- Email dispatch (mocked SMTP)
-- Telegram dispatch (mocked)
-- In-app dispatch
-- Correlation token round-trip
-
-**Expected**: ~10 tests
-
----
-
-## Phase 5: Edge Cases & Error Paths (Priority: Medium)
-
-### 5.1 TOON Format
-
-**File**: `tests/unit/test_toon_integration.py`
-
-- Encode/decode round-trip for tool catalog
-- Empty list → valid TOON
-- Unicode data (Hindi text in SKU names)
-- Large dataset (100 items)
-- Nested objects
-- Special characters in values
-- TOON output < JSON output (size comparison)
-
-**Expected**: ~10 tests
-
-### 5.2 Error Recovery
-
-- DB connection failure during tool execution
-- LLM timeout → fallback response
-- Malformed LLM response → graceful degradation
-- Tool raises unexpected exception → ToolResult(success=False)
-- Missing env vars for providers
-
-**Expected**: ~10 tests
-
-### 5.3 Security
-
-- Prompt injection patterns blocked
-- SQL injection in tool params (handled by SQLModel ORM)
-- XSS in chat responses (handled by frontend, but test sanitization)
-- CSRF protection (non-debug mode)
-- File upload: malicious filename, oversized file
-- Auth: expired session, forged token
-
-**Expected**: ~15 tests
+**New tests**: ~22
 
 ---
 
-## Phase 6: E2E Browser Tests (Priority: Medium-Low)
+## Section 4: Agentic Chat Pipeline
 
-### 6.1 Buyer Chat Flow
+**What this protects**: The chat agent is the primary user interface. Intent
+detection errors mean wrong tools get called. Tool execution errors mean actions
+silently fail. The agentic loop must respect limits and handle LLM failures.
 
-Using Playwright or similar:
-- Login → chat → "I need 100kg rice" → RFx created in UI
-- Create RFx → dispatch → see status change
-- View vendor quotes → compare → award
+### 4a. Intent Detection
 
-### 6.2 Vendor Portal Flow
+**File**: `tests/unit/test_agent_intent.py` (new)
 
-- Vendor login → see RFx list → view details → submit quote
-- Vendor declines RFx
+| Test | Asserts |
+|------|---------|
+| `test_create_rfx_english` | "I need 100kg rice" -> create_rfx |
+| `test_create_rfx_hindi` | "mujhe 50kg atta chahiye" -> create_rfx |
+| `test_dispatch` | "dispatch the RFx" -> dispatch_rfx |
+| `test_cancel` | "cancel RFx #5" -> cancel_rfx |
+| `test_evaluate` | "compare quotes" -> evaluate_offers |
+| `test_award` | "award to vendor #2" -> award_rfx |
+| `test_decline` | "can't supply" -> decline_rfx |
+| `test_submit_quote` | "quote 78/kg" -> submit_quote |
+| `test_list_rfx` | "show my rfx" -> list_rfx |
+| `test_list_vendors` | "show vendors" -> list_vendors |
+| `test_daily_summary` | "what happened today" -> daily_summary |
+| `test_greeting` | "hello" -> ["__greeting__"] |
+| `test_no_match` | "the weather is nice" -> [] |
+| `test_empty_string` | "" -> [] |
+| `test_mixed_multiple` | "I need rice, dispatch" -> [create_rfx, dispatch_rfx] |
+| `test_case_insensitive` | "I NEED 100KG RICE" -> create_rfx |
+| `test_deduplication` | Duplicate patterns -> one entry |
+| `test_long_string_no_crash` | 1000+ chars -> no exception |
 
-### 6.3 Admin Panel
+### 4b. Tool Selection Parsing
 
-- Login → manage organizations → manage users → view telemetry
+**File**: `tests/unit/test_agent_parsing.py` (new)
 
-**Expected**: ~30 tests (lower priority, build after unit/integration)
+| Test | Asserts |
+|------|---------|
+| `test_valid_json_array` | Standard format parsed |
+| `test_valid_single_dict` | Single tool parsed |
+| `test_empty_object` | {} -> [] |
+| `test_empty_array` | [] -> [] |
+| `test_markdown_wrapped` | ```json [...] ``` parsed |
+| `test_llm_preamble` | "Here are tools:\n[{...}]" parsed |
+| `test_legacy_dict_format` | {"create_rfx": {...}} parsed |
+| `test_invalid_json` | Random text -> [] |
+| `test_deduplication` | Duplicates collapsed |
+| `test_missing_tool_key` | Skipped |
+| `test_non_dict_items` | Skipped |
+
+### 4c. Tool Executor — targets Bug #5
+
+**File**: `tests/unit/test_tool_executor.py` (new)
+
+| Test | Asserts |
+|------|---------|
+| `test_happy_path` | ToolResult(success=True) |
+| `test_unknown_tool_raises` | ValueError |
+| `test_alias_resolution` | "search" -> "search_inventory" |
+| `test_service_exception` | ToolResult(success=False) |
+| `test_latency_positive` | latency_ms > 0 |
+| `test_create_rfx_persists` | RFx in DB |
+| `test_dispatch_rfx_status` | Status -> dispatched |
+| `test_cancel_rfx_reason` | Reason persisted |
+| `test_list_rfx_callers_only` | No cross-user leakage |
+| `test_submit_quote_null_thread` | No orphaned message (Bug #5) |
+| `test_evaluate_offers_with_quotes` | Returns quoted offers |
+| `test_evaluate_offers_no_quotes` | Empty quoted list |
+| `test_daily_summary_counts` | Counts correct |
+| `test_clear_context` | Returns cleared flag |
+
+### 4d. Agentic Pipeline
+
+**File**: `tests/unit/test_agent_pipeline.py` (new)
+
+| Test | Asserts |
+|------|---------|
+| `test_greeting_fast_path` | 1 LLM call, no tools |
+| `test_tool_execution_flow` | LLM selects -> tool executes -> response |
+| `test_multi_tool_execution` | 2 tools both execute |
+| `test_continuation_after_create` | create_rfx triggers continuation |
+| `test_continuation_stops_at_max` | Stops after max_iterations |
+| `test_llm_call_budget` | Never exceeds max_llm_calls |
+| `test_llm_selection_error` | Fallback message |
+| `test_llm_response_error` | Tool-based fallback |
+| `test_context_building_buyer` | Includes inventory/vendors/rfx |
+| `test_context_building_vendor` | Includes RFx details |
+| `test_context_building_empty` | "No data yet." |
+| `test_sanitize_blocks_injection` | "ignore previous" -> "[redacted]" |
+| `test_sanitize_preserves_normal` | Normal text unchanged |
+| `test_sanitize_case_insensitive` | "IGNORE PREVIOUS" -> redacted |
+| `test_history_truncation` | Respects limits |
+
+### 4e. Tool Registry
+
+**File**: `tests/unit/test_tool_registry.py` (new)
+
+| Test | Asserts |
+|------|---------|
+| `test_buyer_excludes_vendor_only` | No vendor_only tools |
+| `test_vendor_excludes_buyer_only` | No buyer_only tools |
+| `test_admin_gets_all` | All tools |
+| `test_all_tools_have_fields` | name, description, keywords non-empty |
+| `test_no_duplicate_names` | Keys match .name |
+| `test_tools_to_toon_valid` | Encodes without error |
+| `test_filter_keywords_match` | Keyword matching works |
+| `test_filter_no_match_fallback` | Returns first N |
+| `test_filter_max_limit` | Respects max_tools |
+
+**New tests**: ~68
 
 ---
 
-## Execution Strategy
+## Section 5: Chat API Endpoints
 
-### For the testing agent:
+**What this protects**: The chat API is the HTTP interface to the agent. It must
+enforce auth, route to the correct agent, handle uploads, and return consistent
+shapes.
 
-1. **Start with Phase 1** (agent unit tests) — these are the highest ROI because the agent is new code with 0 dedicated tests
-2. **Then Phase 3** (service layer) — closing the 65% → 90%+ gap on rfx_service
-3. **Then Phase 2** (API endpoints) — expand existing test files
-4. **Phase 4-5** in parallel as time allows
+**File**: `tests/unit/test_chat_api.py` (new)
 
-### Test Infrastructure Conventions:
+| Test | Asserts |
+|------|---------|
+| `test_chat_requires_auth` | No session -> 401 |
+| `test_chat_requires_buyer_or_vendor` | Admin -> 403 |
+| `test_chat_buyer_uses_procurement_agent` | Correct agent |
+| `test_chat_response_shape` | {message, data, success} |
+| `test_chat_llm_error_returns_500` | LLM failure -> 500 |
+| `test_chat_with_history` | History forwarded |
+| `test_chat_with_rfx_id` | rfx_id forwarded |
+| `test_create_rfx_requires_buyer` | Vendor -> 403 |
+| `test_create_rfx_sku_exact_name` | Exact match |
+| `test_create_rfx_sku_fuzzy` | ilike match |
+| `test_create_rfx_sku_by_id` | Direct lookup |
+| `test_create_rfx_missing_sku_skipped` | Unknown SKU skipped |
+| `test_create_rfx_qty_convention` | qty/quantity/count |
+| `test_create_rfx_unit_convention` | unit/unit_override |
+| `test_create_rfx_suggested_vendors` | Vendors in response |
+| `test_create_rfx_dispatch_plan` | Plan in response |
+| `test_dispatch_uses_sourcing_agent` | SourcingAgent |
+| `test_upload_rejects_oversized` | 413 |
 
-- All tests use SQLite in-memory via the `session` fixture from `conftest.py`
-- LLM calls ALWAYS mocked via `unittest.mock.AsyncMock`
-- Use `_mock_chat_response(content)` helper for ChatResponse creation
-- Test classes grouped by feature: `class TestCreateRfx:`, `class TestDispatchRfx:`
-- Each test is independent — no ordering dependencies
-- Fixtures for common setup: `buyer_org`, `buyer_user`, `vendor_user`, `auth_client`
-- SKU fixtures: create categories + SKUs before RFx tests
-- Vendor fixtures: create vendor org + user + vendor record
+**New tests**: ~18
 
-### Running:
+---
+
+## Section 6: Security and Access Control
+
+**What this protects**: RBAC and IDOR are partially tested. This fills gaps
+around cross-vendor isolation, prompt injection, and file validation.
+
+### 6a. Cross-Vendor Isolation
+
+| Test | Asserts |
+|------|---------|
+| `test_vendor_cannot_view_other_thread` | Vendor A != Vendor B |
+| `test_vendor_cannot_quote_for_other` | Cross-vendor quote blocked |
+| `test_vendor_cannot_decline_for_other` | Cross-vendor decline blocked |
+| `test_vendor_inbox_own_only` | No data leakage |
+
+### 6b. Prompt Injection
+
+| Test | Asserts |
+|------|---------|
+| `test_ignore_previous_instructions` | Blocked |
+| `test_you_are_now` | Blocked |
+| `test_system_colon` | Blocked |
+| `test_forget_everything` | Blocked |
+| `test_normal_text_preserved` | Not over-redacted |
+| `test_mixed_content` | Injection redacted, rest preserved |
+| `test_multiple_injections` | All blocked |
+
+### 6c. File Validation
+
+| Test | Asserts |
+|------|---------|
+| `test_rejects_path_traversal` | `../../etc/passwd` sanitized |
+| `test_rejects_null_bytes` | Null bytes stripped |
+| `test_file_size_limit` | Configurable limit works |
+
+**New tests**: ~14
+
+---
+
+## Section 7: Buyer API Endpoints
+
+**File**: Expand integration tests
+
+| Test | Asserts |
+|------|---------|
+| `test_list_rfx_shape` | Response shape |
+| `test_get_rfx_detail_shape` | Includes vendor_offers, line_items |
+| `test_get_rfx_not_found` | 404 |
+| `test_cancel_rfx_success` | Cancel flow |
+| `test_assign_vendors_success` | Assignment flow |
+| `test_assign_vendors_invalid_ids` | 400 |
+| `test_vendor_suggestions` | Endpoint works |
+| `test_defaults_get_and_put` | CRUD |
+| `test_activity_returns_logs` | Audit log shape |
+| `test_award_po_failure_logged` | Not silent (Bug #2) |
+
+**New tests**: ~10
+
+---
+
+## Section 8: Offer and Extraction Pipeline
+
+**File**: Expand `tests/unit/test_offer_service.py`
+
+| Test | Asserts |
+|------|---------|
+| `test_create_offer_basic` | Basic creation |
+| `test_create_offer_revision_increments` | Revision number |
+| `test_create_offer_supersedes_previous` | Previous superseded |
+| `test_create_offer_fuzzy_sku_match` | Name matching |
+| `test_create_offer_no_matching_sku` | Null line_item_id |
+| `test_get_offers_for_rfx` | Non-superseded only |
+| `test_get_offer_history` | All revisions |
+| `test_override_offer_field` | Manual override |
+| `test_override_nonexistent_raises` | ValueError |
+
+**New tests**: ~9
+
+---
+
+## Section 9: Supporting Services
+
+| Service | File | Tests | Purpose |
+|---------|------|-------|---------|
+| Inventory | test_inventory_service.py | 3 | Search edge cases, empty org |
+| Auth | test_auth_service.py | 2 | Registration validation |
+| Channels | test_channels_email_out.py | 2 | Email send mocking |
+| Thread | test_thread_service.py | 2 | Message creation |
+| Defaults | test_defaults_service.py | 1 | Default creation |
+| Notification | test_notifications.py | 1 | Dispatch |
+
+**New tests**: ~11
+
+---
+
+## Execution Order
+
+### Phase 1: Bug-Catching Tests (Highest ROI)
+
+Write tests that expose the 7 known bugs. These tests should FAIL against
+current code, then the bugs are fixed, and the tests pass.
+
+- Section 2a: Quote total calculation (Bug #1)
+- Section 1a: State machine validation (Bug #3)
+- Section 3a: PO rendering and fallback (Bugs #2, #6, #7)
+- Section 4c: Null thread_id (Bug #5)
+
+### Phase 2: Core Service Coverage
+
+Expand `test_rfx_service.py` from 8% to 70%+ coverage.
+
+- Section 1b: RFx CRUD edge cases
+- Section 1c: Vendor suggestions and assignment
+- Section 8: Offer service tests
+
+### Phase 3: Agent Pipeline Tests
+
+Agent code has 0% coverage. Use mocked LLMs and real DB sessions.
+
+- Section 4a: Intent detection
+- Section 4b: Tool selection parsing
+- Section 4c: Tool executor
+- Section 4d: Agentic pipeline
+- Section 4e: Tool registry
+
+### Phase 4: API and Integration Tests
+
+- Section 5: Chat API
+- Section 7: Buyer API
+- Section 2b-2c: Vendor API
+- Section 3b-3c: Award/PO API
+- Section 6: Security
+
+### Phase 5: Supporting Services and Polish
+
+- Section 9: Supporting services
+- Coverage verification
+- PEP8/ruff pass
+
+---
+
+## Conventions
+
+### PEP8 and Project Style
+
+- **File naming**: `tests/unit/test_<module>.py` (snake_case, `test_` prefix)
+- **Class naming**: `class TestFeatureName:` (CamelCase, `Test` prefix)
+- **Method naming**: `def test_specific_behavior(self):` (descriptive, `test_` prefix)
+- **Docstrings**: One-line docstring per test class and method
+- **Line length**: 100 characters max
+- **Imports**: Sorted by isort, first-party = `aeros`
+- **Assertions**: Specific (`assert result.status == RFxStatus.DISPATCHED`)
+  not generic (`assert result`)
+- **Fixtures**: Shared from `conftest.py`; local fixtures at top of file
+- **Mocking**: LLM calls ALWAYS via `AsyncMock`; use `_mock_chat_response()`
+- **Independence**: No ordering dependencies between tests
+
+### Ruff Rules (from pyproject.toml)
+
+```
+E, F, W, I, UP, B, SIM, S, A, C4, DTZ, T20, RUF
+line-length = 100
+```
+
+---
+
+## Verification
 
 ```bash
-# All tests
+# Run all tests except LLM E2E
 python -m pytest tests/ --ignore=tests/integration/test_llm_e2e.py -x --tb=short
-
-# Specific file
-python -m pytest tests/unit/test_agent_intent.py -v
 
 # Coverage report
 python -m pytest tests/ --cov=src/aeros --cov-report=term-missing
+
+# PEP8 compliance
+ruff check tests/
+ruff check src/aeros/
+
+# Verify bug-catching tests
+python -m pytest tests/unit/test_vendor_api.py -k "total_uses_quantity" -v
+python -m pytest tests/unit/test_rfx_service.py -k "state_machine" -v
+python -m pytest tests/unit/test_po_agent.py -k "fallback" -v
 ```
 
-### Target Metrics:
+### Success Criteria
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| Total tests | 560 | 2,500+ |
-| Coverage | 81% | 92%+ |
-| Agent coverage | ~0% | 95%+ |
-| rfx_service coverage | 65% | 95%+ |
-| All services | varies | 90%+ |
+| Overall coverage | 29% | 55%+ |
+| rfx_service.py coverage | 8% | 70%+ |
+| Agent code coverage | 0% | 50%+ |
+| Ruff violations in tests | varies | 0 |
+| Bug-catching tests | 0/7 | 7/7 pass |
+| Test suite runtime | ~15s | <30s |
+
+---
+
+## Critical Files
+
+| File | What Needs to Change |
+|------|---------------------|
+| `src/aeros/services/rfx_service.py` | Add status validation to `cancel_rfx`, `dispatch_rfx`, `award_rfx` |
+| `src/aeros/api/vendor.py:338` | Fix `* 1` to `* quantity` from RFxLineItem |
+| `src/aeros/api/buyer.py:202-207` | Replace `except: pass` with proper error handling |
+| `src/aeros/agents/executor.py:215` | Guard against null thread_id |
+| `src/aeros/agents/po.py:171-175` | Fix HTML fallback content type |

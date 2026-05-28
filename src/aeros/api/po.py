@@ -49,10 +49,14 @@ def download_po(
         raise HTTPException(404, "PO not found")
     if not po.pdf_path or not os.path.exists(po.pdf_path):
         raise HTTPException(404, "PO PDF not found")
+    # Bug #7 fix: serve HTML fallback as text/html, not application/pdf
+    is_html = po.pdf_path.endswith(".html")
+    media_type = "text/html" if is_html else "application/pdf"
+    ext = "html" if is_html else "pdf"
     return FileResponse(
         po.pdf_path,
-        media_type="application/pdf",
-        filename=f"PO_{po.po_number}.pdf",
+        media_type=media_type,
+        filename=f"PO_{po.po_number}.{ext}",
     )
 
 

@@ -191,7 +191,7 @@ async def award_rfx(
 ):
     _verify_rfx_ownership(session, rfx_id, caller)
     try:
-        rfx = rfx_service.award_rfx(session, rfx_id, caller.user_id, body.decisions)
+        rfx_service.award_rfx(session, rfx_id, caller.user_id, body.decisions)
     except ValueError as e:
         msg = str(e)
         if "not found" in msg.lower():
@@ -199,14 +199,25 @@ async def award_rfx(
         raise HTTPException(400, msg) from None
 
     # Trigger PO generation after successful award
+    po_error = None
     try:
         from aeros.workers.po_render import render_and_send_po
 
         await render_and_send_po(rfx_id, body.decisions)
-    except Exception:  # noqa: S110
-        pass
+    except Exception as e:
+        po_error = str(e)
+        import structlog
 
-    return rfx
+        structlog.get_logger().error(
+            "award.po_generation_failed",
+            rfx_id=rfx_id,
+            error=po_error,
+        )
+
+    result = rfx_service.get_rfx_with_details(session, rfx_id) or {}
+    if po_error:
+        result["po_generation_error"] = po_error
+    return result
 
 
 # --- Activity ---

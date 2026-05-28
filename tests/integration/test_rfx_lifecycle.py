@@ -125,9 +125,11 @@ class TestRFxLifecycle:
         # The agentic ProcurementAgent makes 2 LLM calls per iteration:
         # Call 1: tool selection (JSON), Call 2: response generation (text)
         # It may continue for more iterations, so provide enough responses.
-        tool_selection = json.dumps([
-            {"tool": "create_rfx", "params": {"title": "Weekly Grains Order"}},
-        ])
+        tool_selection = json.dumps(
+            [
+                {"tool": "create_rfx", "params": {"title": "Weekly Grains Order"}},
+            ]
+        )
         human_response = (
             "I've created RFx 'Weekly Grains Order' for you. "
             "You can now add line items and dispatch to vendors."

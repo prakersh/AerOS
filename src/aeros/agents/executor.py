@@ -211,9 +211,11 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
                 Thread.vendor_id == vendor.id,
             )
         ).first()
+        if not thread:
+            raise ValueError("No thread found for this RFx — vendor may not be invited")
 
         msg = Message(
-            thread_id=thread.id if thread else None,
+            thread_id=thread.id,
             sender_user_id=user_id,
             sender_kind="vendor",
             channel="in_app",
