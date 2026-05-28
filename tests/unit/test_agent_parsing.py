@@ -49,14 +49,28 @@ class TestParseEdgeCases:
         assert len(result) == 1
         assert result[0][0] == "create_rfx"
 
-    def test_legacy_dict_format(self):
-        """Legacy format: {"create_rfx": {"title": "X"}}."""
-        content = '{"create_rfx": {"title": "X"}, "list_vendors": {}}'
+    def test_tool_calls_wrapper_format(self):
+        """LLM wraps tools in {"thoughts": "...", "tool_calls": [...]}."""
+        content = (
+            '{"thoughts": "user needs rice", '
+            '"tool_calls": [{"tool": "create_rfx", "params": {"title": "Rice"}}]}'
+        )
         result = _parse_tool_selections(content)
-        assert len(result) == 2
-        tool_names = [r[0] for r in result]
-        assert "create_rfx" in tool_names
-        assert "list_vendors" in tool_names
+        assert len(result) == 1
+        assert result[0][0] == "create_rfx"
+
+    def test_tools_wrapper_format(self):
+        """LLM wraps tools in {"tools": [...]}."""
+        content = '{"tools": [{"tool": "list_vendors", "params": {}}]}'
+        result = _parse_tool_selections(content)
+        assert len(result) == 1
+        assert result[0][0] == "list_vendors"
+
+    def test_unknown_dict_keys_return_empty(self):
+        """Arbitrary dict keys should NOT be treated as tool names."""
+        content = '{"random_key": {"title": "X"}, "another_key": {}}'
+        result = _parse_tool_selections(content)
+        assert len(result) == 0
 
     def test_invalid_json(self):
         """Random text should return empty list."""

@@ -75,10 +75,25 @@ async def chat(
 
     try:
         result = await agent.run(ctx, body.message)
+        data = result.data or {}
+
+        # Bridge: extract tool results into top-level fields the frontend expects
+        for tr in data.get("tool_results", []):
+            if not tr.get("success"):
+                continue
+            tool_data = tr.get("data") or {}
+            if tr["tool"] == "create_rfx" and "rfx_id" in tool_data:
+                data["rfx_id"] = tool_data["rfx_id"]
+                data["status"] = tool_data.get("status", "created")
+            elif tr["tool"] == "list_vendors":
+                data["suggested_vendors"] = tool_data
+            elif tr["tool"] == "evaluate_offers":
+                data["evaluation"] = tool_data
+
         return JSONResponse(
             content={
                 "message": result.message,
-                "data": result.data,
+                "data": data,
                 "success": result.success,
             }
         )

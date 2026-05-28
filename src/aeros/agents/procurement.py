@@ -301,9 +301,9 @@ RULES:
 7. ALWAYS reference user's existing IDs from <user_data>
 8. Support English, Hindi, Hinglish
 
-Return ONLY JSON:
+Return ONLY a JSON array — no wrapper keys, no "thoughts", no explanation:
 [{{"tool": "name", "params": {{...}}}}]
-Or {{}} for greetings.
+Or {{}} for greetings. Do NOT wrap in {{"tool_calls": ...}} or {{"thoughts": ...}}.
 """
 
 RESPONSE_PROMPT = """\
@@ -657,13 +657,13 @@ def _parse_tool_selections(content: str) -> list[tuple[str, dict]]:
             return []
         if "tool" in parsed:
             return [(parsed["tool"], parsed.get("params", {}))]
-        results = []
-        for key, val in parsed.items():
-            if isinstance(val, dict):
-                results.append((key, val))
-            else:
-                results.append((key, {"value": val}))
-        return results
+        # Handle {"thoughts": "...", "tool_calls": [...]} wrapper format
+        if "tool_calls" in parsed and isinstance(parsed["tool_calls"], list):
+            parsed = parsed["tool_calls"]
+        elif "tools" in parsed and isinstance(parsed["tools"], list):
+            parsed = parsed["tools"]
+        else:
+            return []
 
     if isinstance(parsed, list):
         results = []
