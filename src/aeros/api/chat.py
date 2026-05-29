@@ -248,6 +248,7 @@ async def create_rfx_from_draft(
             currency_for_this_rfx=draft.get("currency", "INR"),
             notes_for_vendors=draft.get("notes_for_vendors"),
         )
+        assert rfx.id is not None
 
         # Accept both "line_items" (frontend shape) and "items" (agent shape)
         line_items_data = draft.get("line_items") or draft.get("items") or []

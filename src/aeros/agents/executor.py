@@ -227,9 +227,7 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
         # A freshly drafted RFx has no vendors invited yet. Auto-invite the
         # category-matched vendors so "send it to vendors" actually reaches
         # inboxes instead of dispatching to nobody.
-        already = session.exec(
-            select(RFxVendor).where(RFxVendor.rfx_id == rfx_id)
-        ).first()
+        already = session.exec(select(RFxVendor).where(RFxVendor.rfx_id == rfx_id)).first()
         invited_names: list[str] = []
         if not already:
             suggestions = rfx_service.get_vendor_suggestions(session, rfx_id, org_id).get(

@@ -77,6 +77,7 @@ def _blocks_for_create_rfx(data: dict[str, Any]) -> list[Block]:
 
     line_items = data.get("line_items") or []
     if line_items:
+
         def _qty(value: Any) -> str:
             if isinstance(value, float) and value.is_integer():
                 return str(int(value))

@@ -251,7 +251,10 @@ def _backfill_rfx_id(
 # can attach real, SKU-matched line items to a drafted RFx. The model creates the
 # RFx shell but routinely skips add_line_items, leaving an empty draft — we fill
 # it in deterministically instead.
-_ITEM_CLAUSE_RE = re.compile(rf"(\d+(?:\.\d+)?)\s*({_UNIT})\b\s*(?:of\s+)?([a-z][a-z ]*)", re.IGNORECASE)
+_ITEM_CLAUSE_RE = re.compile(
+    rf"(\d+(?:\.\d+)?)\s*({_UNIT})\b\s*(?:of\s+)?([a-z][a-z ]*)",
+    re.IGNORECASE,
+)
 # Words that end an item name (connectors and scheduling tails).
 _ITEM_TAIL_RE = re.compile(
     r"\b(?:and|with|plus|by|before|after|delivered|deliver|delivery|due|within|"
