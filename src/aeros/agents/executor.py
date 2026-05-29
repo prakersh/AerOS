@@ -216,9 +216,38 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
         return {"invited": True, "vendor_id": params["vendor_id"], "status": rv.status.value}
 
     if name == "dispatch_rfx":
-        _assert_rfx_owner(session, params["rfx_id"], user_id)
-        rfx = rfx_service.dispatch_rfx(session, params["rfx_id"], user_id)
-        return {"rfx_id": rfx.id, "status": rfx.status.value}
+        from sqlmodel import select
+
+        from aeros.channels.correlation import generate_correlation_token
+        from aeros.models.rfx import RFxVendor
+
+        rfx_id = params["rfx_id"]
+        _assert_rfx_owner(session, rfx_id, user_id)
+
+        # A freshly drafted RFx has no vendors invited yet. Auto-invite the
+        # category-matched vendors so "send it to vendors" actually reaches
+        # inboxes instead of dispatching to nobody.
+        already = session.exec(
+            select(RFxVendor).where(RFxVendor.rfx_id == rfx_id)
+        ).first()
+        invited_names: list[str] = []
+        if not already:
+            suggestions = rfx_service.get_vendor_suggestions(session, rfx_id, org_id).get(
+                "suggestions", []
+            )
+            for s in suggestions[:5]:
+                line_ids = [mi["line_item_id"] for mi in s.get("matching_items", [])]
+                _, token_hash = generate_correlation_token(rfx_id, s["vendor_id"])
+                rfx_service.invite_vendor(session, rfx_id, s["vendor_id"], token_hash, line_ids)
+                invited_names.append(s.get("vendor_name", f"Vendor #{s['vendor_id']}"))
+
+        rfx = rfx_service.dispatch_rfx(session, rfx_id, user_id)
+        return {
+            "rfx_id": rfx.id,
+            "status": rfx.status.value,
+            "vendors": invited_names,
+            "vendor_count": len(invited_names),
+        }
 
     # ── Evaluation ──
     if name == "evaluate_offers":

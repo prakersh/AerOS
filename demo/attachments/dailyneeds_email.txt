@@ -1,0 +1,20 @@
+Dear Procurement Team,
+
+Thank you for the RFx. Our quotation for the requested items:
+
+Item                Qty    Unit    Unit Price (INR)    Total (INR)
+-------------------------------------------------------------------
+Tomato              200    kg            18.00            3,600.00
+Onion               150    kg            21.50            3,225.00
+Full Cream Milk     300    ltr           56.00           16,800.00
+Paneer               50    kg           315.00           15,750.00
+-------------------------------------------------------------------
+Grand Total:                                             39,375.00
+
+Payment Terms: NET15
+Delivery: Daily before 6 AM
+Validity: 7 days
+
+Regards,
+Daily Needs Distributors
++91-98765-43210

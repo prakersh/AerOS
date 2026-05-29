@@ -30,6 +30,16 @@ async def _extract_excel(file_path: str) -> str:
     return "\n\n".join(parts) if parts else "[Empty spreadsheet]"
 
 
+def _read_csv_rows(content: str, dialect: Any) -> list[str]:
+    stream = io.StringIO(content)
+    reader = csv.reader(stream, dialect) if dialect else csv.reader(stream)
+    rows = []
+    for row in reader:
+        if any(c.strip() for c in row):
+            rows.append(" | ".join(row))
+    return rows
+
+
 async def _extract_csv(file_path: str) -> str:
     with open(file_path, newline="", encoding="utf-8", errors="replace") as f:
         content = f.read()
@@ -39,11 +49,12 @@ async def _extract_csv(file_path: str) -> str:
     except csv.Error:
         dialect = None
 
-    stream = io.StringIO(content)
-    reader = csv.reader(stream, dialect) if dialect else csv.reader(stream)
-    rows = []
-    for row in reader:
-        if any(c.strip() for c in row):
-            rows.append(" | ".join(row))
+    # The sniffer can guess a bogus delimiter on files with title/preamble rows
+    # (common in real vendor quotes), which then makes csv.reader raise. Fall
+    # back to the default comma dialect rather than failing the whole extraction.
+    try:
+        rows = _read_csv_rows(content, dialect)
+    except csv.Error:
+        rows = _read_csv_rows(content, None)
 
     return "\n".join(rows) if rows else "[Empty CSV]"

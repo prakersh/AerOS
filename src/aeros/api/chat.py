@@ -285,51 +285,101 @@ async def create_rfx_from_draft(
                     }
                 )
 
-        if li_records:
-            rfx_service.add_line_items(session, rfx.id, li_records)  # type: ignore[arg-type]
+        li_objs = rfx_service.add_line_items(session, rfx.id, li_records) if li_records else []
+        all_li_ids = [li.id for li in li_objs]
 
-        # Suggest vendors based on the SKUs in the draft
+        # Auto-assign vendors: every vendor that can supply a line item (matched
+        # by category) is invited to quote on the items it covers. The buyer only
+        # picks the contract winner later, at award time. A manual vendor list in
+        # the draft overrides this and restricts the RFx to those vendors.
         from aeros.services import vendor_service
 
         vendors = vendor_service.list_vendors(session, caller.org_id or 0)
+        vendor_by_id = {v.id: v for v in vendors}
+
+        def _channel(v: Any) -> str:
+            return "in_app" if v.vendor_user_id else ("email" if v.primary_email else "telegram")
+
+        manual_vendor_ids = draft.get("vendor_ids") or [
+            x.get("vendor_id") for x in (draft.get("vendors") or []) if x.get("vendor_id")
+        ]
+
+        suggestion_data = (
+            rfx_service.get_vendor_suggestions(session, rfx.id, caller.org_id or 0)
+            if all_li_ids
+            else {"suggestions": [], "unassigned_items": []}
+        )
+        match_by_vendor = {
+            s["vendor_id"]: [mi["line_item_id"] for mi in s["matching_items"]]
+            for s in suggestion_data["suggestions"]
+        }
+
+        assignments: list[dict[str, Any]] = []
+        if manual_vendor_ids:
+            for vid in manual_vendor_ids:
+                if vid not in vendor_by_id:
+                    continue
+                ids = match_by_vendor.get(vid) or all_li_ids
+                if ids:
+                    assignments.append({"vendor_id": vid, "line_item_ids": ids})
+        else:
+            for vid, ids in match_by_vendor.items():
+                if ids:
+                    assignments.append({"vendor_id": vid, "line_item_ids": ids})
+
+        if assignments:
+            rfx_service.assign_vendors_to_items(session, rfx.id, caller.user_id, assignments)
+
+        # Build the dispatch plan from the assigned vendors. If nothing matched
+        # (e.g. vendors have no categories recorded), fall back to listing vendors
+        # so the buyer can still pick manually — nothing is auto-assigned then.
+        plan_vendor_ids = [a["vendor_id"] for a in assignments] or [v.id for v in vendors[:5]]
         suggested = []
-        for v in vendors[:5]:
+        dispatch_plan = []
+        for vid in plan_vendor_ids:
+            v = vendor_by_id.get(vid)
+            if not v:
+                continue
+            channel = _channel(v)
             suggested.append(
                 {
                     "vendor_id": v.id,
                     "vendor_name": v.name,
                     "categories": v.category_ids_csv or "",
-                    "recommended_channel": (
-                        "in_app"
-                        if v.vendor_user_id
-                        else ("email" if v.primary_email else "telegram")
-                    ),
+                    "recommended_channel": channel,
                 }
             )
-
-        dispatch_plan = []
-        for v in vendors[:5]:
-            channel = "in_app" if v.vendor_user_id else ("email" if v.primary_email else "telegram")
-            detail = v.primary_email or v.name
             dispatch_plan.append(
                 {
                     "vendor_id": v.id,
                     "vendor_name": v.name,
                     "channel": channel,
-                    "channel_detail": detail,
+                    "channel_detail": v.primary_email or v.name,
                 }
+            )
+
+        auto_assigned = bool(assignments)
+        if auto_assigned:
+            n = len(assignments)
+            message = (
+                f"RFx '{rfx.title}' created. {n} vendor(s) auto-assigned to quote on "
+                "the items they supply — review and dispatch:"
+            )
+        else:
+            message = (
+                f"RFx '{rfx.title}' created successfully! Here are vendors you can dispatch to:"
             )
 
         return JSONResponse(
             content={
-                "message": (
-                    f"RFx '{rfx.title}' created successfully! Here are vendors you can dispatch to:"
-                ),
+                "message": message,
                 "data": {
                     "rfx_id": rfx.id,
                     "status": "created",
+                    "auto_assigned": auto_assigned,
                     "suggested_vendors": suggested,
                     "dispatch_plan": dispatch_plan,
+                    "unassigned_items": suggestion_data["unassigned_items"],
                 },
                 "success": True,
             }

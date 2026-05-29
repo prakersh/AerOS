@@ -74,6 +74,35 @@ def _blocks_for_create_rfx(data: dict[str, Any]) -> list[Block]:
         {"label": "Status", "value": status_label(data.get("status", "drafting"))},
     ]
     blocks: list[Block] = [_card("Request drafted", fields, accent="indigo")]
+
+    line_items = data.get("line_items") or []
+    if line_items:
+        def _qty(value: Any) -> str:
+            if isinstance(value, float) and value.is_integer():
+                return str(int(value))
+            return str(value)
+
+        rows = [
+            {
+                "item": li.get("sku_name") or li.get("sku_code") or "—",
+                "qty": f"{_qty(li.get('qty'))} {li.get('unit') or ''}".strip(),
+                "target": _money(li.get("target_price")) if li.get("target_price") else "—",
+            }
+            for li in line_items
+        ]
+        blocks.append(
+            {
+                "type": "table",
+                "title": "Requested items",
+                "columns": [
+                    {"key": "item", "label": "Item"},
+                    {"key": "qty", "label": "Qty", "align": "right"},
+                    {"key": "target", "label": "Target price", "align": "right"},
+                ],
+                "rows": rows,
+            }
+        )
+
     if rfx_id:
         blocks.append(
             _actions(
@@ -205,16 +234,30 @@ def _blocks_for_evaluate(data: dict[str, Any]) -> list[Block]:
 
 
 def _blocks_for_dispatch(data: dict[str, Any]) -> list[Block]:
-    return [
-        _card(
-            "Sent to vendors",
-            [
-                {"label": "Reference", "value": f"#{data.get('rfx_id')}"},
-                {"label": "Status", "value": status_label(data.get("status", "dispatched"))},
-            ],
-            accent="green",
-        )
+    rfx_id = data.get("rfx_id")
+    vendors = data.get("vendors") or []
+    fields = [
+        {"label": "Reference", "value": f"#{rfx_id}"},
+        {"label": "Status", "value": status_label(data.get("status", "dispatched"))},
     ]
+    if vendors:
+        fields.append({"label": "Vendors", "value": ", ".join(vendors)})
+    blocks: list[Block] = [_card("Sent to vendors", fields, accent="green")]
+    if rfx_id:
+        blocks.append(
+            _actions(
+                [
+                    {
+                        "id": "open_rfx",
+                        "label": "Open request",
+                        "style": "primary",
+                        "kind": "navigate",
+                        "path": f"/buyer/rfx/{rfx_id}",
+                    }
+                ]
+            )
+        )
+    return blocks
 
 
 def _blocks_for_submit_quote(data: dict[str, Any]) -> list[Block]:

@@ -168,6 +168,183 @@ def detect_intent(message: str) -> list[str]:
     return intents
 
 
+# Read-only tools we can run straight from deterministic intent detection when
+# the LLM selection step returns nothing. The chat model (mimo) is unreliable at
+# emitting tool calls for phrasings like "evaluate the offers for RFx #1" — it
+# sometimes replies "please share the offers" instead of calling the tool. These
+# are all non-destructive and need at most an rfx_id we can resolve from text.
+_FALLBACK_TOOLS = {"evaluate_offers", "list_vendors", "list_rfx", "daily_summary"}
+_RFX_ID_RE = re.compile(r"(?:rfx|rfq)\s*#?\s*(\d+)|#\s*(\d+)", re.IGNORECASE)
+
+
+def _resolve_rfx_id(message: str, ctx: AgentContext) -> int | None:
+    """Find the RFx an intent refers to: explicit number, ctx, else most recent."""
+    m = _RFX_ID_RE.search(message)
+    if m:
+        return int(m.group(1) or m.group(2))
+    if ctx.rfx_id:
+        return ctx.rfx_id
+    from aeros.services import rfx_service
+
+    try:
+        rfx_list = rfx_service.list_rfx_for_buyer(ctx.session, ctx.caller.user_id)
+    except Exception:
+        return None
+    if not rfx_list:
+        return None
+    with_offers = [r for r in rfx_list if r.get("vendor_count")]
+    chosen = with_offers[0] if with_offers else rfx_list[0]
+    return chosen.get("id")
+
+
+# Read-only RFx tools that need an rfx_id. If the model selects one but forgets
+# the id (a common mimo slip), we resolve it from the message rather than letting
+# the tool hard-fail with "missing RFx ID".
+_RFX_ID_TOOLS = {"evaluate_offers", "get_rfx_details", "get_vendor_suggestions"}
+
+# Mutating tools that must run at most once per user turn. The agentic loop
+# re-runs tool *selection* on the same message each iteration, so without this
+# guard a single "create an RFx" request fires create_rfx on every iteration
+# (max_iterations=3 → three duplicate RFx). We drop any of these that already
+# succeeded earlier in the same turn.
+_ONESHOT_TOOLS = {"create_rfx", "dispatch_rfx"}
+
+
+def _resolve_dispatch_rfx_id(message: str, ctx: AgentContext) -> int | None:
+    """Resolve which RFx to dispatch: explicit #, then context, then newest draft."""
+    m = _RFX_ID_RE.search(message)
+    if m:
+        return int(m.group(1) or m.group(2))
+    if ctx.rfx_id:
+        return ctx.rfx_id
+    from aeros.services import rfx_service
+
+    try:
+        rfx_list = rfx_service.list_rfx_for_buyer(ctx.session, ctx.caller.user_id)
+    except Exception:
+        return None
+    drafting = [r for r in rfx_list if r.get("status") == "drafting"]
+    if drafting:
+        return drafting[0].get("id")
+    return None
+
+
+def _backfill_rfx_id(
+    selected: list[tuple[str, dict[str, Any]]], message: str, ctx: AgentContext
+) -> list[tuple[str, dict[str, Any]]]:
+    """Fill in a missing rfx_id for read-only RFx tools the model under-specified."""
+    patched: list[tuple[str, dict[str, Any]]] = []
+    for tool_name, params in selected:
+        if tool_name in _RFX_ID_TOOLS and not params.get("rfx_id"):
+            rid = _resolve_rfx_id(message, ctx)
+            if rid is not None:
+                params = {**params, "rfx_id": rid}
+        elif tool_name == "dispatch_rfx" and not params.get("rfx_id"):
+            rid = _resolve_dispatch_rfx_id(message, ctx)
+            if rid is not None:
+                params = {**params, "rfx_id": rid}
+        patched.append((tool_name, params))
+    return patched
+
+
+# Pull "<qty> <unit> [of] <item name>" clauses out of a free-text request so we
+# can attach real, SKU-matched line items to a drafted RFx. The model creates the
+# RFx shell but routinely skips add_line_items, leaving an empty draft — we fill
+# it in deterministically instead.
+_ITEM_CLAUSE_RE = re.compile(rf"(\d+(?:\.\d+)?)\s*({_UNIT})\b\s*(?:of\s+)?([a-z][a-z ]*)", re.IGNORECASE)
+# Words that end an item name (connectors and scheduling tails).
+_ITEM_TAIL_RE = re.compile(
+    r"\b(?:and|with|plus|by|before|after|delivered|deliver|delivery|due|within|"
+    r"tomorrow|today|tonight|morning|evening|afternoon|asap|please|create|raise|order)\b.*$",
+    re.IGNORECASE,
+)
+
+
+def _find_sku(session: Session, org_id: int, name: str) -> Any:
+    from aeros.services import inventory_service
+
+    name = name.strip()
+    candidates = [name]
+    if name.endswith("es"):
+        candidates.append(name[:-2])
+    if name.endswith("s"):
+        candidates.append(name[:-1])
+    tokens = name.split()
+    if len(tokens) > 1:
+        candidates.append(tokens[-1])  # e.g. "full cream milk" -> "milk"
+    for query in candidates:
+        if not query:
+            continue
+        matches = inventory_service.search_skus(session, org_id, query)
+        if matches:
+            return matches[0]
+    return None
+
+
+def _resolve_line_items(message: str, session: Session, org_id: int) -> list[dict[str, Any]]:
+    """Resolve '200kg tomatoes, 300 litres of milk' into SKU-backed line items."""
+    items: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for match in _ITEM_CLAUSE_RE.finditer(message):
+        qty = float(match.group(1))
+        unit = match.group(2).lower()
+        name = _ITEM_TAIL_RE.sub("", match.group(3)).strip()
+        if not name:
+            continue
+        sku = _find_sku(session, org_id, name)
+        if not sku or sku.id in seen:
+            continue
+        seen.add(sku.id)
+        items.append(
+            {
+                "sku_id": sku.id,
+                "qty": qty,
+                "unit_override": unit,
+                "target_price": sku.last_price,
+                "sku_name": sku.name,
+            }
+        )
+    return items
+
+
+def _derive_rfx_title(items: list[dict[str, Any]]) -> str:
+    names = [it["sku_name"] for it in items][:3]
+    if not names:
+        return "New procurement request"
+    head = ", ".join(names)
+    suffix = "" if len(items) <= 3 else f" +{len(items) - 3} more"
+    return f"Procurement: {head}{suffix}"
+
+
+def _deterministic_tool_calls(
+    detected: list[str], message: str, ctx: AgentContext
+) -> list[tuple[str, dict[str, Any]]]:
+    """Build tool calls from detected intent when the LLM picks nothing."""
+    calls: list[tuple[str, dict[str, Any]]] = []
+    for tool_name in detected:
+        if tool_name == "create_rfx":
+            # Build a titled create from the request itself; line items are
+            # attached deterministically after execution.
+            items = _resolve_line_items(message, ctx.session, ctx.caller.org_id or 0)
+            calls.append((tool_name, {"title": _derive_rfx_title(items)}))
+            continue
+        if tool_name == "dispatch_rfx":
+            rid = _resolve_dispatch_rfx_id(message, ctx)
+            if rid is not None:
+                calls.append((tool_name, {"rfx_id": rid}))
+            continue
+        if tool_name not in _FALLBACK_TOOLS:
+            continue
+        if tool_name == "evaluate_offers":
+            rid = _resolve_rfx_id(message, ctx)
+            if rid is None:
+                continue
+            calls.append((tool_name, {"rfx_id": rid}))
+        else:
+            calls.append((tool_name, {}))
+    return calls
+
+
 # ============================================
 # CONTEXT BUILDER
 # ============================================
@@ -325,10 +502,12 @@ RULES:
 2. On tool failure, say what went wrong in one line.
 3. RFx created → mention ID + one next step.
 4. SAME language as user (English/Hindi/Hinglish).
-5. Tables: compact, no filler text around them.
+5. NEVER draw tables, lists, or repeat the raw rows — the UI renders the
+   structured results below your text. Give a one-line takeaway instead
+   (e.g. which vendor is cheapest, how many vendors quoted).
 6. Suggest ONE logical next action, not a list.
 7. Never start with "Sure!" / "Of course!" / "Great news!". Be direct.
-8. Max 3 sentences for any response. Data tables don't count.
+8. Max 3 sentences. Never reply with an empty message.
 """
 
 
@@ -447,6 +626,7 @@ class ProcurementAgent(BaseAgent):
         # Agentic loop
         iteration = 0
         final_response = ""
+        executed_oneshot: set[str] = set()
 
         while (
             iteration < AGENT_CONFIG["max_iterations"] and llm_calls < AGENT_CONFIG["max_llm_calls"]
@@ -493,11 +673,17 @@ class ProcurementAgent(BaseAgent):
 
             # Parse tool selections
             selected = _parse_tool_selections(selection_resp.content)
+            selected = _backfill_rfx_id(selected, safe_input, ctx)
 
-            # A truncated selection response yields unparseable JSON, which
-            # _parse_tool_selections returns as []. Without this guard the agent
-            # would silently fall into the "no tools needed" path and drop the
-            # user's actual request. Surface it instead.
+            # The chat model (mimo) is an unreliable tool-caller: for the same
+            # "create an RFx for ..." prompt it emits the call only ~half the time
+            # and sometimes truncates mid-JSON. Whenever it gives us nothing usable
+            # but the deterministic detector saw a clear intent, build the tool
+            # calls ourselves. This is what makes create/dispatch/compare reliable.
+            if not selected and detected:
+                selected = _deterministic_tool_calls(detected, safe_input, ctx)
+
+            # Truncated AND no intent we can act on — ask the user to simplify.
             if not selected and selection_resp.finish_reason == "length":
                 logger.warning("agent.select.truncated", iteration=iteration)
                 final_response = (
@@ -505,6 +691,11 @@ class ProcurementAgent(BaseAgent):
                     "I can get each part right?"
                 )
                 break
+
+            # Drop one-shot mutating tools (e.g. create_rfx) that already ran this
+            # turn so a continued loop can't duplicate them.
+            if executed_oneshot:
+                selected = [(t, p) for (t, p) in selected if t not in executed_oneshot]
 
             if not selected:
                 # No tools needed — generate conversational response
@@ -554,6 +745,8 @@ class ProcurementAgent(BaseAgent):
                 iteration_results.append(result)
                 all_tool_results.append(result)
                 all_tools_called.append(tool_name)
+                if tool_name in _ONESHOT_TOOLS and result.success:
+                    executed_oneshot.add(tool_name)
             step.end_time = time.monotonic()
             step.status = "success"
             step.details = {
@@ -561,6 +754,11 @@ class ProcurementAgent(BaseAgent):
                 "successful": sum(1 for r in iteration_results if r.success),
             }
             steps.append(step)
+
+            # A freshly created RFx is just a titled shell — the model rarely
+            # follows up with add_line_items. Resolve the items from the request
+            # and attach them so the draft is real and renders a details table.
+            self._populate_draft_line_items(ctx, safe_input, iteration_results)
 
             # Step 6: Generate response from results
             await emit("respond")
@@ -619,6 +817,46 @@ class ProcurementAgent(BaseAgent):
             total_output_tokens,
         )
 
+    def _populate_draft_line_items(
+        self, ctx: AgentContext, message: str, results: list[ToolResult]
+    ) -> None:
+        from aeros.services import rfx_service
+
+        created = next(
+            (r for r in results if r.tool == "create_rfx" and r.success and r.data.get("rfx_id")),
+            None,
+        )
+        if not created:
+            return
+        rfx_id = created.data["rfx_id"]
+        org_id = ctx.caller.org_id or 0
+
+        details = rfx_service.get_rfx_with_details(ctx.session, rfx_id) or {}
+        existing = details.get("line_items", [])
+
+        if not existing:
+            resolved = _resolve_line_items(message, ctx.session, org_id)
+            if resolved:
+                rfx_service.add_line_items(
+                    ctx.session,
+                    rfx_id,
+                    [{k: v for k, v in it.items() if k != "sku_name"} for it in resolved],
+                )
+                details = rfx_service.get_rfx_with_details(ctx.session, rfx_id) or {}
+                existing = details.get("line_items", [])
+
+        # Surface the items on the result so the UI renders a details table.
+        created.data["line_items"] = [
+            {
+                "sku_name": li.get("sku_name"),
+                "sku_code": li.get("sku_code"),
+                "qty": li.get("qty"),
+                "unit": li.get("unit") or li.get("unit_override"),
+                "target_price": li.get("target_price"),
+            }
+            for li in existing
+        ]
+
     def _build_result(
         self,
         message: str,
@@ -652,12 +890,27 @@ class ProcurementAgent(BaseAgent):
             for r in tool_results
         ]
 
+        blocks = build_blocks_from_results(tool_result_dicts)
+
+        # Safety net: never return a blank bubble. The response LLM occasionally
+        # returns an empty string; pair it with a lead-in (or a clarification when
+        # there are no structured blocks to show either).
+        if not (message or "").strip():
+            message = (
+                "Here's what I found:"
+                if blocks
+                else (
+                    "I didn't catch a clear action there. I can list your RFx, "
+                    "find vendors, or compare offers — what would you like?"
+                )
+            )
+
         return AgentResult(
             message=message,
             data={
                 "tools_called": tools_called,
                 "tool_results": tool_result_dicts,
-                "blocks": build_blocks_from_results(tool_result_dicts),
+                "blocks": blocks,
                 "performance": {
                     "iterations": iterations,
                     "llm_calls": llm_calls,
@@ -721,8 +974,8 @@ def _parse_tool_selections(content: str) -> list[tuple[str, dict[str, Any]]]:
     return []
 
 
-def _check_continuation(results: list[ToolResult], response: str) -> bool:
-    if any(not r.success for r in results):
-        return False
-    has_create = any(r.tool == "create_rfx" and r.success for r in results)
-    return bool(has_create and "dispatch" not in response.lower())
+def _check_continuation(_results: list[ToolResult], _response: str) -> bool:
+    # The loop currently has no follow-up step to take after a one-shot tool, and
+    # re-running selection on the same message only risks repeating work. Stop
+    # after any successful execution; the response already summarizes it.
+    return False

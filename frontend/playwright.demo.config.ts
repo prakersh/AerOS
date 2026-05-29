@@ -8,7 +8,7 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: "list",
-  timeout: 240000,
+  timeout: 600000,
   use: {
     baseURL: "http://localhost:5173",
     viewport: { width: 1440, height: 900 },
@@ -16,5 +16,12 @@ export default defineConfig({
     actionTimeout: 30000,
     launchOptions: { slowMo: 350 },
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  // Override the device's 1280x720 viewport so the page fills the 1440x900
+  // video canvas (otherwise the recording has gray padding on the edges).
+  projects: [
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } },
+    },
+  ],
 });

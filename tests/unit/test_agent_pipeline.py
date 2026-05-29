@@ -160,11 +160,12 @@ class TestToolExecutionFlow:
 class TestContinuationLogic:
     """Continuation logic after tool execution."""
 
-    def test_continuation_after_create_rfx(self):
-        """create_rfx success should trigger continuation when dispatch not mentioned."""
+    def test_no_continuation_after_create_rfx(self):
+        """create_rfx must NOT continue the loop: re-running selection on the same
+        message just re-picks create_rfx and spawns duplicate RFx."""
         results = [ToolResult(tool="create_rfx", success=True, data={"rfx_id": 1})]
         response = "RFx #1 created successfully."
-        assert _check_continuation(results, response) is True
+        assert _check_continuation(results, response) is False
 
     def test_continuation_stops_on_dispatch_keyword(self):
         """'dispatch' in response should stop continuation."""
