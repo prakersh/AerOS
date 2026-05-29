@@ -29,6 +29,12 @@ import {
   formatCountdown,
   formatDate,
 } from "@/lib/format";
+import {
+  senderLabel,
+  channelLabel,
+  extractionLabel,
+  rfxStatusLabel,
+} from "@/lib/labels";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -208,14 +214,14 @@ function MessageBubble({ msg }: { msg: ThreadMessage }) {
       >
         <div className="mb-1.5 flex items-center gap-2">
           <span
-            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium capitalize ${SENDER_COLORS[msg.sender_kind]}`}
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${SENDER_COLORS[msg.sender_kind]}`}
           >
-            {msg.sender_kind}
+            {senderLabel(msg.sender_kind)}
           </span>
           <span
             className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${CHANNEL_COLORS[msg.channel]}`}
           >
-            {msg.channel.replace("_", " ")}
+            {channelLabel(msg.channel)}
           </span>
         </div>
         <p className="text-sm whitespace-pre-wrap">{msg.body_text}</p>
@@ -340,16 +346,16 @@ function RfxContextPanel({
         <div className="mt-4 grid grid-cols-1 gap-4 rounded-lg border border-zinc-800 bg-zinc-950/50 p-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-600">
-              RFx ID
+              Reference
             </label>
-            <p className="mt-1 text-sm text-zinc-300">{rfx.rfx_id}</p>
+            <p className="mt-1 text-sm text-zinc-300">#{rfx.rfx_id}</p>
           </div>
           <div>
             <label className="block text-[10px] font-medium uppercase tracking-wider text-zinc-600">
               Status
             </label>
-            <p className="mt-1 text-sm text-zinc-300 capitalize">
-              {rfx.rfx_status}
+            <p className="mt-1 text-sm text-zinc-300">
+              {rfxStatusLabel(rfx.rfx_status)}
             </p>
           </div>
           {rfx.deadline && (
@@ -522,7 +528,7 @@ function QuoteFormTab({
     <form onSubmit={handleSubmit} className="space-y-6">
       {isRfxClosed && (
         <div className="rounded-lg border border-amber-800/50 bg-amber-900/20 px-4 py-3 text-sm text-amber-400">
-          This RFx is <span className="font-semibold">{rfx.rfx_status}</span> — quote submission is disabled.
+          This request is <span className="font-semibold">{rfxStatusLabel(rfx.rfx_status)}</span>, so new quotes can't be submitted.
         </div>
       )}
       {eq && !isRfxClosed && (
@@ -1004,9 +1010,9 @@ function UploadAnalyzeTab({
                 </div>
                 <div className="flex items-center gap-3">
                   <span
-                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium capitalize ${EXTRACTION_COLORS[f.extraction_status]}`}
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${EXTRACTION_COLORS[f.extraction_status]}`}
                   >
-                    {f.extraction_status}
+                    {extractionLabel(f.extraction_status)}
                   </span>
                   <button
                     type="button"

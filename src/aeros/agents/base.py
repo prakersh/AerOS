@@ -2,6 +2,7 @@
 
 import json
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -9,6 +10,10 @@ from sqlmodel import Session
 
 from aeros.ai.openai_compatible import OpenAICompatibleProvider
 from aeros.security.auth_context import AuthContext
+
+# Called as the agent moves through its pipeline so a streaming endpoint can show
+# live progress. Receives a small dict like ``{"label": "Finding vendors"}``.
+StepCallback = Callable[[dict[str, Any]], Awaitable[None]]
 
 
 @dataclass
@@ -20,6 +25,7 @@ class AgentContext:
     rfx_id: int | None = None
     thread_id: int | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    on_step: StepCallback | None = None
 
 
 @dataclass

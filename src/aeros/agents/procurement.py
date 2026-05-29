@@ -7,6 +7,7 @@ Inspired by memo.sbs MemoAgent architecture:
 4. TOON format for tool catalogs (40% token savings vs JSON)
 """
 
+import contextlib
 import json
 import re
 import time
@@ -27,6 +28,7 @@ from aeros.agents.tools import (
     tools_to_toon,
 )
 from aeros.ai.base import ChatMessage
+from aeros.ai.labels import step_label
 from aeros.ai.ui_blocks import build_blocks_from_results
 from aeros.models.user_defaults import UserDefaults
 
@@ -335,6 +337,14 @@ class ProcurementAgent(BaseAgent):
 
     async def run(self, ctx: AgentContext, user_input: str) -> AgentResult:
         start_time = time.monotonic()
+
+        async def emit(name: str, tool: str | None = None) -> None:
+            """Tell a streaming listener what the agent is doing right now."""
+            if ctx.on_step is None:
+                return
+            with contextlib.suppress(Exception):
+                await ctx.on_step({"label": step_label(name, tool=tool)})
+
         steps: list[PipelineStep] = []
         llm_calls = 0
         total_input_tokens = 0
@@ -356,6 +366,7 @@ class ProcurementAgent(BaseAgent):
         )
 
         # Step 1: Gather context
+        await emit("context")
         step = PipelineStep(name="context", start_time=time.monotonic())
         try:
             if role == "vendor":
@@ -374,6 +385,7 @@ class ProcurementAgent(BaseAgent):
 
         # Fast-path: pure greeting — skip tool selection LLM call entirely
         if detected == ["__greeting__"]:
+            await emit("greeting")
             step = PipelineStep(name="greeting", start_time=time.monotonic())
             try:
                 greeting_resp = await ctx.chat_provider.chat(
@@ -442,6 +454,7 @@ class ProcurementAgent(BaseAgent):
             iteration += 1
 
             # Step 4: LLM selects tools
+            await emit("select_tools")
             step = PipelineStep(name=f"select_tools_{iteration}", start_time=time.monotonic())
             selection_prompt = TOOL_SELECTION_PROMPT.format(
                 now=datetime.now(UTC).strftime("%A, %Y-%m-%d %H:%M UTC"),
@@ -488,13 +501,14 @@ class ProcurementAgent(BaseAgent):
             if not selected and selection_resp.finish_reason == "length":
                 logger.warning("agent.select.truncated", iteration=iteration)
                 final_response = (
-                    "That request was a bit too complex for me to plan in one step. "
-                    "Could you break it into smaller parts?"
+                    "There's a lot in that one. Could you break it into smaller steps so "
+                    "I can get each part right?"
                 )
                 break
 
             if not selected:
                 # No tools needed — generate conversational response
+                await emit("respond")
                 step = PipelineStep(name=f"converse_{iteration}", start_time=time.monotonic())
                 try:
                     converse_resp = await ctx.chat_provider.chat(
@@ -522,7 +536,8 @@ class ProcurementAgent(BaseAgent):
                     final_response = converse_resp.content
                 except Exception:
                     final_response = (
-                        "I can help with procurement — RFx, vendors, quotes. What do you need?"
+                        "I can help you raise requests, find vendors, and compare quotes. "
+                        "What do you need?"
                     )
                 step.end_time = time.monotonic()
                 step.status = "success"
@@ -530,6 +545,8 @@ class ProcurementAgent(BaseAgent):
                 break
 
             # Step 5: Execute tools
+            for tool_name, _ in selected:
+                await emit("execute", tool=tool_name)
             step = PipelineStep(name=f"execute_{iteration}", start_time=time.monotonic())
             iteration_results: list[ToolResult] = []
             for tool_name, params in selected:
@@ -546,6 +563,7 @@ class ProcurementAgent(BaseAgent):
             steps.append(step)
 
             # Step 6: Generate response from results
+            await emit("respond")
             step = PipelineStep(name=f"respond_{iteration}", start_time=time.monotonic())
             results_for_prompt = _format_results_for_prompt(iteration_results)
 

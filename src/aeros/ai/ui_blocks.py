@@ -21,6 +21,8 @@ from typing import Any
 
 import structlog
 
+from aeros.ai.labels import channel_label, status_label
+
 logger = structlog.get_logger()
 
 Block = dict[str, Any]
@@ -68,17 +70,17 @@ def _blocks_for_create_rfx(data: dict[str, Any]) -> list[Block]:
     rfx_id = data.get("rfx_id")
     fields = [
         {"label": "Title", "value": data.get("title", "—"), "emphasis": True},
-        {"label": "RFx", "value": f"#{rfx_id}"},
-        {"label": "Status", "value": str(data.get("status", "drafting")).title()},
+        {"label": "Reference", "value": f"#{rfx_id}"},
+        {"label": "Status", "value": status_label(data.get("status", "drafting"))},
     ]
-    blocks: list[Block] = [_card("RFx drafted", fields, accent="indigo")]
+    blocks: list[Block] = [_card("Request drafted", fields, accent="indigo")]
     if rfx_id:
         blocks.append(
             _actions(
                 [
                     {
                         "id": "open_rfx",
-                        "label": "Open RFx",
+                        "label": "Open request",
                         "style": "primary",
                         "kind": "navigate",
                         "path": f"/buyer/rfx/{rfx_id}",
@@ -91,7 +93,7 @@ def _blocks_for_create_rfx(data: dict[str, Any]) -> list[Block]:
 
 def _blocks_for_add_line_items(data: dict[str, Any]) -> list[Block]:
     count = data.get("count", 0)
-    return [_text(f"Added **{count}** line item{'s' if count != 1 else ''} to the RFx.")]
+    return [_text(f"Added **{count}** item{'s' if count != 1 else ''} to your request.")]
 
 
 def _vendor_rows(vendors: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -103,7 +105,7 @@ def _vendor_rows(vendors: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "vendor": v.get("vendor_name") or v.get("name") or "—",
                 "categories": v.get("categories") or "—",
                 "score": {"value": f"{score:.0f}" if isinstance(score, (int, float)) else "—"},
-                "channel": v.get("recommended_channel") or v.get("channel") or "in_app",
+                "channel": channel_label(v.get("recommended_channel") or v.get("channel") or "in_app"),
             }
         )
     return rows
@@ -120,8 +122,8 @@ def _blocks_for_vendors(data: Any) -> list[Block]:
             "columns": [
                 {"key": "vendor", "label": "Vendor"},
                 {"key": "categories", "label": "Categories"},
-                {"key": "score", "label": "Score", "align": "right"},
-                {"key": "channel", "label": "Channel"},
+                {"key": "score", "label": "Match", "align": "right"},
+                {"key": "channel", "label": "Reach via"},
             ],
             "rows": _vendor_rows(vendors),
         }
@@ -132,7 +134,7 @@ def _blocks_for_evaluate(data: dict[str, Any]) -> list[Block]:
     line_items = data.get("line_items", [])
     offers = data.get("offers", [])
     if not offers:
-        return [_text("No vendor quotes have arrived yet for this RFx.")]
+        return [_text("No quotes have come in yet.")]
 
     # price lookup: line_item_id -> {vendor_id: unit_price}
     price_by_item: dict[Any, dict[Any, float]] = {}
@@ -143,7 +145,7 @@ def _blocks_for_evaluate(data: dict[str, Any]) -> list[Block]:
                 continue
             price_by_item.setdefault(lid, {})[off.get("vendor_id")] = li.get("unit_price")
 
-    columns = [{"key": "item", "label": "Line item"}]
+    columns = [{"key": "item", "label": "Item"}]
     for off in offers:
         columns.append(
             {
@@ -176,10 +178,10 @@ def _blocks_for_evaluate(data: dict[str, Any]) -> list[Block]:
     blocks: list[Block] = [
         {
             "type": "table",
-            "title": "Side-by-side comparison",
+            "title": "Quote comparison",
             "columns": columns,
             "rows": rows,
-            "note": "Lowest price per line item is highlighted.",
+            "note": "Lowest price for each item is highlighted.",
         }
     ]
     rfx_id = data.get("rfx_id")
@@ -189,7 +191,7 @@ def _blocks_for_evaluate(data: dict[str, Any]) -> list[Block]:
                 [
                     {
                         "id": "open_comparison",
-                        "label": "Open full comparison & award",
+                        "label": "Compare & award",
                         "style": "primary",
                         "kind": "navigate",
                         "path": f"/buyer/rfx/{rfx_id}",
@@ -203,10 +205,10 @@ def _blocks_for_evaluate(data: dict[str, Any]) -> list[Block]:
 def _blocks_for_dispatch(data: dict[str, Any]) -> list[Block]:
     return [
         _card(
-            "RFx dispatched",
+            "Sent to vendors",
             [
-                {"label": "RFx", "value": f"#{data.get('rfx_id')}"},
-                {"label": "Status", "value": str(data.get("status", "dispatched")).title()},
+                {"label": "Reference", "value": f"#{data.get('rfx_id')}"},
+                {"label": "Status", "value": status_label(data.get("status", "dispatched"))},
             ],
             accent="green",
         )
@@ -218,10 +220,10 @@ def _blocks_for_submit_quote(data: dict[str, Any]) -> list[Block]:
         _card(
             "Quote submitted",
             [
-                {"label": "Offer", "value": f"#{data.get('offer_id')}"},
+                {"label": "Quote", "value": f"#{data.get('offer_id')}"},
                 {"label": "Revision", "value": str(data.get("revision", 1))},
             ],
-            subtitle="The buyer now sees your quote in their comparison matrix.",
+            subtitle="The buyer can now see your quote alongside the others.",
             accent="green",
         )
     ]
@@ -231,9 +233,9 @@ def _blocks_for_view_thread(data: dict[str, Any]) -> list[Block]:
     line_items = data.get("line_items", [])
     blocks: list[Block] = [
         _card(
-            data.get("title", "RFx"),
+            data.get("title", "Request"),
             [
-                {"label": "Status", "value": str(data.get("status", "")).title()},
+                {"label": "Status", "value": status_label(data.get("status", ""))},
                 {"label": "Deadline", "value": data.get("deadline") or "—"},
             ],
             accent="indigo",
@@ -266,12 +268,12 @@ def _blocks_for_daily_summary(data: dict[str, Any]) -> list[Block]:
     return [
         _keyvalue(
             [
-                {"label": "Total RFx", "value": str(data.get("total_rfx", 0))},
-                {"label": "Drafting", "value": str(data.get("drafting", 0))},
-                {"label": "Dispatched", "value": str(data.get("dispatched", 0))},
+                {"label": "Total requests", "value": str(data.get("total_rfx", 0))},
+                {"label": "Drafts", "value": str(data.get("drafting", 0))},
+                {"label": "Sent to vendors", "value": str(data.get("dispatched", 0))},
                 {"label": "Awarded", "value": str(data.get("awarded", 0))},
             ],
-            title="Daily summary",
+            title="Today at a glance",
         )
     ]
 

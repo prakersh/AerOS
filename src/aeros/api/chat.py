@@ -1,17 +1,19 @@
 """Chat API — conversational AI for buyer + vendor co-pilots, plus RFx actions."""
 
+import asyncio
 import contextlib
 import hashlib
 import json
 import os
 import re
 import traceback
+from collections.abc import AsyncIterator
 from datetime import datetime
 from typing import Any
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
@@ -47,15 +49,40 @@ class DispatchConfirmRequest(BaseModel):
     dispatch_plan: list[dict[str, Any]]
 
 
-@router.post("")
-async def chat(
-    body: ChatRequest,
-    session: Session = Depends(get_session),
-    caller: AuthContext = Depends(get_current_user),
-) -> JSONResponse:
-    if caller.role not in (Role.BUYER, Role.VENDOR):
-        raise HTTPException(403, "Chat not available for this role")
+def _client_data(data: dict[str, Any]) -> dict[str, Any]:
+    """Shape an agent's ``data`` for the browser.
 
+    Bridges tool results into the top-level fields the frontend reads, then
+    strips internal-only keys (raw tool dumps, timing/token telemetry) so they
+    never reach the client.
+    """
+    data = data or {}
+    for tr in data.get("tool_results", []):
+        if not tr.get("success"):
+            continue
+        tool_data = tr.get("data") or {}
+        if tr["tool"] == "create_rfx" and "rfx_id" in tool_data:
+            data["rfx_id"] = tool_data["rfx_id"]
+            data["status"] = tool_data.get("status", "created")
+        elif tr["tool"] == "list_vendors":
+            data["suggested_vendors"] = tool_data
+        elif tr["tool"] == "evaluate_offers":
+            data["evaluation"] = tool_data
+
+    # Drop timing/token telemetry and raw tool dumps; the UI never reads them.
+    # ``tools_called`` stays: it's part of the response contract and the browser
+    # ignores it (it carries no timing or token budget detail).
+    for internal_key in ("performance", "tool_results"):
+        data.pop(internal_key, None)
+    return data
+
+
+def _build_procurement_ctx(
+    session: Session,
+    caller: AuthContext,
+    body: ChatRequest,
+    on_step: Any | None = None,
+) -> tuple[Any, AgentContext]:
     from aeros.agents.procurement import ProcurementAgent
 
     agent = ProcurementAgent()
@@ -79,29 +106,28 @@ async def chat(
         vision_provider=vision_provider,
         rfx_id=body.rfx_id,
         metadata=metadata,
+        on_step=on_step,
     )
+    return agent, ctx
+
+
+@router.post("")
+async def chat(
+    body: ChatRequest,
+    session: Session = Depends(get_session),
+    caller: AuthContext = Depends(get_current_user),
+) -> JSONResponse:
+    if caller.role not in (Role.BUYER, Role.VENDOR):
+        raise HTTPException(403, "Chat not available for this role")
+
+    agent, ctx = _build_procurement_ctx(session, caller, body)
 
     try:
         result = await agent.run(ctx, body.message)
-        data = result.data or {}
-
-        # Bridge: extract tool results into top-level fields the frontend expects
-        for tr in data.get("tool_results", []):
-            if not tr.get("success"):
-                continue
-            tool_data = tr.get("data") or {}
-            if tr["tool"] == "create_rfx" and "rfx_id" in tool_data:
-                data["rfx_id"] = tool_data["rfx_id"]
-                data["status"] = tool_data.get("status", "created")
-            elif tr["tool"] == "list_vendors":
-                data["suggested_vendors"] = tool_data
-            elif tr["tool"] == "evaluate_offers":
-                data["evaluation"] = tool_data
-
         return JSONResponse(
             content={
                 "message": result.message,
-                "data": data,
+                "data": _client_data(result.data),
                 "success": result.success,
             }
         )
@@ -109,8 +135,77 @@ async def chat(
         logger.error("chat.error", error=str(e), traceback=traceback.format_exc())
         return JSONResponse(
             status_code=500,
-            content={"message": f"AI error: {e}", "data": {}, "success": False},
+            content={
+                "message": "Sorry, something went wrong on our side. Please try again.",
+                "data": {},
+                "success": False,
+            },
         )
+
+
+@router.post("/stream")
+async def chat_stream(
+    body: ChatRequest,
+    session: Session = Depends(get_session),
+    caller: AuthContext = Depends(get_current_user),
+) -> StreamingResponse:
+    """Same as ``chat`` but streams live progress as Server-Sent Events.
+
+    Each frame is ``data: {json}\\n\\n``. Progress frames look like
+    ``{"type": "step", "label": "Finding vendors"}``; the final frame is
+    ``{"type": "result", "message", "data", "success"}``.
+    """
+    if caller.role not in (Role.BUYER, Role.VENDOR):
+        raise HTTPException(403, "Chat not available for this role")
+
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+
+    async def on_step(event: dict[str, Any]) -> None:
+        await queue.put({"type": "step", **event})
+
+    agent, ctx = _build_procurement_ctx(session, caller, body, on_step=on_step)
+
+    async def run_agent() -> None:
+        try:
+            result = await agent.run(ctx, body.message)
+            await queue.put(
+                {
+                    "type": "result",
+                    "message": result.message,
+                    "data": _client_data(result.data),
+                    "success": result.success,
+                }
+            )
+        except Exception as e:
+            logger.error("chat.stream.error", error=str(e), traceback=traceback.format_exc())
+            await queue.put(
+                {
+                    "type": "result",
+                    "message": "Sorry, something went wrong on our side. Please try again.",
+                    "data": {},
+                    "success": False,
+                }
+            )
+        finally:
+            await queue.put(None)
+
+    async def event_stream() -> AsyncIterator[str]:
+        task = asyncio.create_task(run_agent())
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield f"data: {json.dumps(item)}\n\n"
+        finally:
+            with contextlib.suppress(Exception):
+                await task
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/create-rfx")

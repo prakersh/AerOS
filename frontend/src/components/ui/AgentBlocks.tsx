@@ -27,17 +27,29 @@ export interface AgentBlock {
 }
 
 function renderInline(text: string): ReactNode {
-  // Minimal **bold** support; everything else is plain text.
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((p, i) =>
-    p.startsWith("**") && p.endsWith("**") ? (
-      <strong key={i} className="text-zinc-100">
-        {p.slice(2, -2)}
-      </strong>
-    ) : (
-      <span key={i}>{p}</span>
-    ),
-  );
+  // Inline formatting: **bold**, *italic*, and `code`. Splitting on all three
+  // at once keeps order intact; anything else renders as plain text.
+  const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g);
+  return parts.map((p, i) => {
+    if (p.startsWith("**") && p.endsWith("**")) {
+      return (
+        <strong key={i} className="text-zinc-100">
+          {p.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (p.startsWith("`") && p.endsWith("`")) {
+      return (
+        <code key={i} className="rounded bg-zinc-800 px-1 py-0.5 text-[11px] text-indigo-300">
+          {p.slice(1, -1)}
+        </code>
+      );
+    }
+    if (p.startsWith("*") && p.endsWith("*") && p.length > 2) {
+      return <em key={i}>{p.slice(1, -1)}</em>;
+    }
+    return <span key={i}>{p}</span>;
+  });
 }
 
 function CellView({ cell }: { cell: Cell }) {

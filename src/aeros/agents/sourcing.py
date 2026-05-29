@@ -41,11 +41,11 @@ class SourcingAgent(BaseAgent):
         rfx_id = action.get("rfx_id") or ctx.rfx_id
 
         if not rfx_id:
-            return AgentResult(message="No RFx ID provided", success=False)
+            return AgentResult(message="I couldn't tell which request this is for.", success=False)
 
         rfx = ctx.session.get(RFxRun, rfx_id)
         if not rfx:
-            return AgentResult(message="RFx not found", success=False)
+            return AgentResult(message="I couldn't find that request.", success=False)
 
         line_items = list(
             ctx.session.exec(select(RFxLineItem).where(RFxLineItem.rfx_id == rfx_id)).all()
@@ -98,7 +98,7 @@ class SourcingAgent(BaseAgent):
             )
 
         return AgentResult(
-            message="Here's the proposed dispatch plan. Confirm to send.",
+            message="Here's the plan for reaching each vendor. Confirm to send.",
             data={
                 "dispatch_plan": dispatch_plan,
                 "status": "confirming_dispatch",
@@ -235,11 +235,12 @@ Currency: {rfx.currency_for_this_rfx}
         rfx_service.dispatch_rfx(ctx.session, rfx.id, ctx.caller.user_id)  # type: ignore[arg-type]
         ctx.session.commit()
 
-        message = f"RFQ dispatched to {dispatched_count} vendors!"
+        vendor_word = "vendor" if dispatched_count == 1 else "vendors"
+        message = f"Sent to {dispatched_count} {vendor_word}."
         if delivery_errors:
             failed = ", ".join(delivery_errors)
             message += (
-                f" Note: delivery failed for {failed} — they can still respond via the portal link."
+                f" We couldn't reach {failed} directly, but they can still respond from the portal."
             )
 
         return AgentResult(

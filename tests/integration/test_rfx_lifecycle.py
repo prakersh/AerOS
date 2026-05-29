@@ -166,6 +166,51 @@ class TestRFxLifecycle:
         assert "create_rfx" in data["data"].get("tools_called", [])
         assert "Weekly Grains" in data["message"] or "grains" in data["message"].lower()
 
+    def test_chat_stream_emits_steps_then_result(self, auth_client, skus):
+        """POST /api/chat/stream should stream progress frames then a final result,
+        and must not leak internal performance telemetry to the client."""
+        tool_selection = json.dumps(
+            [{"tool": "create_rfx", "params": {"title": "Weekly Grains Order"}}]
+        )
+        human_response = "Created your request for weekly grains."
+        no_tools = json.dumps({})
+
+        mock_provider = AsyncMock()
+        mock_provider.chat.side_effect = [
+            _mock_chat_response(tool_selection),
+            _mock_chat_response(human_response),
+            _mock_chat_response(no_tools),
+            _mock_chat_response("Anything else?"),
+        ]
+
+        with (
+            patch("aeros.api.chat.get_chat_provider", return_value=mock_provider),
+            patch("aeros.api.chat.get_vision_provider", return_value=None),
+        ):
+            resp = auth_client.post(
+                "/api/chat/stream",
+                json={"message": "I need 100kg Basmati Rice for next week", "history": []},
+            )
+
+        assert resp.status_code == 200
+        assert resp.headers["content-type"].startswith("text/event-stream")
+
+        frames = [
+            json.loads(line[len("data:") :].strip())
+            for line in resp.text.splitlines()
+            if line.startswith("data:")
+        ]
+        steps = [f for f in frames if f.get("type") == "step"]
+        results = [f for f in frames if f.get("type") == "result"]
+
+        assert len(steps) >= 2  # at least context + one more
+        assert all(f.get("label") for f in steps)
+        assert len(results) == 1
+        result = results[0]
+        assert result["success"] is True
+        assert "performance" not in result["data"]
+        assert "tool_results" not in result["data"]
+
     def test_create_rfx_from_draft(self, auth_client, skus):
         """POST /api/chat/create-rfx should persist an RFx with line items."""
         draft = {

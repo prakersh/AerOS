@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect, useCallback, type FormEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
-import { ConfirmDialog, VoiceInput, showToast, AgentBlocks } from "@/components/ui";
+import { VoiceInput, showToast, AgentBlocks } from "@/components/ui";
 import type { AgentBlock, AgentAction } from "@/components/ui";
+import { streamChat, type ChatResult } from "@/lib/streamChat";
+import { formatTimestamp, formatTimestampAbsolute } from "@/lib/format";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -19,35 +21,11 @@ interface ChatMsg {
   retryOf?: string;
 }
 
-interface DraftLineItem {
-  sku_name: string;
-  qty: number;
-  unit: string;
-  target_price?: number;
-}
-
-interface SuggestedVendor {
-  vendor_id: number;
-  vendor_name: string;
-  categories: string;
-  recommended_channel: string;
-}
-
 /* ------------------------------------------------------------------ */
 /* Persistence                                                          */
 /* ------------------------------------------------------------------ */
 
 const CHAT_STORAGE_KEY = "aeros-chat-messages";
-const DISPATCHED_STORAGE_KEY = "aeros-chat-dispatched";
-
-function loadDispatchedIds(): Set<number> {
-  try {
-    const raw = localStorage.getItem(DISPATCHED_STORAGE_KEY);
-    return raw ? new Set<number>(JSON.parse(raw)) : new Set<number>();
-  } catch {
-    return new Set<number>();
-  }
-}
 
 function loadPersistedMessages(): ChatMsg[] {
   try {
@@ -131,7 +109,7 @@ function MessageContent({ role, content }: { role: "user" | "assistant"; content
 
 const INITIAL_PROMPTS = [
   "I need 150kg tomatoes",
-  "Create an RFx for office supplies",
+  "Set up a request for office supplies",
   "Reorder from last week",
 ];
 
@@ -146,13 +124,13 @@ function getContextualPrompts(messages: ChatMsg[]): string[] {
     return ["Confirm the draft", "Change quantities", "Add more items"];
   }
   if (lastAssistant.data?.rfx_id && lastAssistant.data?.status === "created") {
-    return ["Show dispatch plan", "Add more vendors", "View RFx details"];
+    return ["Send to vendors", "Add more vendors", "View request"];
   }
   if (lastAssistant.data?.suggested_vendors) {
     return ["Confirm vendors", "Add another vendor", "Change delivery date"];
   }
   if (lastAssistant.data?.dispatch_plan) {
-    return ["Confirm dispatch", "Modify dispatch plan"];
+    return ["Send to vendors", "Change the plan"];
   }
 
   return [];
@@ -168,19 +146,9 @@ export default function ChatCopilot() {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [createdRfxId, setCreatedRfxId] = useState<number | null>(null);
-  const [dispatchedRfxIds, setDispatchedRfxIds] = useState<Set<number>>(loadDispatchedIds);
+  /* Live progress label streamed from the agent while it works */
+  const [stepLabel, setStepLabel] = useState<string | null>(null);
 
-  const markDispatched = useCallback((rfxId: number) => {
-    setDispatchedRfxIds((prev) => {
-      const next = new Set(prev).add(rfxId);
-      try {
-        localStorage.setItem(DISPATCHED_STORAGE_KEY, JSON.stringify([...next]));
-      } catch {
-        // storage full — silently drop
-      }
-      return next;
-    });
-  }, []);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -191,15 +159,6 @@ export default function ChatCopilot() {
   /* File attachment state */
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingFilePreview, setPendingFilePreview] = useState<string | null>(null);
-
-  /* Confirmation dialog state */
-  const [confirmDraftOpen, setConfirmDraftOpen] = useState(false);
-  const [pendingDraft, setPendingDraft] = useState<Record<string, unknown> | null>(null);
-  const [confirmDispatchOpen, setConfirmDispatchOpen] = useState(false);
-  const [pendingDispatch, setPendingDispatch] = useState<{
-    rfxId: number;
-    plan: Array<Record<string, unknown>>;
-  } | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -308,11 +267,20 @@ export default function ChatCopilot() {
         body.attachment_name = attachment.name;
       }
 
-      const resp = await api.post<{
-        message: string;
-        data: Record<string, unknown>;
-        success: boolean;
-      }>("/api/chat", body);
+      setStepLabel(null);
+      let resp: ChatResult;
+      try {
+        resp = await streamChat(body, (label) => setStepLabel(label));
+      } catch {
+        // Streaming unavailable (proxy, network, auth refresh) — fall back to
+        // the plain JSON endpoint so the chat still works.
+        resp = await api.post<ChatResult>("/api/chat", body);
+      } finally {
+        setStepLabel(null);
+      }
+
+      const rfxId = resp.data?.rfx_id as number | undefined;
+      if (rfxId) setCreatedRfxId(rfxId);
 
       const assistantMsg: ChatMsg = {
         role: "assistant",
@@ -326,15 +294,12 @@ export default function ChatCopilot() {
       processingRef.current = false;
       await drainQueue(afterResponse);
     } catch (err: unknown) {
-      const errMsg =
-        err && typeof err === "object" && "message" in err
-          ? String((err as { message: string }).message)
-          : "Failed to get response";
+      console.error("chat failed", err);
       const afterError = [
         ...updatedMessages,
         {
           role: "assistant" as const,
-          content: `Error: ${errMsg}`,
+          content: "Something went wrong reaching the copilot. Tap Retry to try again.",
           timestamp: new Date(),
           failed: true,
           retryOf: actualMsg,
@@ -421,60 +386,13 @@ export default function ChatCopilot() {
 
   const handleChipClick = useCallback((text: string) => {
     // Some chips are contextual actions, not raw messages
-    if (text === "View RFx details" && createdRfxId) {
+    if (text === "View request" && createdRfxId) {
       navigate(`/buyer/rfx/${createdRfxId}`);
       return;
     }
     setInput(text);
     inputRef.current?.focus();
   }, [createdRfxId, navigate]);
-
-  /* ---------------------------------------------------------------- */
-  /* Draft confirmation handlers                                        */
-  /* ---------------------------------------------------------------- */
-
-  function handleDraftConfirmClick(draft: Record<string, unknown>) {
-    setPendingDraft(draft);
-    setConfirmDraftOpen(true);
-  }
-
-  async function handleConfirmDraft() {
-    if (!pendingDraft) return;
-    setConfirmDraftOpen(false);
-    setActionLoading(true);
-    try {
-      const resp = await api.post<{
-        message: string;
-        data: Record<string, unknown>;
-        success: boolean;
-      }>("/api/chat/create-rfx", { draft: pendingDraft });
-
-      const rfxId = resp.data?.rfx_id as number | undefined;
-      if (rfxId) setCreatedRfxId(rfxId);
-
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: resp.message,
-          data: resp.data,
-          timestamp: new Date(),
-        },
-      ]);
-    } catch (err: unknown) {
-      const errMsg =
-        err && typeof err === "object" && "message" in err
-          ? String((err as { message: string }).message)
-          : "Failed to create RFx";
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Error: ${errMsg}`, timestamp: new Date(), failed: true },
-      ]);
-    } finally {
-      setActionLoading(false);
-      setPendingDraft(null);
-    }
-  }
 
   /* ---------------------------------------------------------------- */
   /* Agent block actions (navigate / post)                              */
@@ -504,57 +422,6 @@ export default function ChatCopilot() {
   }
 
   /* ---------------------------------------------------------------- */
-  /* Dispatch confirmation handlers                                     */
-  /* ---------------------------------------------------------------- */
-
-  function handleDispatchConfirmClick(
-    rfxId: number,
-    plan: Array<Record<string, unknown>>,
-  ) {
-    setPendingDispatch({ rfxId, plan });
-    setConfirmDispatchOpen(true);
-  }
-
-  async function handleConfirmDispatch() {
-    if (!pendingDispatch) return;
-    setConfirmDispatchOpen(false);
-    setActionLoading(true);
-    try {
-      const resp = await api.post<{
-        message: string;
-        data: Record<string, unknown>;
-        success: boolean;
-      }>("/api/chat/dispatch", {
-        rfx_id: pendingDispatch.rfxId,
-        dispatch_plan: pendingDispatch.plan,
-      });
-
-      markDispatched(pendingDispatch.rfxId);
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: resp.message,
-          data: resp.data,
-          timestamp: new Date(),
-        },
-      ]);
-    } catch (err: unknown) {
-      const errMsg =
-        err && typeof err === "object" && "message" in err
-          ? String((err as { message: string }).message)
-          : "Failed to dispatch";
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", content: `Error: ${errMsg}`, timestamp: new Date(), failed: true },
-      ]);
-    } finally {
-      setActionLoading(false);
-      setPendingDispatch(null);
-    }
-  }
-
-  /* ---------------------------------------------------------------- */
   /* Derived state                                                      */
   /* ---------------------------------------------------------------- */
 
@@ -580,7 +447,7 @@ export default function ChatCopilot() {
         {messages.length > 0 && (
           <button
             type="button"
-            onClick={() => { setMessages([]); localStorage.removeItem(CHAT_STORAGE_KEY); localStorage.removeItem(DISPATCHED_STORAGE_KEY); queueRef.current = []; setCreatedRfxId(null); setDispatchedRfxIds(new Set()); }}
+            onClick={() => { setMessages([]); localStorage.removeItem(CHAT_STORAGE_KEY); queueRef.current = []; setCreatedRfxId(null); }}
             className="text-xs text-zinc-500 hover:text-zinc-300 transition"
           >
             Clear chat
@@ -603,7 +470,7 @@ export default function ChatCopilot() {
                 What do you need to procure?
               </h3>
               <p className="text-zinc-500 text-xs mt-2 leading-relaxed">
-                Tell me in plain language — I&apos;ll draft the purchase request, find vendors, and handle dispatch.
+                Tell me in plain language. I&apos;ll draft the request, find vendors, and send it out for you.
               </p>
               <p className="text-zinc-600 text-[11px] mt-3 italic">
                 e.g. &quot;I need 150kg tomatoes, 80kg onions, and 500L milk by tomorrow 5 AM&quot;
@@ -629,10 +496,15 @@ export default function ChatCopilot() {
         )}
 
         {/* Message bubbles */}
-        {messages.map((msg, i) => (
+        {messages.map((msg, i) => {
+          const blocks =
+            msg.role !== "user" && Array.isArray(msg.data?.blocks)
+              ? (msg.data!.blocks as AgentBlock[])
+              : [];
+          return (
           <div
             key={i}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+            className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}
           >
             <div
               className={`max-w-[80%] rounded-xl px-4 py-3 ${
@@ -672,15 +544,6 @@ export default function ChatCopilot() {
               {/* Message content with markdown for assistant */}
               <MessageContent role={msg.role} content={msg.content} />
 
-              {/* Agent visual reply: tables / cards / actions */}
-              {Array.isArray(msg.data?.blocks) && (msg.data!.blocks as AgentBlock[]).length > 0 && (
-                <AgentBlocks
-                  blocks={msg.data!.blocks as AgentBlock[]}
-                  onAction={handleAgentAction}
-                  actionsDisabled={actionLoading}
-                />
-              )}
-
               {/* Retry button for failed messages */}
               {msg.failed && msg.retryOf && (
                 <button
@@ -695,25 +558,45 @@ export default function ChatCopilot() {
                 </button>
               )}
 
-              <p className="text-[10px] mt-1 opacity-50">
-                {msg.timestamp.toLocaleTimeString()}
+              <p
+                className="mt-1 text-[11px] text-zinc-500"
+                title={formatTimestampAbsolute(msg.timestamp.toISOString())}
+              >
+                {formatTimestamp(msg.timestamp.toISOString())}
               </p>
             </div>
-          </div>
-        ))}
 
-        {/* Typing indicator */}
+            {/* Agent visual reply rendered as its own panel, not nested in the bubble */}
+            {blocks.length > 0 && (
+              <div className="mt-1 w-full max-w-[80%] animate-slide-up">
+                <AgentBlocks
+                  blocks={blocks}
+                  onAction={handleAgentAction}
+                  actionsDisabled={actionLoading}
+                />
+              </div>
+            )}
+          </div>
+          );
+        })}
+
+        {/* Live progress indicator */}
         {loading && (
-          <div className="flex justify-start">
-            <div className="bg-zinc-800 rounded-xl px-4 py-3">
-              <div className="flex gap-1 items-center">
-                <span className="h-2 w-2 rounded-full bg-zinc-500 animate-bounce [animation-delay:0ms]" />
-                <span className="h-2 w-2 rounded-full bg-zinc-500 animate-bounce [animation-delay:150ms]" />
-                <span className="h-2 w-2 rounded-full bg-zinc-500 animate-bounce [animation-delay:300ms]" />
-                {queueLen > 0 && (
-                  <span className="ml-2 text-[10px] text-zinc-500">
-                    +{queueLen} queued
+          <div className="flex justify-start animate-fade-in">
+            <div className="rounded-xl bg-zinc-800 px-4 py-3">
+              <div className="flex items-center gap-2.5">
+                <span className="flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-bounce [animation-delay:0ms]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-bounce [animation-delay:150ms]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-bounce [animation-delay:300ms]" />
+                </span>
+                {stepLabel && (
+                  <span key={stepLabel} className="animate-slide-up text-xs text-zinc-400">
+                    {stepLabel}
                   </span>
+                )}
+                {queueLen > 0 && (
+                  <span className="text-[10px] text-zinc-600">+{queueLen} queued</span>
                 )}
               </div>
             </div>
@@ -800,217 +683,7 @@ export default function ChatCopilot() {
         </p>
       </form>
 
-      {/* Draft Confirmation Dialog */}
-      <ConfirmDialog
-        open={confirmDraftOpen}
-        onClose={() => {
-          setConfirmDraftOpen(false);
-          setPendingDraft(null);
-        }}
-        onConfirm={handleConfirmDraft}
-        title="Create RFx?"
-        message="Create this RFx? This will create the RFx and make it available for dispatch."
-        confirmLabel="Create RFx"
-        confirmVariant="primary"
-        isPending={actionLoading}
-      />
-
-      {/* Dispatch Confirmation Dialog */}
-      <ConfirmDialog
-        open={confirmDispatchOpen}
-        onClose={() => {
-          setConfirmDispatchOpen(false);
-          setPendingDispatch(null);
-        }}
-        onConfirm={handleConfirmDispatch}
-        title="Dispatch to Vendors?"
-        message="Dispatch to vendors? This will send the RFx to all listed vendors."
-        confirmLabel="Dispatch"
-        confirmVariant="primary"
-        isPending={actionLoading}
-      />
     </div>
   );
 }
 
-/* ------------------------------------------------------------------ */
-/* Sub-components                                                      */
-/* ------------------------------------------------------------------ */
-
-/** Normalize draft items from various agent response shapes into a uniform list. */
-function normalizeDraftItems(draft: Record<string, unknown>): DraftLineItem[] {
-  // Try line_items first (expected shape), then items (agent shape)
-  const raw =
-    (draft.line_items as Array<Record<string, unknown>>) ??
-    (draft.items as Array<Record<string, unknown>>) ??
-    [];
-  return raw.map((item) => ({
-    sku_name: String(item.sku_name ?? item.name ?? item.item_name ?? ""),
-    qty: Number(item.qty ?? item.quantity ?? item.count ?? 0),
-    unit: String(item.unit ?? item.unit_override ?? "pcs"),
-    target_price:
-      item.target_price != null ? Number(item.target_price) :
-      item.est_unit_price != null ? Number(item.est_unit_price) :
-      item.last_price != null ? Number(item.last_price) :
-      item.price != null ? Number(item.price) :
-      undefined,
-  }));
-}
-
-function DraftCard({
-  draft,
-  onConfirm,
-  confirmed,
-  loading,
-}: {
-  draft: Record<string, unknown>;
-  onConfirm: (draft: Record<string, unknown>) => void;
-  confirmed: boolean;
-  loading: boolean;
-}) {
-  const items = normalizeDraftItems(draft);
-  const totalItems = (draft.total_items as number) ?? items.length;
-  const totalEst = draft.total_estimated as number | undefined;
-
-  return (
-    <div className="mt-3 rounded-lg border border-zinc-700 bg-zinc-900 p-3">
-      <p className="text-xs font-semibold text-indigo-400 mb-2">
-        Draft RFQ {totalItems > 0 ? `(${totalItems} items)` : ""}
-      </p>
-      {!!draft.title && <p className="text-xs text-zinc-300 mb-2">{String(draft.title)}</p>}
-      {items.length > 0 ? (
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="text-zinc-500 border-b border-zinc-800">
-              <th className="text-left py-1">Item</th>
-              <th className="text-right py-1">Qty</th>
-              <th className="text-right py-1">Unit</th>
-              <th className="text-right py-1">Price</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, i) => (
-              <tr key={i} className="border-b border-zinc-800/50">
-                <td className="py-1 text-zinc-300">{item.sku_name}</td>
-                <td className="py-1 text-right text-zinc-300">{item.qty}</td>
-                <td className="py-1 text-right text-zinc-400">{item.unit}</td>
-                <td className="py-1 text-right text-zinc-400">
-                  {item.target_price != null ? `₹${item.target_price}` : "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      ) : (
-        <p className="text-xs text-zinc-500 italic">No items in draft yet</p>
-      )}
-      {totalEst != null && totalEst > 0 && (
-        <p className="text-xs text-zinc-400 mt-1 text-right">
-          Est. Total: ₹{totalEst.toLocaleString()}
-        </p>
-      )}
-      {!confirmed && (
-        <button
-          type="button"
-          disabled={loading || items.length === 0}
-          onClick={() => onConfirm(draft)}
-          className="mt-3 w-full rounded-lg bg-indigo-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-indigo-500 disabled:opacity-50"
-        >
-          {loading ? "Creating..." : "Confirm & Create RFx"}
-        </button>
-      )}
-      {confirmed && (
-        <div className="mt-2 flex items-center gap-1.5 text-xs text-green-400">
-          <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-          </svg>
-          RFx Created
-        </div>
-      )}
-    </div>
-  );
-}
-
-function TermsChip({ terms }: { terms: Record<string, unknown> }) {
-  return (
-    <div className="mt-3 rounded-lg border border-amber-800/50 bg-amber-900/20 p-3">
-      <p className="text-xs font-semibold text-amber-400 mb-2">Terms (confirm or change)</p>
-      <div className="grid grid-cols-2 gap-1 text-xs">
-        {Object.entries(terms).map(([key, val]) => (
-          <div key={key} className="flex justify-between">
-            <span className="text-zinc-500">{key.replace(/_/g, " ")}</span>
-            <span className="text-zinc-300">{String(val)}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function VendorSuggestions({ vendors }: { vendors: SuggestedVendor[] }) {
-  return (
-    <div className="mt-3 rounded-lg border border-zinc-700 bg-zinc-900 p-3">
-      <p className="text-xs font-semibold text-green-400 mb-2">Suggested Vendors</p>
-      {vendors.map((v, i) => (
-        <div key={i} className="flex items-center justify-between py-1 text-xs border-b border-zinc-800/50 last:border-0">
-          <span className="text-zinc-300">{v.vendor_name}</span>
-          <span className="rounded-full bg-zinc-800 px-2 py-0.5 text-zinc-500">{v.recommended_channel}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function DispatchPlanCard({
-  plan,
-  rfxId,
-  onConfirm,
-  loading,
-  alreadyDispatched,
-}: {
-  plan: Array<Record<string, unknown>>;
-  rfxId: number | null;
-  onConfirm: (rfxId: number, plan: Array<Record<string, unknown>>) => void;
-  loading: boolean;
-  alreadyDispatched: boolean;
-}) {
-  // Derived from persisted parent state so a re-render/remount can't re-arm
-  // the button and trigger a duplicate dispatch.
-  const dispatched = alreadyDispatched;
-
-  const handleClick = () => {
-    if (!rfxId) return;
-    onConfirm(rfxId, plan);
-  };
-
-  return (
-    <div className="mt-3 rounded-lg border border-blue-800/50 bg-blue-900/20 p-3">
-      <p className="text-xs font-semibold text-blue-400 mb-2">Dispatch Plan</p>
-      {plan.map((entry, i) => (
-        <div key={i} className="flex items-center justify-between py-1 text-xs border-b border-blue-800/30 last:border-0">
-          <span className="text-zinc-300">{String(entry.vendor_name)}</span>
-          <div className="flex items-center gap-2">
-            <span className="text-zinc-500">via {String(entry.channel)}</span>
-            <span className="text-zinc-600 text-[10px]">{String(entry.channel_detail)}</span>
-          </div>
-        </div>
-      ))}
-      {!dispatched && rfxId && (
-        <button
-          type="button"
-          disabled={loading}
-          onClick={handleClick}
-          className="mt-3 w-full rounded-lg bg-green-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-green-500 disabled:opacity-50"
-        >
-          {loading ? "Dispatching..." : "Confirm & Dispatch to Vendors"}
-        </button>
-      )}
-      {!rfxId && !dispatched && (
-        <p className="mt-2 text-[10px] text-zinc-500">Create the RFx first before dispatching</p>
-      )}
-      {dispatched && (
-        <p className="mt-3 text-center text-xs font-medium text-green-400">✓ Dispatched to vendors</p>
-      )}
-    </div>
-  );
-}
