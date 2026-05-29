@@ -7,7 +7,7 @@ format the platform accepts.
 - **Prompts & flow** → this file
 - **Vendor attachments** → [`attachments/`](attachments/) (regenerate with
   `.venv/bin/python demo/generate_demo_files.py`)
-- **Recorded walkthrough** → [`../demos/demo.mp4`](../demos/demo.mp4) — one
+- **Recorded walkthrough** → [`demo.mp4`](demo.mp4) — one
   continuous, captioned flow on a single RFx: Step 1 buyer signs in · Step 2
   buyer drafts the request in plain language (with an items table) · Step 3 the
   agent dispatches it and auto-invites matching vendors · Steps 4–5 two vendors

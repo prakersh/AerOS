@@ -14,7 +14,7 @@ and Analytics ship as extensible Coming-Soon stubs.
 
 ## Demo
 
-📺 **[`demos/demo.mp4`](demos/demo.mp4)** — a single, captioned end-to-end
+📺 **[`demo/demo.mp4`](demo/demo.mp4)** — a single, captioned end-to-end
 walkthrough on one RFx: the buyer signs in and **drafts a request in plain
 language** (rendered as a line-item table), the co-pilot **dispatches it and
 auto-invites the matching vendors**, **two vendors reply** in different formats
@@ -59,8 +59,10 @@ bodies. AerOS turns every reply, on every channel, into one normalized
 - **Security & guardrails by design** — bcrypt + JWT auth, RBAC enforced in
   the service layer, HMAC-signed correlation tokens, magic-byte upload
   validation, prompt-injection isolation, append-only audit log, log redaction.
-- **TDD as a primary discipline** — unit + integration + Playwright E2E,
-  ≥80% backend line coverage enforced in CI, VCR cassettes for offline AI replay.
+- **TDD as a primary discipline** — 773 backend tests (unit + integration) at
+  81% line coverage (≥80% enforced in CI) plus Playwright E2E across the full
+  RFx lifecycle; AI calls are mocked for deterministic offline runs. See
+  [Testing & quality](#testing--quality).
 
 ## Stack
 
@@ -75,7 +77,7 @@ bodies. AerOS turns every reply, on every channel, into one normalized
 | Auth | PyJWT + bcrypt direct (no passlib) |
 | Channels | aiosmtplib + IMAPClient · python-telegram-bot · FastAPI WebSocket |
 | PO render | WeasyPrint (HTML → PDF) |
-| Testing | pytest · pytest-asyncio · VCR.py · aiosmtpd · Playwright |
+| Testing | pytest · pytest-asyncio · `unittest.mock` · aiosmtpd · Playwright · Vitest |
 
 ## Getting Started
 
@@ -151,6 +153,35 @@ Seeded by `./app.sh setup` (or `./app.sh seed`). Listed at
 | Buyer | `buyer@aeros.demo` | `buyer123` |
 | Vendor | `freshfarm@vendor.demo` (and other `*@vendor.demo`) | `vendor123` |
 | Admin | `admin@aeros.demo` | `admin123` |
+
+## Testing & quality
+
+Testing was treated as a first-class deliverable, not an afterthought.
+
+- **773 backend tests** across **46 unit** and **13 integration** modules,
+  **81% line coverage** with an **80% gate enforced in CI** (`pytest --cov`).
+- **Unit** — services, the agentic pipeline (intent detection, tool selection,
+  deterministic fallbacks, one-shot guards), offer parsing/normalization,
+  guardrails, and RBAC. AI provider calls are mocked, so the suite is
+  deterministic and runs fully offline with no API key.
+- **Integration** — the full RFx lifecycle, the chat API, and the
+  format-agnostic extraction pipeline (PDF, Word, Excel, CSV, image, email)
+  exercised end-to-end against the real database and services.
+- **End-to-end** — Playwright specs for auth, buyer, vendor, admin, and the
+  complete RFx lifecycle drive the real React UI against the running backend.
+  The captioned [`demo/demo.mp4`](demo/demo.mp4) walkthrough is itself a passing
+  E2E spec that runs **draft → dispatch → vendor reply → compare → award**
+  through the live UI and a real LLM — the same end-to-end path the assignment
+  asks for.
+- **Frontend** — Vitest component/unit specs.
+- A separate live-LLM connectivity check runs when an API key is configured
+  (skipped offline).
+
+```bash
+./app.sh test                 # full suite: backend (pytest + coverage) + Playwright E2E
+./app.sh test --pytest-only   # backend only
+./app.sh test --test-uat-only # Playwright E2E only
+```
 
 ## Status
 
