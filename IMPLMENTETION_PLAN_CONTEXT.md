@@ -37,9 +37,9 @@ We are not building one feature. We are building **AEROS — a procurement OS** 
 | Vendor reply: photographed rate card (image) | §3.4 `extractors/image.py` → vision | planned |
 | Vendor reply: email body | §3.4 `extractors/email_body.py` (HTML sanitize + plaintext + forwarded-chain) | planned |
 | Multi-attachment fusion (body + PDF + image in one reply) | §3.4 `OfferFusionService` | planned |
-| Reads each response (real AI loop) | §3 EvaluationAgent + NIM vision/chat | planned |
+| Reads each response (real AI loop) | §3 EvaluationAgent + MiMo vision/chat | planned |
 | Side-by-side comparison | §5 ComparisonMatrix UI + §3 OfferService | planned |
-| AI loops real, not stubs | NIM + Groq direct SDK; VCR for tests | planned |
+| AI loops real, not stubs | MiMo + Groq direct SDK; VCR for tests | planned |
 | Working prototype, live demo | §8 build order, §9 demo script | planned |
 
 ---
@@ -53,7 +53,7 @@ We are not building one feature. We are building **AEROS — a procurement OS** 
 | D3 | Authenticated roles | **Buyer + Vendor + Admin** (3-tier RBAC). Admin module modeled on memo.sbs (DB-backed AI config, user mgmt, cross-tenant observability, full audit). See §3.8. | confirmed |
 | D4 | Channels | In-app chat + Email (SMTP+IMAP) + Telegram bot, unified via signed correlation tokens | confirmed |
 | D5 | Channel implementation order | **Web (in-app) FIRST → Email second → Telegram last** | confirmed |
-| D6 | AI provider primary | **NVIDIA NIM** (free tier) via OpenAI-compatible SDK at `https://integrate.api.nvidia.com/v1` | confirmed |
+| D6 | AI provider primary | **MiMo** (`mimo-v2.5`) for chat + vision via an OpenAI-compatible endpoint; **NVIDIA NIM** (`nvidia/nv-embed-v1`) for embeddings | implemented |
 | D7 | Provider-agnostic | Thin `ChatProvider` protocol → any OpenAI-compat OR Anthropic-compat endpoint | confirmed |
 | D8 | ASR | Groq `whisper-large-v3-turbo` | confirmed |
 | D9 | Voice scope | **Both buyer AND vendor chat** have mic button | confirmed |
@@ -117,11 +117,11 @@ After evaluating Direct SDK, LangChain, LangGraph, and Pydantic AI against AEROS
 | ORM | SQLModel + Alembic | |
 | DB | SQLite (default, single-file) | demo-friendly; PostgreSQL later via DSN swap |
 | Background | Huey (SQLite backend) | IMAP poll, Telegram poll-fallback, offer extraction, notifications, PO render |
-| Frontend | React 19 + TypeScript + Vite + Tailwind v4 + Lucide + TanStack Query + Zustand + Framer Motion | built via `/ui-ux-pro-max` skill |
+| Frontend | React 19 + TypeScript + Vite + Tailwind v4 + TanStack Query + Zustand + React Router 7 | built via `/ui-ux-pro-max` skill |
 | Streaming | FastAPI SSE for chat + WebSocket for in-app channel | |
-| AI primary | NVIDIA NIM via OpenAI SDK pointed at `https://integrate.api.nvidia.com/v1` | chat: `nvidia/llama-3.1-nemotron-70b-instruct` (configurable) |
-| AI vision | NIM `/v1/vision/extract` (`nvidia/neva-22b`) with `microsoft/phi-3.5-vision-instruct` fallback; vision-language chat: `meta/llama-3.2-90b-vision-instruct` for richer cases | |
-| AI embeddings | NIM `nvidia/nv-embed-v1` for vendor-by-SKU semantic matching | |
+| AI chat | MiMo (`mimo-v2.5`) via OpenAI-compatible SDK at `mimo_base_url` | configurable to any OpenAI-compatible endpoint (NVIDIA NIM, OpenAI, Anthropic, Azure) |
+| AI vision | MiMo (`mimo-v2.5`) multimodal via the OpenAI-compatible chat endpoint | used for offer extraction from images/scanned docs |
+| AI embeddings | NVIDIA NIM `nvidia/nv-embed-v1` for vendor-by-SKU semantic matching | |
 | ASR | Groq `whisper-large-v3-turbo` | voice notes from buyer + vendor |
 | Email out | `aiosmtplib` (TLS, dedicated SMTP) | |
 | Email in | `IMAPClient` polled by Huey (every 30s) | |
@@ -130,7 +130,7 @@ After evaluating Direct SDK, LangChain, LangGraph, and Pydantic AI against AEROS
 | Auth | PyJWT + bcrypt direct (4DPocket pattern, NO passlib) | HttpOnly + Secure + SameSite cookies, 15-min access + 7-day refresh rotation |
 | PO render | `weasyprint` (HTML→PDF) | fallback `reportlab` |
 | Doc parsing | `pymupdf4llm`/`PyMuPDF` (PDF), `python-docx` (Word), `openpyxl` (Excel), `csv` stdlib + sniffer, `bleach` (HTML email sanitize) | |
-| Testing | `pytest` + `pytest-asyncio` + `VCR.py` + `aiosmtpd` + `Playwright` + `Vitest` + `httpx` TestClient | |
+| Testing | `pytest` + `pytest-asyncio` + `VCR.py` + `aiosmtpd` + `Playwright` + `httpx` TestClient | |
 | Logging | `structlog` JSON | |
 | Observability | self-hosted `audit_log` + `llm_cache` tables | no LangSmith |
 | Storage | local `data/uploads/<rfx_id>/<vendor_id>/`, behind `StorageService` interface | S3/R2 swap is one file |
@@ -371,9 +371,9 @@ PipelineReport(id, chat_turn_id, user_id, rfx_id?, agent_run_id, total_latency_m
 Inspect this turn
   ├─ 2.3 s  total
   ├─ LLM calls       3
-  │   ├─ nim:llama-3.1-nemotron-70b   ↓ 1842 ↑ 142 tok  •  920 ms
-  │   ├─ nim:llama-3.1-nemotron-70b   ↓ 2031 ↑ 87  tok  •  840 ms  (cache miss)
-  │   └─ nim:neva-22b  (vision)        ↓ image       •  510 ms
+  │   ├─ mimo-v2.5                     ↓ 1842 ↑ 142 tok  •  920 ms
+  │   ├─ mimo-v2.5                     ↓ 2031 ↑ 87  tok  •  840 ms  (cache miss)
+  │   └─ mimo-v2.5  (vision)           ↓ image       •  510 ms
   ├─ Tools fired     2
   │   ├─ inventory.lookup_skus              ✓ 12 ms
   │   └─ vendors.suggest_for_category       ✓ 45 ms
@@ -785,7 +785,7 @@ aerchain/
 
 - Backend: ≥80% line coverage (`pytest --cov=src/aeros --cov-fail-under=80`).
 - Agents: 100% covered for happy + 2 error paths.
-- Frontend: component-level Vitest for ChatStream, ComparisonMatrix, TermsChip, UploadZone, MicButton; full flows in Playwright.
+- Frontend: full user flows (auth, buyer, vendor, admin, RFx lifecycle) covered by Playwright E2E in `frontend/e2e/`.
 - VCR cassettes for every NIM/Groq call; replay-by-default, opt-in re-record via `RECORD_VCR=1 pytest`.
 
 ### 7.3 Test suite layout

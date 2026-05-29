@@ -1,28 +1,38 @@
-# AEROS Testing Plan — Quality-First, Workflow-Driven
+# AerOS Testing Plan — Quality-First, Workflow-Driven
 
 ## Overview
 
-AEROS has 560 existing tests at 29% measured coverage. The previous plan targeted
-2,500+ tests organized by code layer. This plan reorients around **business
-workflows** — the flows that directly affect customers — and targets ~200 new
-high-quality tests that protect core use cases and catch 7 confirmed bugs.
+The suite is organized around **business workflows** — the flows that directly
+affect customers — rather than code layers. As of this writing it has **777
+tests at 80.85% line coverage**, with **≥80% enforced** in CI
+(`fail_under = 80` in `pyproject.toml`). The 7 bugs catalogued below were each
+identified, reproduced with a failing test, then fixed; those regression tests
+now pass.
+
+Run the full suite (backend + Playwright E2E) with `./app.sh test`. The PO
+rendering tests need WeasyPrint's native libraries — `./app.sh` exports the
+Homebrew lib path on macOS automatically; running `pytest` directly without it
+fails only those 4 tests.
 
 **Principle**: every test must justify its existence by protecting a specific
 business risk. No test exists solely to inflate a count.
 
 ---
 
-## Confirmed Bugs Requiring Test Coverage
+## Confirmed Bugs — Caught and Fixed
 
-| # | Location | Bug | Impact |
-|---|----------|-----|--------|
-| 1 | `api/vendor.py:338` | `total = sum(li.unit_price * 1)` — hardcoded `* 1` instead of quantity | Every structured quote total is wrong |
-| 2 | `api/buyer.py:202-207` | `except Exception: pass` swallows PO generation errors | PO silently never created |
-| 3 | `services/rfx_service.py` | No status validation on `cancel_rfx`, `dispatch_rfx`, `award_rfx` | Cancelled RFx can be awarded |
-| 4 | `api/vendor.py:236-270` | AI extraction runs synchronously inline | Request timeouts on large files |
-| 5 | `agents/executor.py:215` | `Message(thread_id=thread.id if thread else None)` | Orphaned messages with null FK |
-| 6 | `services/rfx_service.py:318` | No idempotency guard on `award_rfx` | Duplicate POs on double-award |
-| 7 | `agents/po.py:171-175` | WeasyPrint fallback saves HTML but `pdf_path` is used | HTML served as `application/pdf` |
+All 7 were reproduced with a failing test, then fixed. Locations cite the
+current function (line numbers omitted to avoid drift).
+
+| # | Location | Bug | Impact | Status |
+|---|----------|-----|--------|--------|
+| 1 | `api/vendor.py` `submit_quote` | total used a hardcoded `* 1` instead of quantity | Every structured quote total was wrong | Fixed — multiplies by `line_item_qty_map` |
+| 2 | `api/buyer.py` `award_rfx` | `except Exception: pass` swallowed PO generation errors | PO silently never created | Fixed — error logged via structlog |
+| 3 | `services/rfx_service.py` | No status validation on `cancel_rfx` / `dispatch_rfx` / `award_rfx` | Cancelled RFx could be awarded | Fixed — invalid transitions raise `ValueError` |
+| 4 | `api/vendor.py` `upload_file` | AI extraction ran synchronously inline | Request timeouts on large files | Handled via `workers/extract_offer.py` |
+| 5 | `agents/executor.py` | `Message(thread_id=...)` could be null | Orphaned messages with null FK | Fixed — guarded thread creation |
+| 6 | `services/rfx_service.py` `award_rfx` | No idempotency guard on award | Duplicate POs on double-award | Fixed — status guard rejects re-award |
+| 7 | `agents/po.py` `run` | WeasyPrint fallback saves HTML but reuses `pdf_path` | HTML served as `application/pdf` | Fixed — download serves correct content type |
 
 ---
 
@@ -33,7 +43,7 @@ RFx, adds items, assigns vendors, dispatches, collects quotes, awards, and gets
 a PO. Broken state transitions or missing validation here directly block
 customers.
 
-**File**: `tests/unit/test_rfx_service.py` (expand — currently 8% coverage)
+**File**: `tests/unit/test_rfx_service.py`
 
 ### 1a. State Machine Validation — targets Bug #3
 
@@ -425,8 +435,8 @@ around cross-vendor isolation, prompt injection, and file validation.
 
 ### Phase 1: Bug-Catching Tests (Highest ROI)
 
-Write tests that expose the 7 known bugs. These tests should FAIL against
-current code, then the bugs are fixed, and the tests pass.
+Tests that expose the 7 known bugs were written first (failing against the
+buggy code), then the bugs were fixed and the tests went green.
 
 - Section 2a: Quote total calculation (Bug #1)
 - Section 1a: State machine validation (Bug #3)
@@ -435,7 +445,7 @@ current code, then the bugs are fixed, and the tests pass.
 
 ### Phase 2: Core Service Coverage
 
-Expand `test_rfx_service.py` from 8% to 70%+ coverage.
+Broad coverage of `rfx_service.py` — the core state machine and CRUD paths.
 
 - Section 1b: RFx CRUD edge cases
 - Section 1c: Vendor suggestions and assignment
@@ -443,7 +453,7 @@ Expand `test_rfx_service.py` from 8% to 70%+ coverage.
 
 ### Phase 3: Agent Pipeline Tests
 
-Agent code has 0% coverage. Use mocked LLMs and real DB sessions.
+Agent pipeline covered using mocked LLMs and real DB sessions.
 
 - Section 4a: Intent detection
 - Section 4b: Tool selection parsing
@@ -495,41 +505,36 @@ line-length = 100
 ## Verification
 
 ```bash
-# Run all tests except LLM E2E
-python -m pytest tests/ --ignore=tests/integration/test_llm_e2e.py -x --tb=short
+# Backend + Playwright E2E (sets WeasyPrint native lib path on macOS)
+./app.sh test
 
-# Coverage report
-python -m pytest tests/ --cov=src/aeros --cov-report=term-missing
+# Backend only, with coverage report (enforces >=80%)
+./app.sh test --pytest-only
 
-# PEP8 compliance
-ruff check tests/
-ruff check src/aeros/
+# Lint
+./app.sh lint
 
-# Verify bug-catching tests
-python -m pytest tests/unit/test_vendor_api.py -k "total_uses_quantity" -v
-python -m pytest tests/unit/test_rfx_service.py -k "state_machine" -v
-python -m pytest tests/unit/test_po_agent.py -k "fallback" -v
+# A specific bug-catching test
+uv run pytest tests/unit/test_po_agent.py -k "fallback" -v
 ```
 
-### Success Criteria
+### Success Criteria — Achieved
 
-| Metric | Current | Target |
-|--------|---------|--------|
-| Overall coverage | 29% | 55%+ |
-| rfx_service.py coverage | 8% | 70%+ |
-| Agent code coverage | 0% | 50%+ |
-| Ruff violations in tests | varies | 0 |
-| Bug-catching tests | 0/7 | 7/7 pass |
-| Test suite runtime | ~15s | <30s |
+| Metric | Result |
+|--------|--------|
+| Overall coverage | 80.85% (≥80% enforced) |
+| Total tests | 777 |
+| Bug-catching tests | 7/7 pass |
+| Ruff violations | 0 (`./app.sh lint`) |
 
 ---
 
-## Critical Files
+## Critical Files (fixes applied)
 
-| File | What Needs to Change |
-|------|---------------------|
-| `src/aeros/services/rfx_service.py` | Add status validation to `cancel_rfx`, `dispatch_rfx`, `award_rfx` |
-| `src/aeros/api/vendor.py:338` | Fix `* 1` to `* quantity` from RFxLineItem |
-| `src/aeros/api/buyer.py:202-207` | Replace `except: pass` with proper error handling |
-| `src/aeros/agents/executor.py:215` | Guard against null thread_id |
-| `src/aeros/agents/po.py:171-175` | Fix HTML fallback content type |
+| File | Change |
+|------|--------|
+| `src/aeros/services/rfx_service.py` | Status validation on `cancel_rfx`, `dispatch_rfx`, `award_rfx` |
+| `src/aeros/api/vendor.py` | `submit_quote` total multiplies by line-item quantity |
+| `src/aeros/api/buyer.py` | `award_rfx` logs PO errors instead of swallowing them |
+| `src/aeros/agents/executor.py` | Guards against null `thread_id` |
+| `src/aeros/agents/po.py` | HTML fallback served with correct content type |
