@@ -12,6 +12,19 @@ Six agents run end-to-end (buyer Procurement co-pilot, Sourcing, Intake,
 Evaluation, Vendor co-pilot, post-award PO); Negotiation, Contract, Invoice,
 and Analytics ship as extensible Coming-Soon stubs.
 
+## Demo
+
+📺 **[`demos/demo.mp4`](demos/demo.mp4)** — a single, captioned end-to-end
+walkthrough on one RFx: the buyer signs in and **drafts a request in plain
+language** (rendered as a line-item table), the co-pilot **dispatches it and
+auto-invites the matching vendors**, **two vendors reply** in different formats
+(a spreadsheet read by AI, then a scanned photo read by the vision model), and
+the buyer **compares the offers side-by-side and awards** them. Each step is
+introduced by a title card naming the actor and account.
+
+The live-demo runbook (prompts, accounts, and sample vendor attachments in
+every supported format) lives in [`demo/SCRIPT.md`](demo/SCRIPT.md).
+
 ## Why
 
 Procurement teams lose hours to **format chaos** — vendors quote in PDFs,
