@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback, type FormEvent, type KeyboardEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "@/api/client";
-import { ConfirmDialog, VoiceInput, showToast } from "@/components/ui";
+import { ConfirmDialog, VoiceInput, showToast, AgentBlocks } from "@/components/ui";
+import type { AgentBlock, AgentAction } from "@/components/ui";
 
 /* ------------------------------------------------------------------ */
 /* Types                                                               */
@@ -476,6 +477,33 @@ export default function ChatCopilot() {
   }
 
   /* ---------------------------------------------------------------- */
+  /* Agent block actions (navigate / post)                              */
+  /* ---------------------------------------------------------------- */
+  async function handleAgentAction(action: AgentAction) {
+    if (action.kind === "navigate" && action.path) {
+      navigate(action.path);
+      return;
+    }
+    if (action.kind === "post" && action.endpoint) {
+      setActionLoading(true);
+      try {
+        const resp = await api.post<{ message: string; data: Record<string, unknown>; success: boolean }>(
+          action.endpoint,
+          action.payload ?? {},
+        );
+        setMessages((prev) => [
+          ...prev,
+          { role: "assistant", content: resp.message, data: resp.data, timestamp: new Date() },
+        ]);
+      } catch {
+        showToast("Action failed. Please try again.", "error");
+      } finally {
+        setActionLoading(false);
+      }
+    }
+  }
+
+  /* ---------------------------------------------------------------- */
   /* Dispatch confirmation handlers                                     */
   /* ---------------------------------------------------------------- */
 
@@ -644,46 +672,13 @@ export default function ChatCopilot() {
               {/* Message content with markdown for assistant */}
               <MessageContent role={msg.role} content={msg.content} />
 
-              {/* Data-driven sub-components */}
-              {!!msg.data?.draft && (
-                <DraftCard
-                  draft={msg.data.draft as Record<string, unknown>}
-                  onConfirm={handleDraftConfirmClick}
-                  confirmed={!!createdRfxId}
-                  loading={actionLoading}
+              {/* Agent visual reply: tables / cards / actions */}
+              {Array.isArray(msg.data?.blocks) && (msg.data!.blocks as AgentBlock[]).length > 0 && (
+                <AgentBlocks
+                  blocks={msg.data!.blocks as AgentBlock[]}
+                  onAction={handleAgentAction}
+                  actionsDisabled={actionLoading}
                 />
-              )}
-              {!!msg.data?.terms_confirmation && (
-                <TermsChip terms={msg.data.terms_confirmation as Record<string, unknown>} />
-              )}
-              {!!msg.data?.suggested_vendors && (
-                <VendorSuggestions vendors={msg.data.suggested_vendors as SuggestedVendor[]} />
-              )}
-              {!!msg.data?.dispatch_plan && (
-                <DispatchPlanCard
-                  plan={msg.data.dispatch_plan as Array<Record<string, unknown>>}
-                  rfxId={createdRfxId}
-                  onConfirm={handleDispatchConfirmClick}
-                  loading={actionLoading}
-                  alreadyDispatched={
-                    createdRfxId ? dispatchedRfxIds.has(createdRfxId) : false
-                  }
-                />
-              )}
-              {!!msg.data?.rfx_id && msg.data?.status === "created" && (
-                <button
-                  type="button"
-                  onClick={() => navigate(`/buyer/rfx/${msg.data!.rfx_id}`)}
-                  className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 underline"
-                >
-                  View RFx Details
-                </button>
-              )}
-              {msg.data?.status === "dispatched" && (
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
-                  <span className="text-xs text-green-400">Dispatched successfully</span>
-                </div>
               )}
 
               {/* Retry button for failed messages */}

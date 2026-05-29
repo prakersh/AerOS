@@ -19,7 +19,9 @@ import {
   StatusBadge,
   VoiceInput,
   showToast,
+  AgentBlocks,
 } from "@/components/ui";
+import type { AgentBlock } from "@/components/ui";
 import {
   formatTimestamp,
   formatFileSize,
@@ -837,6 +839,7 @@ function UploadAnalyzeTab({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [analyzingFileId, setAnalyzingFileId] = useState<string | null>(null);
   const [aiAnswer, setAiAnswer] = useState<string | null>(null);
+  const [aiBlocks, setAiBlocks] = useState<AgentBlock[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -901,14 +904,15 @@ function UploadAnalyzeTab({
   const handleAskAI = async (fileId: string, filename: string) => {
     setAnalyzingFileId(fileId);
     setAiAnswer(null);
+    setAiBlocks([]);
     try {
-      const res = await api.post<{ message?: string; suggestions?: string[] }>(
-        `/api/vendor/rfx/${rfxId}/copilot`,
-        {
-          message: `I uploaded "${filename}". Help me review my quote against this RFQ's requirements and flag anything I might be missing.`,
-        },
-      );
+      const res = await api.post<{ message?: string; data?: { blocks?: AgentBlock[] } }>("/api/chat", {
+        message: `I uploaded "${filename}". Show me what this RFx is requesting and help me review my quote against its requirements.`,
+        history: [],
+        rfx_id: Number(rfxId),
+      });
       setAiAnswer(res.message || "No response from co-pilot.");
+      setAiBlocks(res.data?.blocks ?? []);
     } catch {
       showToast("Failed to get co-pilot response", "error");
     } finally {
@@ -1029,13 +1033,17 @@ function UploadAnalyzeTab({
             </p>
             <button
               type="button"
-              onClick={() => setAiAnswer(null)}
+              onClick={() => {
+                setAiAnswer(null);
+                setAiBlocks([]);
+              }}
               className="text-xs text-zinc-500 hover:text-zinc-300"
             >
               Dismiss
             </button>
           </div>
           <p className="whitespace-pre-wrap text-sm text-zinc-200">{aiAnswer}</p>
+          {aiBlocks.length > 0 && <AgentBlocks blocks={aiBlocks} />}
         </div>
       )}
     </div>

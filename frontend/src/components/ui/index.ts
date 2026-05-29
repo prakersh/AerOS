@@ -13,3 +13,5 @@ export { default as LifecycleStepper } from "./LifecycleStepper";
 export { StarRating } from "./StarRating";
 export { default as VoiceInput } from "./VoiceInput";
 export { showToast, ToastContainer } from "./Toast";
+export { AgentBlocks } from "./AgentBlocks";
+export type { AgentBlock, AgentAction } from "./AgentBlocks";

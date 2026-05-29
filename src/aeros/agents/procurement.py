@@ -27,6 +27,7 @@ from aeros.agents.tools import (
     tools_to_toon,
 )
 from aeros.ai.base import ChatMessage
+from aeros.ai.ui_blocks import build_blocks_from_results
 from aeros.models.user_defaults import UserDefaults
 
 logger = structlog.get_logger()
@@ -623,19 +624,22 @@ class ProcurementAgent(BaseAgent):
             tokens=input_tokens + output_tokens,
         )
 
+        tool_result_dicts = [
+            {
+                "tool": r.tool,
+                "success": r.success,
+                "data": r.data,
+                "ms": round(r.latency_ms),
+            }
+            for r in tool_results
+        ]
+
         return AgentResult(
             message=message,
             data={
                 "tools_called": tools_called,
-                "tool_results": [
-                    {
-                        "tool": r.tool,
-                        "success": r.success,
-                        "data": r.data,
-                        "ms": round(r.latency_ms),
-                    }
-                    for r in tool_results
-                ],
+                "tool_results": tool_result_dicts,
+                "blocks": build_blocks_from_results(tool_result_dicts),
                 "performance": {
                     "iterations": iterations,
                     "llm_calls": llm_calls,
