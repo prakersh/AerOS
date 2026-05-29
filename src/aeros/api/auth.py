@@ -38,6 +38,16 @@ class UserResponse(BaseModel):
     display_name: str
     org_id: int | None
 
+    @classmethod
+    def from_user(cls, user: Any) -> "UserResponse":
+        return cls(
+            id=user.id,
+            email=user.email,
+            role=user.role.value,
+            display_name=user.display_name,
+            org_id=user.org_id,
+        )
+
 
 def _set_auth_cookies(response: Response, access: str, refresh: str) -> None:
     secure = not settings.debug
@@ -63,13 +73,7 @@ def login(
     refresh = create_refresh_token(user.id)  # type: ignore[arg-type]
 
     _set_auth_cookies(response, access, refresh)
-    return UserResponse(
-        id=user.id,  # type: ignore[arg-type]
-        email=user.email,
-        role=user.role.value,
-        display_name=user.display_name,
-        org_id=user.org_id,
-    )
+    return UserResponse.from_user(user)
 
 
 @router.post("/register")
@@ -91,13 +95,7 @@ def register(
     refresh = create_refresh_token(user.id)  # type: ignore[arg-type]
 
     _set_auth_cookies(response, access, refresh)
-    return UserResponse(
-        id=user.id,  # type: ignore[arg-type]
-        email=user.email,
-        role=user.role.value,
-        display_name=user.display_name,
-        org_id=user.org_id,
-    )
+    return UserResponse.from_user(user)
 
 
 @router.post("/logout")
@@ -115,13 +113,7 @@ def me(
     user = auth_service.get_user_by_id(session, current_user.user_id)
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return UserResponse(
-        id=user.id,  # type: ignore[arg-type]
-        email=user.email,
-        role=user.role.value,
-        display_name=user.display_name,
-        org_id=user.org_id,
-    )
+    return UserResponse.from_user(user)
 
 
 class UpdateProfileRequest(BaseModel):
@@ -141,13 +133,7 @@ def update_profile(
     session.add(user)
     session.commit()
     session.refresh(user)
-    return UserResponse(
-        id=user.id,  # type: ignore[arg-type]
-        email=user.email,
-        role=user.role.value,
-        display_name=user.display_name,
-        org_id=user.org_id,
-    )
+    return UserResponse.from_user(user)
 
 
 @router.get("/demo-accounts")

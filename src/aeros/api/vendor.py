@@ -1,7 +1,7 @@
 import json
 import os
 import re
-from typing import Any
+from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
@@ -29,6 +29,35 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/api/vendor", tags=["vendor"])
 
 
+def _get_current_vendor(
+    session: Session = Depends(get_session),
+    caller: AuthContext = require_role(Role.VENDOR),
+) -> Vendor:
+    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
+    if not vendor:
+        raise HTTPException(403, "No vendor profile")
+    return vendor
+
+
+CurrentVendor = Annotated[Vendor, Depends(_get_current_vendor)]
+
+
+def _get_vendor_thread(
+    rfx_id: int,
+    vendor: CurrentVendor,
+    session: Session = Depends(get_session),
+) -> Thread:
+    thread = session.exec(
+        select(Thread).where(Thread.rfx_id == rfx_id, Thread.vendor_id == vendor.id)
+    ).first()
+    if not thread:
+        raise HTTPException(404, "Thread not found")
+    return thread
+
+
+VendorThread = Annotated[Thread, Depends(_get_vendor_thread)]
+
+
 @router.get("/inbox")
 def vendor_inbox(
     session: Session = Depends(get_session),
@@ -36,24 +65,17 @@ def vendor_inbox(
 ) -> list[dict[str, Any]]:
     vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
-        return []
+        return []  # no profile yet — empty inbox, not an error
     return rfx_service.list_rfx_for_vendor(session, vendor.id)  # type: ignore[arg-type]
 
 
 @router.get("/rfx/{rfx_id}/thread")
 def get_thread(
     rfx_id: int,
+    vendor: CurrentVendor,
+    thread: VendorThread,
     session: Session = Depends(get_session),
-    caller: AuthContext = require_role(Role.VENDOR),
 ) -> dict[str, Any]:
-    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
-    if not vendor:
-        raise HTTPException(403, "No vendor profile")
-    thread = session.exec(
-        select(Thread).where(Thread.rfx_id == rfx_id, Thread.vendor_id == vendor.id)
-    ).first()
-    if not thread:
-        raise HTTPException(404, "Thread not found")
 
     from aeros.models.rfx import RFxLineItem, RFxRun
     from aeros.models.sku import SKU
@@ -184,18 +206,10 @@ class ReplyRequest(BaseModel):
 def reply_to_rfx(
     rfx_id: int,
     body: ReplyRequest,
+    thread: VendorThread,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
 ) -> Any:
-    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
-    if not vendor:
-        raise HTTPException(403, "No vendor profile")
-    thread = session.exec(
-        select(Thread).where(Thread.rfx_id == rfx_id, Thread.vendor_id == vendor.id)
-    ).first()
-    if not thread:
-        raise HTTPException(404, "Thread not found")
-
     msg = Message(
         thread_id=thread.id,
         sender_user_id=caller.user_id,
@@ -213,18 +227,12 @@ def reply_to_rfx(
 @router.post("/rfx/{rfx_id}/upload")
 async def upload_file(
     rfx_id: int,
+    vendor: CurrentVendor,
+    thread: VendorThread,
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
 ) -> dict[str, Any]:
-    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
-    if not vendor:
-        raise HTTPException(403, "No vendor profile")
-    thread = session.exec(
-        select(Thread).where(Thread.rfx_id == rfx_id, Thread.vendor_id == vendor.id)
-    ).first()
-    if not thread:
-        raise HTTPException(404, "Thread not found")
 
     content = await file.read()
     raw_name = os.path.basename(file.filename or "upload")
@@ -296,6 +304,7 @@ class CopilotRequest(BaseModel):
 async def vendor_copilot(
     rfx_id: int,
     body: CopilotRequest,
+    vendor: CurrentVendor,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
 ) -> dict[str, Any]:
@@ -306,9 +315,6 @@ async def vendor_copilot(
     from aeros.models.rfx import RFxLineItem, RFxRun
     from aeros.models.sku import SKU
 
-    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
-    if not vendor:
-        raise HTTPException(403, "No vendor profile")
     rv = session.exec(
         select(RFxVendor).where(RFxVendor.rfx_id == rfx_id, RFxVendor.vendor_id == vendor.id)
     ).first()
@@ -355,12 +361,12 @@ def list_uploads(
 ) -> list[dict[str, Any]]:
     vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
     if not vendor:
-        return []
+        return []  # no profile yet — empty list, not an error
     thread = session.exec(
         select(Thread).where(Thread.rfx_id == rfx_id, Thread.vendor_id == vendor.id)
     ).first()
     if not thread:
-        return []
+        return []  # no thread yet — empty list, not an error
     messages = list(session.exec(select(Message).where(Message.thread_id == thread.id)).all())
     msg_ids = [m.id for m in messages]
     if not msg_ids:
@@ -398,17 +404,11 @@ class SubmitQuoteRequest(BaseModel):
 def submit_quote(
     rfx_id: int,
     body: SubmitQuoteRequest,
+    vendor: CurrentVendor,
+    thread: VendorThread,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
 ) -> dict[str, Any]:
-    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
-    if not vendor:
-        raise HTTPException(403, "No vendor profile")
-    thread = session.exec(
-        select(Thread).where(Thread.rfx_id == rfx_id, Thread.vendor_id == vendor.id)
-    ).first()
-    if not thread:
-        raise HTTPException(404, "Thread not found")
 
     # Look up quantities from RFxLineItem for accurate total
     from aeros.models.rfx import RFxLineItem
@@ -489,12 +489,9 @@ class DeclineRequest(BaseModel):
 def decline_rfx(
     rfx_id: int,
     body: DeclineRequest,
+    vendor: CurrentVendor,
     session: Session = Depends(get_session),
-    caller: AuthContext = require_role(Role.VENDOR),
 ) -> Any:
-    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
-    if not vendor:
-        raise HTTPException(403, "No vendor profile")
     try:
         return rfx_service.decline_rfx_vendor(session, rfx_id, vendor.id, body.reason)  # type: ignore[arg-type]
     except ValueError as e:
@@ -509,12 +506,10 @@ class UpdateVendorProfileRequest(BaseModel):
 @router.put("/profile")
 def update_vendor_profile(
     body: UpdateVendorProfileRequest,
+    vendor: CurrentVendor,
     session: Session = Depends(get_session),
     caller: AuthContext = require_role(Role.VENDOR),
 ) -> dict[str, Any]:
-    vendor = session.exec(select(Vendor).where(Vendor.vendor_user_id == caller.user_id)).first()
-    if not vendor:
-        raise HTTPException(403, "No vendor profile")
     if body.vendor_name is not None:
         vendor.name = body.vendor_name
         from aeros.models.user import User

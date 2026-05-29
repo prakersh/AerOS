@@ -19,6 +19,13 @@ router = APIRouter(prefix="/api/buyer", tags=["buyer"])
 # --- Helpers ---
 
 
+def _raise_for_value_error(e: ValueError) -> None:
+    msg = str(e)
+    if "not found" in msg.lower():
+        raise HTTPException(404, msg) from None
+    raise HTTPException(400, msg) from None
+
+
 def _verify_rfx_ownership(session: Session, rfx_id: int, caller: AuthContext) -> None:
     """Verify the caller owns this RFx. Admins bypass.
 
@@ -188,10 +195,7 @@ def vendor_suggestions(
     try:
         return rfx_service.get_vendor_suggestions(session, rfx_id, caller.org_id or 0)
     except ValueError as e:
-        msg = str(e)
-        if "not found" in msg.lower():
-            raise HTTPException(404, msg) from None
-        raise HTTPException(400, msg) from None
+        _raise_for_value_error(e)
 
 
 class VendorAssignment(BaseModel):
@@ -215,10 +219,7 @@ def assign_vendors(
         assignments = [a.model_dump() for a in body.assignments]
         return rfx_service.assign_vendors_to_items(session, rfx_id, caller.user_id, assignments)
     except ValueError as e:
-        msg = str(e)
-        if "not found" in msg.lower():
-            raise HTTPException(404, msg) from None
-        raise HTTPException(400, msg) from None
+        _raise_for_value_error(e)
 
 
 class CancelRFxRequest(BaseModel):
@@ -236,10 +237,7 @@ def cancel_rfx(
     try:
         return rfx_service.cancel_rfx(session, rfx_id, caller.user_id, body.reason)
     except ValueError as e:
-        msg = str(e)
-        if "not found" in msg.lower():
-            raise HTTPException(404, msg) from None
-        raise HTTPException(400, msg) from None
+        _raise_for_value_error(e)
 
 
 class AwardRequest(BaseModel):
@@ -257,10 +255,7 @@ async def award_rfx(
     try:
         rfx_service.award_rfx(session, rfx_id, caller.user_id, body.decisions)
     except ValueError as e:
-        msg = str(e)
-        if "not found" in msg.lower():
-            raise HTTPException(404, msg) from None
-        raise HTTPException(400, msg) from None
+        _raise_for_value_error(e)
 
     # Trigger PO generation after successful award
     po_error = None

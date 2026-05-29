@@ -1,5 +1,6 @@
 """Base agent class for all AEROS agents."""
 
+import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
@@ -27,6 +28,13 @@ class AgentResult:
     data: dict[str, Any] = field(default_factory=dict)
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     success: bool = True
+
+
+def parse_llm_json(raw: str, fallback: dict[str, Any] | None = None) -> dict[str, Any]:
+    try:
+        return json.loads(raw)  # type: ignore[no-any-return]
+    except json.JSONDecodeError:
+        return fallback if fallback is not None else {"message": raw}
 
 
 class BaseAgent(ABC):

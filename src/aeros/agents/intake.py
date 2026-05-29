@@ -4,7 +4,7 @@ import json
 
 from sqlmodel import select
 
-from aeros.agents.base import AgentContext, AgentResult, BaseAgent
+from aeros.agents.base import AgentContext, AgentResult, BaseAgent, parse_llm_json
 from aeros.ai.base import ChatMessage
 from aeros.ai.prompts.intake import INTAKE_SYSTEM_PROMPT
 from aeros.models.user_defaults import UserDefaults
@@ -90,10 +90,9 @@ class IntakeAgent(BaseAgent):
             response_format={"type": "json_object"},
         )
 
-        try:
-            parsed = json.loads(response.content)
-        except json.JSONDecodeError:
-            parsed = {"message": response.content, "status": "gathering"}
+        parsed = parse_llm_json(
+            response.content, {"message": response.content, "status": "gathering"}
+        )
 
         return AgentResult(
             message=parsed.get("message", response.content),

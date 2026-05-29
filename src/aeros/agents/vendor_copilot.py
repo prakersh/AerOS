@@ -1,8 +1,6 @@
 """VendorCopilotAgent — helps vendors compose RFQ responses."""
 
-import json
-
-from aeros.agents.base import AgentContext, AgentResult, BaseAgent
+from aeros.agents.base import AgentContext, AgentResult, BaseAgent, parse_llm_json
 from aeros.ai.base import ChatMessage
 
 VENDOR_SYSTEM_PROMPT = """You are the AEROS Vendor Co-pilot. \
@@ -61,10 +59,9 @@ class VendorCopilotAgent(BaseAgent):
             response_format={"type": "json_object"},
         )
 
-        try:
-            parsed = json.loads(response.content)
-        except json.JSONDecodeError:
-            parsed = {"message": response.content, "status": "chatting"}
+        parsed = parse_llm_json(
+            response.content, {"message": response.content, "status": "chatting"}
+        )
 
         return AgentResult(
             message=parsed.get("message", response.content),

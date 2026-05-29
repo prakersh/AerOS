@@ -7,7 +7,7 @@ from typing import Any
 import structlog
 from sqlmodel import select
 
-from aeros.agents.base import AgentContext, AgentResult, BaseAgent
+from aeros.agents.base import AgentContext, AgentResult, BaseAgent, parse_llm_json
 from aeros.ai.base import ChatMessage
 from aeros.channels.correlation import generate_correlation_token
 from aeros.channels.email_out import send_rfx_invitation
@@ -149,10 +149,9 @@ Currency: {rfx.currency_for_this_rfx}
             max_tokens=1024,
             response_format={"type": "json_object"},
         )
-        try:
-            composed = json.loads(resp.content)
-        except json.JSONDecodeError:
-            composed = {"subject": rfx.title, "summary": resp.content}
+        composed = parse_llm_json(
+            resp.content, {"subject": rfx.title, "summary": resp.content}
+        )
 
         base_summary = composed.get("summary", rfx.title)
         dispatched_count = 0
