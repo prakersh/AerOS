@@ -70,7 +70,7 @@ _TOOL_STEP_LABELS = {
 
 
 def humanize(field: str) -> str:
-    """Turn a snake_case field name into a readable label: ``payment_terms`` -> ``Payment terms``."""
+    """Snake_case field name to readable label: ``payment_terms`` -> ``Payment terms``."""
     text = str(field).replace("_", " ").strip()
     return text[:1].upper() + text[1:] if text else text
 

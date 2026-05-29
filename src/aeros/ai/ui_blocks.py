@@ -105,7 +105,9 @@ def _vendor_rows(vendors: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "vendor": v.get("vendor_name") or v.get("name") or "—",
                 "categories": v.get("categories") or "—",
                 "score": {"value": f"{score:.0f}" if isinstance(score, (int, float)) else "—"},
-                "channel": channel_label(v.get("recommended_channel") or v.get("channel") or "in_app"),
+                "channel": channel_label(
+                    v.get("recommended_channel") or v.get("channel") or "in_app"
+                ),
             }
         )
     return rows

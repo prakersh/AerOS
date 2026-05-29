@@ -149,9 +149,7 @@ Currency: {rfx.currency_for_this_rfx}
             max_tokens=1024,
             response_format={"type": "json_object"},
         )
-        composed = parse_llm_json(
-            resp.content, {"subject": rfx.title, "summary": resp.content}
-        )
+        composed = parse_llm_json(resp.content, {"subject": rfx.title, "summary": resp.content})
 
         base_summary = composed.get("summary", rfx.title)
         dispatched_count = 0
