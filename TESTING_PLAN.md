@@ -1,16 +1,16 @@
-# AerOS Testing Plan — Quality-First, Workflow-Driven
+# AerOS Testing Plan - Quality-First, Workflow-Driven
 
 ## Overview
 
-The suite is organized around **business workflows** — the flows that directly
-affect customers — rather than code layers. As of this writing it has **777
+The suite is organized around **business workflows** - the flows that directly
+affect customers - rather than code layers. As of this writing it has **777
 tests at 80.85% line coverage**, with **≥80% enforced** in CI
 (`fail_under = 80` in `pyproject.toml`). The 7 bugs catalogued below were each
 identified, reproduced with a failing test, then fixed; those regression tests
 now pass.
 
 Run the full suite (backend + Playwright E2E) with `./app.sh test`. The PO
-rendering tests need WeasyPrint's native libraries — `./app.sh` exports the
+rendering tests need WeasyPrint's native libraries - `./app.sh` exports the
 Homebrew lib path on macOS automatically; running `pytest` directly without it
 fails only those 4 tests.
 
@@ -19,24 +19,24 @@ business risk. No test exists solely to inflate a count.
 
 ---
 
-## Confirmed Bugs — Caught and Fixed
+## Confirmed Bugs - Caught and Fixed
 
 All 7 were reproduced with a failing test, then fixed. Locations cite the
 current function (line numbers omitted to avoid drift).
 
 | # | Location | Bug | Impact | Status |
 |---|----------|-----|--------|--------|
-| 1 | `api/vendor.py` `submit_quote` | total used a hardcoded `* 1` instead of quantity | Every structured quote total was wrong | Fixed — multiplies by `line_item_qty_map` |
-| 2 | `api/buyer.py` `award_rfx` | `except Exception: pass` swallowed PO generation errors | PO silently never created | Fixed — error logged via structlog |
-| 3 | `services/rfx_service.py` | No status validation on `cancel_rfx` / `dispatch_rfx` / `award_rfx` | Cancelled RFx could be awarded | Fixed — invalid transitions raise `ValueError` |
+| 1 | `api/vendor.py` `submit_quote` | total used a hardcoded `* 1` instead of quantity | Every structured quote total was wrong | Fixed - multiplies by `line_item_qty_map` |
+| 2 | `api/buyer.py` `award_rfx` | `except Exception: pass` swallowed PO generation errors | PO silently never created | Fixed - error logged via structlog |
+| 3 | `services/rfx_service.py` | No status validation on `cancel_rfx` / `dispatch_rfx` / `award_rfx` | Cancelled RFx could be awarded | Fixed - invalid transitions raise `ValueError` |
 | 4 | `api/vendor.py` `upload_file` | AI extraction ran synchronously inline | Request timeouts on large files | Handled via `workers/extract_offer.py` |
-| 5 | `agents/executor.py` | `Message(thread_id=...)` could be null | Orphaned messages with null FK | Fixed — guarded thread creation |
-| 6 | `services/rfx_service.py` `award_rfx` | No idempotency guard on award | Duplicate POs on double-award | Fixed — status guard rejects re-award |
-| 7 | `agents/po.py` `run` | WeasyPrint fallback saves HTML but reuses `pdf_path` | HTML served as `application/pdf` | Fixed — download serves correct content type |
+| 5 | `agents/executor.py` | `Message(thread_id=...)` could be null | Orphaned messages with null FK | Fixed - guarded thread creation |
+| 6 | `services/rfx_service.py` `award_rfx` | No idempotency guard on award | Duplicate POs on double-award | Fixed - status guard rejects re-award |
+| 7 | `agents/po.py` `run` | WeasyPrint fallback saves HTML but reuses `pdf_path` | HTML served as `application/pdf` | Fixed - download serves correct content type |
 
 ---
 
-## Section 1: RFx Lifecycle — Highest Priority
+## Section 1: RFx Lifecycle - Highest Priority
 
 **What this protects**: The RFx lifecycle is the core product. A buyer creates an
 RFx, adds items, assigns vendors, dispatches, collects quotes, awards, and gets
@@ -45,7 +45,7 @@ customers.
 
 **File**: `tests/unit/test_rfx_service.py`
 
-### 1a. State Machine Validation — targets Bug #3
+### 1a. State Machine Validation - targets Bug #3
 
 Tests enforce valid status transitions. Invalid transitions must raise
 `ValueError`. These tests define the contract; the service code must be patched
@@ -99,12 +99,12 @@ to add validation.
 ## Section 2: Vendor Quote Submission
 
 **What this protects**: Vendors submitting quotes is the second most critical
-flow. Bug #1 means every structured quote total is wrong — directly affecting
+flow. Bug #1 means every structured quote total is wrong - directly affecting
 procurement decisions and financial accuracy.
 
 **File**: `tests/unit/test_vendor_api.py` (expand)
 
-### 2a. Quote Total Calculation — targets Bug #1
+### 2a. Quote Total Calculation - targets Bug #1
 
 | Test | Asserts |
 |------|---------|
@@ -151,7 +151,7 @@ duplicated, or delivered as HTML pretending to be PDF.
 
 **File**: `tests/unit/test_po_agent.py` (new)
 
-### 3a. PO Rendering — targets Bugs #2, #6, #7
+### 3a. PO Rendering - targets Bugs #2, #6, #7
 
 | Test | Asserts |
 |------|---------|
@@ -241,7 +241,7 @@ silently fail. The agentic loop must respect limits and handle LLM failures.
 | `test_missing_tool_key` | Skipped |
 | `test_non_dict_items` | Skipped |
 
-### 4c. Tool Executor — targets Bug #5
+### 4c. Tool Executor - targets Bug #5
 
 **File**: `tests/unit/test_tool_executor.py` (new)
 
@@ -445,7 +445,7 @@ buggy code), then the bugs were fixed and the tests went green.
 
 ### Phase 2: Core Service Coverage
 
-Broad coverage of `rfx_service.py` — the core state machine and CRUD paths.
+Broad coverage of `rfx_service.py` - the core state machine and CRUD paths.
 
 - Section 1b: RFx CRUD edge cases
 - Section 1c: Vendor suggestions and assignment
@@ -518,7 +518,7 @@ line-length = 100
 uv run pytest tests/unit/test_po_agent.py -k "fallback" -v
 ```
 
-### Success Criteria — Achieved
+### Success Criteria - Achieved
 
 | Metric | Result |
 |--------|--------|

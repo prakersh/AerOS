@@ -1,4 +1,4 @@
-# AEROS — AI Procurement OS
+# AEROS - AI Procurement OS
 
 > **Single source of truth** for design + implementation tracking + sub-agent dispatch.
 > On plan approval, this file is mirrored to `/Users/prakersh/projects/aerchain/IMPLMENTETION_PLAN_CONTEXT.md` (project root) and kept in sync.
@@ -9,15 +9,15 @@
 
 Aerchain-style assignment:
 
-> Build an end-to-end working prototype where a **buyer drafts an RFx in conversation with an AI co-pilot**, the RFx goes out to vendors over **email (or any channel)**, vendors reply in **whatever format they like — PDF, Word, Excel, scanned proforma, photographed rate card, or even an email body** — and the system **reads each response and consolidates them into a single side-by-side comparison**. Liberty over framework, models, channels, storage, UI, persona, sample data. Stubs OK for plumbing; **AI loops must be real and functional**. Deliverable: a **working prototype ready for live demo**.
+> Build an end-to-end working prototype where a **buyer drafts an RFx in conversation with an AI co-pilot**, the RFx goes out to vendors over **email (or any channel)**, vendors reply in **whatever format they like - PDF, Word, Excel, scanned proforma, photographed rate card, or even an email body** - and the system **reads each response and consolidates them into a single side-by-side comparison**. Liberty over framework, models, channels, storage, UI, persona, sample data. Stubs OK for plumbing; **AI loops must be real and functional**. Deliverable: a **working prototype ready for live demo**.
 
-We are not building one feature. We are building **AEROS — a procurement OS** that mirrors aerchain Aera's multi-agent framing (Intake → Sourcing → Vendor Onboarding → Evaluation → Negotiation → Contract → Invoice → Analytics).
+We are not building one feature. We are building **AEROS - a procurement OS** that mirrors aerchain Aera's multi-agent framing (Intake → Sourcing → Vendor Onboarding → Evaluation → Negotiation → Contract → Invoice → Analytics).
 
 **Persona**: procurement agent at a Blinkit/Zepto-style dark store. Manages a catalog of daily-purchase SKUs (produce, dairy, packaged FMCG), keeps a directory of preferred vendors per category, and conversationally drafts purchase requests.
 
-**Authenticated users (two roles)**: Buyer and Vendor — both with chat + upload.
+**Authenticated users (two roles)**: Buyer and Vendor - both with chat + upload.
 
-**Channels (unified)**: in-app chat (web), Email (SMTP/IMAP), Telegram bot. Any inbound reply on any channel — tagged with a signed correlation token — routes to the same RFx thread.
+**Channels (unified)**: in-app chat (web), Email (SMTP/IMAP), Telegram bot. Any inbound reply on any channel - tagged with a signed correlation token - routes to the same RFx thread.
 
 **Demo brand**: AEROS.
 
@@ -48,7 +48,7 @@ We are not building one feature. We are building **AEROS — a procurement OS** 
 
 | # | Decision | Choice | Date |
 |---|---|---|---|
-| D1 | Product scope | AEROS — full procurement OS, mirroring Aera's 8 agents; ship 4 real, stub 4 as "Coming Soon" | confirmed |
+| D1 | Product scope | AEROS - full procurement OS, mirroring Aera's 8 agents; ship 4 real, stub 4 as "Coming Soon" | confirmed |
 | D2 | Persona | Procurement agent at Blinkit/Zepto-style dark store; daily-purchase SKUs | confirmed |
 | D3 | Authenticated roles | **Buyer + Vendor + Admin** (3-tier RBAC). Admin module modeled on memo.sbs (DB-backed AI config, user mgmt, cross-tenant observability, full audit). See §3.8. | confirmed |
 | D4 | Channels | In-app chat + Email (SMTP+IMAP) + Telegram bot, unified via signed correlation tokens | confirmed |
@@ -58,7 +58,7 @@ We are not building one feature. We are building **AEROS — a procurement OS** 
 | D8 | ASR | Groq `whisper-large-v3-turbo` | confirmed |
 | D9 | Voice scope | **Both buyer AND vendor chat** have mic button | confirmed |
 | D10 | Language | **Hindi + Hinglish + English (auto-detect)** | confirmed |
-| D11 | Framework | **Direct SDK + Pydantic + plain Python agent classes** — no LangChain, no LangGraph (see §3.1 for rationale) | confirmed |
+| D11 | Framework | **Direct SDK + Pydantic + plain Python agent classes** - no LangChain, no LangGraph (see §3.1 for rationale) | confirmed |
 | D12 | Backend | FastAPI + SQLModel + SQLite + Alembic + Huey | confirmed |
 | D13 | Frontend | React 19 + Vite + Tailwind v4 + TanStack Query + Zustand, built using `/ui-ux-pro-max` skill | confirmed |
 | D14 | TDD | Unit + Integration + E2E (Playwright). Coverage ≥80% backend. | confirmed |
@@ -81,7 +81,7 @@ We are not building one feature. We are building **AEROS — a procurement OS** 
 | D31 | Late offer policy | Offers arriving after `response_deadline` are accepted but flagged (`Offer.is_late=true`); ComparisonMatrix shows a "late" badge; buyer chooses whether to include in award. No silent drops. | confirmed |
 | D32 | AI provider failover | `AIProviderConfig` rows carry `priority_rank` per kind (chat/vision/asr/embedding). On provider error or timeout >5s, `ai/factory.py` falls through to the next enabled provider of the same kind; chat surfaces a one-line "switched to backup model" notice. Admin tunable in `/admin/ai/providers`. | confirmed |
 | D33 | Confidence thresholds | Per-field confidence <0.7 → yellow badge + "review" CTA; overall offer confidence = MIN of all line-item field confidences (worst-link); offers with overall <0.5 auto-flag for buyer review and cannot be awarded without explicit acknowledge. | confirmed |
-| D34 | In-app canonical thread | Whatever channel a dispatch went over (email / Telegram / in-app), the vendor's `/vendor/inbox` always shows the full thread (all messages, AI co-pilot replies, attachments, channel-of-origin badge). Vendor can always reply in-app regardless of invitation channel. Implication: email-bounce / Telegram-blocked are NOT blocking failure modes — vendor self-serves by logging in. See §3.6. | confirmed |
+| D34 | In-app canonical thread | Whatever channel a dispatch went over (email / Telegram / in-app), the vendor's `/vendor/inbox` always shows the full thread (all messages, AI co-pilot replies, attachments, channel-of-origin badge). Vendor can always reply in-app regardless of invitation channel. Implication: email-bounce / Telegram-blocked are NOT blocking failure modes - vendor self-serves by logging in. See §3.6. | confirmed |
 | D35 | SourcingAgent channel confirmation | SourcingAgent **proposes** a dispatch plan (channel per vendor) based on vendor's available channels (priority: in-app > email > Telegram) and **asks the buyer to confirm** via a "Dispatch Plan" chat card before sending. Buyer can override per-vendor channel or approve. No silent dispatch. See §3.4. | confirmed |
 
 ---
@@ -92,7 +92,7 @@ We are not building one feature. We are building **AEROS — a procurement OS** 
 
 After evaluating Direct SDK, LangChain, LangGraph, and Pydantic AI against AEROS' actual needs (provider-agnostic NVIDIA NIM, multimodal extraction quality, omnichannel orchestration, 1–2 day budget, live demo, TDD):
 
-**Choice: Direct SDK (OpenAI-compatible client) behind a thin `ChatProvider` protocol — no LangChain, no LangGraph.**
+**Choice: Direct SDK (OpenAI-compatible client) behind a thin `ChatProvider` protocol - no LangChain, no LangGraph.**
 
 | Aspect | Direct SDK (chosen) | LangChain | LangGraph | Pydantic AI |
 |---|---|---|---|---|
@@ -105,7 +105,7 @@ After evaluating Direct SDK, LangChain, LangGraph, and Pydantic AI against AEROS
 | TDD friction | low (just classes) | mock framework primitives | checkpointer adds setup | typed = good |
 | Matches user 4DPocket philosophy | yes | no | partial | no |
 
-**Why no LangGraph despite stateful orchestration**: The orchestration is small enough (≤6 statuses on `RFxRun`) that a DB-backed state machine is clearer and ships faster. We **render the agent graph for the demo from our own state model** — same wow factor, zero framework risk.
+**Why no LangGraph despite stateful orchestration**: The orchestration is small enough (≤6 statuses on `RFxRun`) that a DB-backed state machine is clearer and ships faster. We **render the agent graph for the demo from our own state model** - same wow factor, zero framework risk.
 
 **Multi-agent ≠ agent framework.** Each Aera-style agent (Intake, Sourcing, Vendor, Evaluation) is a plain Python class in `src/aeros/agents/` with one public `run(ctx, input) → AgentResult` method and Pydantic input/output schemas. This **is** a multi-agent system.
 
@@ -330,9 +330,9 @@ Single rule: **any inbound message tagged with a valid signed correlation token 
 
 Each channel's inbound handler normalizes to one `Message{thread_id, sender, channel, body, attachments[]}` record. EvaluationAgent runs on the union of attachments + body for that thread, regardless of channel.
 
-**In-app is the canonical thread view (D34).** Regardless of which channel the dispatch went over, the vendor's `/vendor/inbox` always renders the complete thread: every `Message` row for that `(rfx_id, vendor_id)` — including AI co-pilot replies, attachments, and a `ChannelBadge` indicating each message's channel-of-origin. Vendor can always reply in-app even if the invitation arrived via email or Telegram. This is why email-bounce and Telegram-blocked are NOT blocking failure modes for AEROS — the vendor self-serves by logging in. We therefore do not implement bounce-retry, auto-channel-switching, or out-of-office detection.
+**In-app is the canonical thread view (D34).** Regardless of which channel the dispatch went over, the vendor's `/vendor/inbox` always renders the complete thread: every `Message` row for that `(rfx_id, vendor_id)` - including AI co-pilot replies, attachments, and a `ChannelBadge` indicating each message's channel-of-origin. Vendor can always reply in-app even if the invitation arrived via email or Telegram. This is why email-bounce and Telegram-blocked are NOT blocking failure modes for AEROS - the vendor self-serves by logging in. We therefore do not implement bounce-retry, auto-channel-switching, or out-of-office detection.
 
-### 3.7 Observability & Statistics layer (D26 — memo.sbs-style)
+### 3.7 Observability & Statistics layer (D26 - memo.sbs-style)
 
 A first-class telemetry layer captures every AI call, every agent run, every channel event, and surfaces them to (a) the developer (logs + admin dashboard) and (b) the buyer (per-chat pipeline report + activity timeline). Aggregate stats live on an Observability dashboard.
 
@@ -399,7 +399,7 @@ Inspect this turn
 
 **Tests added** (§7.3): `test_llm_call_log_decorator.py`, `test_agent_run_log_context.py`, `test_pipeline_report_attached_to_chat.py`, `test_observability_dashboard_aggregations.py`, `test_channel_event_log.py`, `test_log_redaction_in_telemetry.py` (no secrets/PII in telemetry rows).
 
-### 3.8 Admin Module + 3-tier RBAC (D27 — memo.sbs-style)
+### 3.8 Admin Module + 3-tier RBAC (D27 - memo.sbs-style)
 
 **Three roles**, hierarchical permissions:
 
@@ -409,37 +409,37 @@ Inspect this turn
 | **Buyer** | Everything in own buyer-org scope: inventory, vendors, draft + dispatch + award RFx, comparison matrix, override extractions, see own + buyer-org observability, audit log scoped to own org | Cross-org reads, manage models/providers, manage other users, suspend users, see vendor's internal defaults beyond what's in the RFx |
 | **Admin** | Everything: cross-tenant observability, model/provider config (DB-backed), user management (list/create/suspend/role-change), system settings (retention, rate limits, AI budget caps), full audit log, vendor KYC approval, manual PII redaction triggers | Bypass tested safety controls (correlation tokens, append-only audit, encryption-at-rest envelope still apply) |
 
-**Enforcement (defence in depth, 3 layers — all tested):**
+**Enforcement (defence in depth, 3 layers - all tested):**
 
 1. **Router layer**: every endpoint declares `required_role: list[Role]` via FastAPI dependency `require_role(*roles)`. Returns 403 with audit log entry.
 2. **Service layer**: every service method takes a `caller: AuthContext` and re-checks role + org scope before any DB hit. Tests assert that bypassing the router (e.g. via direct service import) still rejects.
-3. **DB-query layer**: helper `for_user(caller)` builds query filters by role — buyers see only own-org rows, vendors see only own-thread rows, admins see all. Used as a wrapper on every list/get query (`select(Offer).where(*for_user(caller, Offer))`). Tests assert that omitting the wrapper raises a `MissingAuthFilter` lint error.
+3. **DB-query layer**: helper `for_user(caller)` builds query filters by role - buyers see only own-org rows, vendors see only own-thread rows, admins see all. Used as a wrapper on every list/get query (`select(Offer).where(*for_user(caller, Offer))`). Tests assert that omitting the wrapper raises a `MissingAuthFilter` lint error.
 
 **Admin patterns adopted from memo.sbs** (`/Users/prakersh/projects/memo.sbs/src/ai/providers.py` + admin pages):
 
 - **DB-backed AI provider config**: `AIProviderConfig(provider, model, enabled, is_default, context_window, max_output_tokens, cost_per_1k_input, cost_per_1k_output, base_url_override?, api_key_env_var, created_by_admin_id, updated_at)`. `.env` provides initial defaults; admin panel can override per provider/model at runtime. `ai/factory.py` reads from DB first, falls back to env.
 - **Runtime toggle**: admin can disable a misbehaving model in one click; agents fall through to the next enabled model.
-- **Per-model token cap & cost budget**: live-editable. Breach triggers circuit breaker (§2 D24 / P2.9) — agents return a polite error and admin gets an alert.
+- **Per-model token cap & cost budget**: live-editable. Breach triggers circuit breaker (§2 D24 / P2.9) - agents return a polite error and admin gets an alert.
 - **Knowledge Hub-style settings page**: AI config + system settings (retention days, rate limits, AI budget caps) under one `/admin/settings`.
 
 **Admin shell** (`/admin/*`, separate from `/buyer` and `/vendor`):
 
-- `/admin/dashboard` — KPIs across all orgs (RFx count, offers extracted, cost, error rate, p95 latency).
-- `/admin/users` — list/filter/create/suspend/role-change/reset-password; force-logout.
-- `/admin/orgs` — list buyer + vendor organizations.
-- `/admin/vendors/kyc` — approve/reject vendor KYC (`Vendor.kyc_status` flow).
-- `/admin/ai/providers` — DB-backed provider + model config table.
-- `/admin/ai/budgets` — per-user + per-RFx token caps; circuit-breaker tuning.
-- `/admin/settings` — retention, rate limits, CORS allow-list, JWT TTLs, log redaction patterns.
-- `/admin/observability` — superset of buyer observability: cross-tenant, full trace_id drill-down.
-- `/admin/audit` — full immutable audit log view + export.
-- `/admin/incidents` — runbook actions (revoke token, force-rotate HMAC secret, replay failed Huey tasks).
+- `/admin/dashboard` - KPIs across all orgs (RFx count, offers extracted, cost, error rate, p95 latency).
+- `/admin/users` - list/filter/create/suspend/role-change/reset-password; force-logout.
+- `/admin/orgs` - list buyer + vendor organizations.
+- `/admin/vendors/kyc` - approve/reject vendor KYC (`Vendor.kyc_status` flow).
+- `/admin/ai/providers` - DB-backed provider + model config table.
+- `/admin/ai/budgets` - per-user + per-RFx token caps; circuit-breaker tuning.
+- `/admin/settings` - retention, rate limits, CORS allow-list, JWT TTLs, log redaction patterns.
+- `/admin/observability` - superset of buyer observability: cross-tenant, full trace_id drill-down.
+- `/admin/audit` - full immutable audit log view + export.
+- `/admin/incidents` - runbook actions (revoke token, force-rotate HMAC secret, replay failed Huey tasks).
 
 **Bootstrap**: first migration creates a single `admin@aeros.local` seeded user with a random password printed to stdout on first run and immediately rotated via the admin panel.
 
 **Audit**: every admin action writes `AuditLog` with `actor_role=admin` and is non-redactable (admin actions are always preserved for compliance).
 
-**Security note**: admin role does NOT grant power to silently read vendor↔buyer chat content beyond what's stored as data — even admins viewing a thread create an audit entry visible to the parties involved (transparency over surveillance).
+**Security note**: admin role does NOT grant power to silently read vendor↔buyer chat content beyond what's stored as data - even admins viewing a thread create an audit entry visible to the parties involved (transparency over surveillance).
 
 **New tables** (added to §3.3):
 
@@ -487,11 +487,11 @@ Beyond the happy path, the demo must handle these four flows. Each is small (≤
 
 **Offer revisions.** A vendor who has already submitted may resubmit before `response_deadline`. Each resubmit creates a **new** `Offer` row with `revision_no = prev + 1` and the prior row's `superseded_by_offer_id` set to the new id (so revision history is preserved, not lost). ComparisonMatrix shows the latest by default with a small **"v2 / v3"** badge; a hover-toggle reveals prior revisions side-by-side. Any buyer override on a prior revision is migrated forward to the latest revision (audited).
 
-**Multi-stage reminders.** `RFxVendor.reminders_sent_json` is an append-only array of `{slot: 'T-24h' | 'T-2h' | 'final', sent_at, channel}`. The reminder worker scans every 5 min; for each unsent slot whose trigger time has passed (relative to `response_deadline`), it sends via vendor's preferred channel (falls through to next preference on failure) and appends to the array. Per-slot idempotency is enforced by the array — a slot never fires twice even on worker crash + restart.
+**Multi-stage reminders.** `RFxVendor.reminders_sent_json` is an append-only array of `{slot: 'T-24h' | 'T-2h' | 'final', sent_at, channel}`. The reminder worker scans every 5 min; for each unsent slot whose trigger time has passed (relative to `response_deadline`), it sends via vendor's preferred channel (falls through to next preference on failure) and appends to the array. Per-slot idempotency is enforced by the array - a slot never fires twice even on worker crash + restart.
 
 ---
 
-## 4. Security, Guardrails & Compliance (hard requirement — non-negotiable)
+## 4. Security, Guardrails & Compliance (hard requirement - non-negotiable)
 
 ### 4.1 Application security baseline (OWASP Top 10 aligned)
 
@@ -520,18 +520,18 @@ Beyond the happy path, the demo must handle these four flows. Each is small (≤
 
 | Layer | Control | Implementation |
 |---|---|---|
-| **Input — system prompts** | All system prompts versioned in `ai/prompts/` as constants; reviewed before merge; never user-controlled | unit tests assert immutability + content checksum |
-| **Input — user content boundary** | Every untrusted input (vendor message, buyer free text, extracted doc content) wrapped in explicit delimiters with instructions to the LLM that content inside is **data, not instructions** | `prompts/wrap.py` `wrap_untrusted(text, kind)` helper |
-| **Input — content classifier** | Lightweight pre-filter (regex + keyword) rejects obvious jailbreak patterns ("ignore previous", "you are now", "system:", "</system>", "DAN", base64-encoded instruction blocks, prompt-leak attempts) before reaching the main LLM | `ai/guardrails/input_filter.py` + `test_guardrails_input.py` |
-| **Input — dual-LLM evaluator (high-risk paths)** | For tool-calling decisions that produce side effects (dispatch RFx, send email, award PO), a small evaluator LLM call validates the intent against the raw user message. Mismatch → human-in-loop | `ai/guardrails/intent_validator.py` + `test_guardrails_intent.py` |
-| **Output — schema validation** | Every LLM output that drives an action is parsed against a Pydantic schema; validation failure → retry once with stricter prompt → fail closed (refuse) | enforced in every agent |
-| **Output — action allow-list** | LLM tool calls restricted to a fixed enum of named tools; unknown tool name → reject without execution | `agents/base.py` `Tool.registry` |
-| **Output — content filter** | Output passed through a redactor that strips email addresses, phone numbers, credit-card patterns, API-key patterns before display | `ai/guardrails/output_filter.py` |
-| **Output — refusal patterns** | If the model is asked to do anything outside procurement scope, system prompt directs it to refuse politely and stay on task; tested with off-topic prompts | `test_guardrails_refusal.py` |
-| **Behavior — confirmation gate** | High-stakes actions (Send to vendors, Award) require explicit buyer click — never auto-executed even if AI suggests | UI + backend enforced |
-| **Behavior — tool-call audit** | Every tool call logged with input + output + actor; surfaced in Activity panel | `audit_service.py` |
-| **Behavior — cost circuit-breaker** | Per-RFx + per-user token budget; breached → AI loop halts and asks buyer | `services/ai_budget_service.py` |
-| **Behavior — vendor-side isolation** | VendorAgent's tools cannot touch other vendors' threads, cannot read buyer defaults beyond what was sent in the RFx; tested | `test_security_rbac.py` |
+| **Input - system prompts** | All system prompts versioned in `ai/prompts/` as constants; reviewed before merge; never user-controlled | unit tests assert immutability + content checksum |
+| **Input - user content boundary** | Every untrusted input (vendor message, buyer free text, extracted doc content) wrapped in explicit delimiters with instructions to the LLM that content inside is **data, not instructions** | `prompts/wrap.py` `wrap_untrusted(text, kind)` helper |
+| **Input - content classifier** | Lightweight pre-filter (regex + keyword) rejects obvious jailbreak patterns ("ignore previous", "you are now", "system:", "</system>", "DAN", base64-encoded instruction blocks, prompt-leak attempts) before reaching the main LLM | `ai/guardrails/input_filter.py` + `test_guardrails_input.py` |
+| **Input - dual-LLM evaluator (high-risk paths)** | For tool-calling decisions that produce side effects (dispatch RFx, send email, award PO), a small evaluator LLM call validates the intent against the raw user message. Mismatch → human-in-loop | `ai/guardrails/intent_validator.py` + `test_guardrails_intent.py` |
+| **Output - schema validation** | Every LLM output that drives an action is parsed against a Pydantic schema; validation failure → retry once with stricter prompt → fail closed (refuse) | enforced in every agent |
+| **Output - action allow-list** | LLM tool calls restricted to a fixed enum of named tools; unknown tool name → reject without execution | `agents/base.py` `Tool.registry` |
+| **Output - content filter** | Output passed through a redactor that strips email addresses, phone numbers, credit-card patterns, API-key patterns before display | `ai/guardrails/output_filter.py` |
+| **Output - refusal patterns** | If the model is asked to do anything outside procurement scope, system prompt directs it to refuse politely and stay on task; tested with off-topic prompts | `test_guardrails_refusal.py` |
+| **Behavior - confirmation gate** | High-stakes actions (Send to vendors, Award) require explicit buyer click - never auto-executed even if AI suggests | UI + backend enforced |
+| **Behavior - tool-call audit** | Every tool call logged with input + output + actor; surfaced in Activity panel | `audit_service.py` |
+| **Behavior - cost circuit-breaker** | Per-RFx + per-user token budget; breached → AI loop halts and asks buyer | `services/ai_budget_service.py` |
+| **Behavior - vendor-side isolation** | VendorAgent's tools cannot touch other vendors' threads, cannot read buyer defaults beyond what was sent in the RFx; tested | `test_security_rbac.py` |
 | **Cross-prompt-injection (the big one)** | Vendor-supplied extracted content (PDF text, image OCR, email body) **never** passes through to the buyer's chat as instructions. EvaluationAgent runs in an isolated context with its own system prompt and outputs only structured `Offer` JSON. The Offer JSON is then displayed in the comparison matrix, **not fed back as a string into the buyer's chat history**. | architectural separation + `test_security_cross_prompt_injection.py` |
 
 ### 4.3 Production/Compliance design (SOC2-leaning, even pre-certification)
@@ -587,35 +587,35 @@ Beyond the happy path, the demo must handle these four flows. Each is small (≤
 Two role-aware shells sharing components:
 
 **Buyer shell** (`/buyer`):
-- **Dashboard** — open RFx tiles (status, vendor count, time-to-quote), recent activity, "Draft new request" CTA, KPI cards (open RFx, awaiting quotes, awarded today).
-- **Chat co-pilot** (headline) — full-page conversation with IntakeAgent. SSE streams. Inline cards: detected SKU pulls from inventory, suggested vendors, draft preview, **Terms chip** (D16 confirmation). Mic button → Groq Whisper → transcript injected. "Approve & Send" gate.
-- **Inventory** — SKU table with categories, last price, reorder points, aliases. Inline edit.
-- **Vendors** — directory grouped by category, per-vendor performance, preferred rank drag-handle, last-contact, response-rate.
-- **RFx detail** — header (status, delivery window, deadline countdown, **Withdraw RFx** action with confirmation modal), per-vendor lanes showing every Message with **ChannelBadge** (email/telegram/in-app), Offer card per vendor as it arrives with **revision badge** (v2/v3) and **late badge** if applicable, **ComparisonMatrix** (side-by-side, sortable, lowest-price/best-lead-time highlights, per-field confidence badges with <0.7 yellow / <0.5 red auto-flag, manual override pencil, **per-line-item Award** with split-award support). Declined vendors render as "Declined" tiles with reason instead of offer card.
-- **Settings → Defaults** — form for `UserDefaults`.
-- **Activity** — audit log feed.
+- **Dashboard** - open RFx tiles (status, vendor count, time-to-quote), recent activity, "Draft new request" CTA, KPI cards (open RFx, awaiting quotes, awarded today).
+- **Chat co-pilot** (headline) - full-page conversation with IntakeAgent. SSE streams. Inline cards: detected SKU pulls from inventory, suggested vendors, draft preview, **Terms chip** (D16 confirmation). Mic button → Groq Whisper → transcript injected. "Approve & Send" gate.
+- **Inventory** - SKU table with categories, last price, reorder points, aliases. Inline edit.
+- **Vendors** - directory grouped by category, per-vendor performance, preferred rank drag-handle, last-contact, response-rate.
+- **RFx detail** - header (status, delivery window, deadline countdown, **Withdraw RFx** action with confirmation modal), per-vendor lanes showing every Message with **ChannelBadge** (email/telegram/in-app), Offer card per vendor as it arrives with **revision badge** (v2/v3) and **late badge** if applicable, **ComparisonMatrix** (side-by-side, sortable, lowest-price/best-lead-time highlights, per-field confidence badges with <0.7 yellow / <0.5 red auto-flag, manual override pencil, **per-line-item Award** with split-award support). Declined vendors render as "Declined" tiles with reason instead of offer card.
+- **Settings → Defaults** - form for `UserDefaults`.
+- **Activity** - audit log feed.
 - **Coming-Soon tabs**: Negotiation, Contract, Invoice, Analytics (placeholder with mocked screenshot).
 
 **Vendor shell** (`/vendor`):
-- **Inbox** — list of RFx received, status, deadline countdown.
-- **RFx detail + Reply chat** — full thread visible (all messages from all channels merged per D34, with ChannelBadge per message), VendorAgent co-pilot walks vendor through the quote ("here's what they need: 150kg tomatoes…; paste your prices or drop a file"), upload zone (PDF/Word/Excel/CSV/image), submit button (resubmit creates a new revision per D29), extraction-status badge, **mic button** (D9), **"Decline this RFx"** action with reason modal.
-- **Profile** — categories served, notification prefs (email/Telegram toggles, Telegram bind via deep-link button), **Defaults form**.
+- **Inbox** - list of RFx received, status, deadline countdown.
+- **RFx detail + Reply chat** - full thread visible (all messages from all channels merged per D34, with ChannelBadge per message), VendorAgent co-pilot walks vendor through the quote ("here's what they need: 150kg tomatoes…; paste your prices or drop a file"), upload zone (PDF/Word/Excel/CSV/image), submit button (resubmit creates a new revision per D29), extraction-status badge, **mic button** (D9), **"Decline this RFx"** action with reason modal.
+- **Profile** - categories served, notification prefs (email/Telegram toggles, Telegram bind via deep-link button), **Defaults form**.
 
 **Admin shell** (`/admin`, D27):
-- **Dashboard** — cross-tenant KPIs (RFx count, offers extracted, cost, latency, error rate).
-- **Users** — list/filter/create/suspend/role-change/reset-password/force-logout.
-- **Orgs** — buyer + vendor organizations.
-- **Vendors → KYC** — approve/reject vendor KYC (`Vendor.kyc_status`).
-- **AI → Providers** — DB-backed model config: toggle, set default, per-model token cap.
-- **AI → Budgets** — per-user + per-RFx caps, circuit-breaker tuning.
-- **Settings** — retention, rate limits, CORS, JWT TTLs, log redaction patterns.
-- **Observability** — superset of buyer observability: cross-tenant + trace drill-down.
-- **Audit** — full immutable log + CSV export.
-- **Incidents** — runbook actions (revoke token, rotate HMAC, replay failed Huey tasks).
+- **Dashboard** - cross-tenant KPIs (RFx count, offers extracted, cost, latency, error rate).
+- **Users** - list/filter/create/suspend/role-change/reset-password/force-logout.
+- **Orgs** - buyer + vendor organizations.
+- **Vendors → KYC** - approve/reject vendor KYC (`Vendor.kyc_status`).
+- **AI → Providers** - DB-backed model config: toggle, set default, per-model token cap.
+- **AI → Budgets** - per-user + per-RFx caps, circuit-breaker tuning.
+- **Settings** - retention, rate limits, CORS, JWT TTLs, log redaction patterns.
+- **Observability** - superset of buyer observability: cross-tenant + trace drill-down.
+- **Audit** - full immutable log + CSV export.
+- **Incidents** - runbook actions (revoke token, rotate HMAC, replay failed Huey tasks).
 
 **Shared**: login/register, role-aware redirect (`/buyer` | `/vendor` | `/admin`), dark-mode-friendly Tailwind theme, Command Palette (Cmd+K), Toaster (sonner-style), responsive (≥1024px primary, ≥390px functional).
 
-**UX language**: code-switching aware — UI strings in English, but chat responses follow `User.language_pref`. Voice transcripts auto-detect.
+**UX language**: code-switching aware - UI strings in English, but chat responses follow `User.language_pref`. Voice transcripts auto-detect.
 
 ---
 
@@ -871,7 +871,7 @@ tests/e2e/  (Playwright)
 
 ### 7.4 UAT (User Acceptance Test) scripts
 
-`docs/UAT.md` — manual + Playwright-automatable scripts covering:
+`docs/UAT.md` - manual + Playwright-automatable scripts covering:
 
 1. **UAT-1 Buyer drafts in Hinglish via voice → dispatches**
 2. **UAT-2 Vendor receives via in-app, replies with PDF → buyer sees extracted offer**
@@ -898,10 +898,10 @@ tests/e2e/  (Playwright)
 > **Rule: every significant step is committed and pushed to `origin/main` before moving on.** No accumulated uncommitted work; demo-day insurance + small reviewable diffs.
 
 **What counts as a significant step:**
-- Every completed phase (Phase 0, 1, 2, …) — **mandatory `P*.CP` commit checkpoint**.
-- Within a phase, any standalone packet that adds passing tests + working code (≥30 min of work) — recommended sub-checkpoint.
-- Schema migrations — always their own commit so `alembic revision` history stays clean.
-- Security / guardrails / observability work — always tagged in the commit message for grep-ability.
+- Every completed phase (Phase 0, 1, 2, …) - **mandatory `P*.CP` commit checkpoint**.
+- Within a phase, any standalone packet that adds passing tests + working code (≥30 min of work) - recommended sub-checkpoint.
+- Schema migrations - always their own commit so `alembic revision` history stays clean.
+- Security / guardrails / observability work - always tagged in the commit message for grep-ability.
 
 **Convention:**
 ```bash
@@ -913,7 +913,7 @@ git commit -m "phase-N: <imperative summary>"
 git push               # always push, never accumulate
 ```
 
-**Commit message template:** `phase-<N>: <verb> <object>` — e.g.
+**Commit message template:** `phase-<N>: <verb> <object>` - e.g.
 `phase-2: add NIM OpenAI-compat provider + VCR cassettes`,
 `phase-6: add multimodal offer fusion with confidence scoring`.
 
@@ -934,49 +934,49 @@ git push               # always push, never accumulate
 
 **Pre-push CI gate (when CI lands in P0.7):** ruff + mypy --strict + pytest + secret-scan + dep-audit. Demo failure modes: silenced.
 
-### Phase 0 — Scaffolding (Day 1 morning, ~2.5h)
+### Phase 0 - Scaffolding (Day 1 morning, ~2.5h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P0.1 | Create `IMPLMENTETION_PLAN_CONTEXT.md` in project root (mirror of this file) | claude (main) | — | `[x]` |
+| P0.1 | Create `IMPLMENTETION_PLAN_CONTEXT.md` in project root (mirror of this file) | claude (main) | - | `[x]` |
 | P0.2 | Init project structure (`src/aeros/`, `frontend/`, `tests/`, `pyproject.toml`, `alembic.ini`, `app.sh`, `.env.example`, `docker-compose.yml`) | feature-implementer | P0.1 | `[x]` |
 | P0.3 | FastAPI app shell, config loader, DB engine + session, SQLModel registry, lifespan hooks | feature-implementer | P0.2 | `[x]` |
 | P0.4 | Frontend scaffold via `/ui-ux-pro-max` (Vite + React 19 + Tailwind v4 + routes + auth shell + role-aware redirect for buyer/vendor/admin) | feature-implementer (invoke `/ui-ux-pro-max` skill in prompt) | P0.2 | `[x]` |
 | P0.5 | First migration (Alembic) + seed script | feature-implementer | P0.3 | `[x]` |
-| P0.6 | **Pre-commit hook**: secret-pattern scan (.env regex + entropy), block `*.env` / `*.key` / `*.pem` staging, `ruff check`, `ruff format --check` | feature-implementer | P0.2 | `[x]` (.pre-commit-config.yaml — ruff lint/format + secret scan + .env blocker) |
-| P0.7 | **CI workflow** (`.github/workflows/ci.yml`): ruff + mypy --strict + pytest + coverage gate + secret-scan + dep-audit | feature-implementer | P0.6 | `[x]` (.github/workflows/ci.yml — backend lint/format/typecheck/tests/secret-scan + frontend typecheck/build) |
+| P0.6 | **Pre-commit hook**: secret-pattern scan (.env regex + entropy), block `*.env` / `*.key` / `*.pem` staging, `ruff check`, `ruff format --check` | feature-implementer | P0.2 | `[x]` (.pre-commit-config.yaml - ruff lint/format + secret scan + .env blocker) |
+| P0.7 | **CI workflow** (`.github/workflows/ci.yml`): ruff + mypy --strict + pytest + coverage gate + secret-scan + dep-audit | feature-implementer | P0.6 | `[x]` (.github/workflows/ci.yml - backend lint/format/typecheck/tests/secret-scan + frontend typecheck/build) |
 | P0.CP | **Commit checkpoint**: `git add . && git commit -m "phase-0: scaffold + pre-commit + CI" && git push` | claude (main) | P0.2–P0.7 | `[x]` |
 
-### Phase 1 — Auth + 3-tier RBAC + Audit (Day 1 morning, ~2.5h)
+### Phase 1 - Auth + 3-tier RBAC + Audit (Day 1 morning, ~2.5h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P1.1 | `security/jwt.py`, `security/hmac.py`, `security/csrf.py`, `security/headers.py`, `security/rate_limit.py` | feature-implementer | P0.3 | `[x]` (all 5 files done — csrf, headers, rate_limit added with middleware wiring in main.py) |
-| P1.2 | `models/user.py` (role enum buyer|vendor|admin, status), `models/organization.py`, `models/user_defaults.py`, `models/audit.py`, `models/system_setting.py`, `models/ai_provider_config.py` + migration | feature-implementer | P0.5 | `[x]` (all 6 models done — system_setting + ai_provider_config added) |
+| P1.1 | `security/jwt.py`, `security/hmac.py`, `security/csrf.py`, `security/headers.py`, `security/rate_limit.py` | feature-implementer | P0.3 | `[x]` (all 5 files done - csrf, headers, rate_limit added with middleware wiring in main.py) |
+| P1.2 | `models/user.py` (role enum buyer|vendor|admin, status), `models/organization.py`, `models/user_defaults.py`, `models/audit.py`, `models/system_setting.py`, `models/ai_provider_config.py` + migration | feature-implementer | P0.5 | `[x]` (all 6 models done - system_setting + ai_provider_config added) |
 | P1.3 | `services/auth_service.py`, `services/audit_service.py`, `services/defaults_service.py`, `security/auth_context.py` (`AuthContext` dataclass + `require_role(*roles)` dep) | feature-implementer | P1.1, P1.2 | `[x]` (defaults_service.py added with get/update/ensure_defaults) |
-| P1.3b | **`db/scope.py`** — `for_user(caller, Model)` query-scope filter helper for 3-tier RBAC (buyer→own-org, vendor→own-threads, admin→all) + `MissingAuthFilter` lint rule for unscoped queries + unit tests `test_db_query_scope_filter.py` | feature-implementer | P1.2 | `[x]` (db_scope.py with for_user() + MissingScopeError + 7 unit tests) |
+| P1.3b | **`db/scope.py`** - `for_user(caller, Model)` query-scope filter helper for 3-tier RBAC (buyer→own-org, vendor→own-threads, admin→all) + `MissingAuthFilter` lint rule for unscoped queries + unit tests `test_db_query_scope_filter.py` | feature-implementer | P1.2 | `[x]` (db_scope.py with for_user() + MissingScopeError + 7 unit tests) |
 | P1.4 | `api/auth.py` (register/login/logout/refresh/me) + tests/unit + tests/integration | feature-implementer + test-runner | P1.3 | `[x]` |
-| P1.5 | Frontend auth pages (Login/Register/RoleRedirect) — redirects to `/buyer`, `/vendor`, or `/admin` per role | feature-implementer (UI skill) | P0.4, P1.4 | `[x]` (Register.tsx added + /register route + login→register link) |
-| P1.6 | Security RBAC tests: buyer↔vendor isolation, admin elevation paths, token-tamper, scope-filter omission detection | test-runner | P1.4, P1.3b | `[x]` (test_security_rbac.py — 22 tests: buyer/vendor/admin isolation + tampered token + unauthenticated) |
+| P1.5 | Frontend auth pages (Login/Register/RoleRedirect) - redirects to `/buyer`, `/vendor`, or `/admin` per role | feature-implementer (UI skill) | P0.4, P1.4 | `[x]` (Register.tsx added + /register route + login→register link) |
+| P1.6 | Security RBAC tests: buyer↔vendor isolation, admin elevation paths, token-tamper, scope-filter omission detection | test-runner | P1.4, P1.3b | `[x]` (test_security_rbac.py - 22 tests: buyer/vendor/admin isolation + tampered token + unauthenticated) |
 | P1.7 | Bootstrap admin: seed migration creates `admin@aeros.local` with random password printed once + forced rotation; tests | feature-implementer | P1.2 | `[x]` |
 | P1.CP | **Commit checkpoint**: `git add . && git commit -m "phase-1: 3-tier RBAC auth + audit + admin bootstrap" && git push` | claude (main) | P1.1–P1.7 | `[x]` |
 
-### Phase 2 — Provider abstraction + AI primitives (Day 1 midday, ~2h) — **PARALLELIZABLE**
+### Phase 2 - Provider abstraction + AI primitives (Day 1 midday, ~2h) - **PARALLELIZABLE**
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
 | P2.1 | `ai/base.py` protocols + `ai/factory.py` + `ai/llm_cache.py` + `ai/schemas.py` | feature-implementer | P0.3 | `[x]` |
 | P2.2 | `ai/openai_compatible.py` (NIM impl) + VCR tests | feature-implementer | P2.1 | `[x]` (impl done, VCR deferred) |
-| P2.3 | `ai/anthropic_compatible.py` + VCR tests (parallel with P2.2) | feature-implementer | P2.1 | `[ ]` (deferred — NIM-only for prototype) |
+| P2.3 | `ai/anthropic_compatible.py` + VCR tests (parallel with P2.2) | feature-implementer | P2.1 | `[ ]` (deferred - NIM-only for prototype) |
 | P2.4 | `ai/nim_vision.py` + VCR tests (parallel with P2.2) | feature-implementer | P2.1 | `[x]` (vision via openai_compatible) |
 | P2.5 | `ai/groq_asr.py` + VCR tests (parallel with P2.2) | feature-implementer | P2.1 | `[x]` |
-| P2.6 | `ai/normalization.py` (units + currency) + unit tests (property-based via hypothesis) | feature-implementer | P2.1 | `[x]` (31 tests — Hindi unit names, currency symbols, quantity conversion, price parsing) |
+| P2.6 | `ai/normalization.py` (units + currency) + unit tests (property-based via hypothesis) | feature-implementer | P2.1 | `[x]` (31 tests - Hindi unit names, currency symbols, quantity conversion, price parsing) |
 | P2.7 | `ai/prompts/` (system prompts incl. Hindi/Hinglish/English handling) + `prompts/wrap.py` (untrusted-content delimiter helper) + immutability checksum tests | feature-implementer | P2.1 | `[x]` (intake + evaluation prompts done) |
-| P2.8 | **`ai/guardrails/` — input filter (jailbreak regex), intent validator (dual-LLM), output filter (PII redactor), action allow-list registry** + tests for each + cross-prompt-injection test suite | feature-implementer + test-runner | P2.1, P2.2, P2.7 | `[x]` (input_filter + output_filter + intent_validator + action_registry — 47 tests) |
+| P2.8 | **`ai/guardrails/` - input filter (jailbreak regex), intent validator (dual-LLM), output filter (PII redactor), action allow-list registry** + tests for each + cross-prompt-injection test suite | feature-implementer + test-runner | P2.1, P2.2, P2.7 | `[x]` (input_filter + output_filter + intent_validator + action_registry - 47 tests) |
 | P2.9 | `services/ai_budget_service.py` (per-RFx + per-user token cap + circuit breaker) + tests | feature-implementer | P2.1 | `[x]` (circuit breaker + budget stubs + 11 tests) |
 | P2.CP | **Commit checkpoint**: `git commit -m "phase-2: provider abstraction + guardrails + budget" && git push` | claude (main) | P2.1–P2.9 | `[x]` |
 
-### Phase 3 — Inventory + Vendors + Defaults (Day 1 afternoon, ~2h) — **PARALLELIZABLE**
+### Phase 3 - Inventory + Vendors + Defaults (Day 1 afternoon, ~2h) - **PARALLELIZABLE**
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
@@ -984,10 +984,10 @@ git push               # always push, never accumulate
 | P3.2 | `services/inventory_service.py`, `services/vendor_service.py` + unit tests | feature-implementer | P3.1 | `[x]` |
 | P3.3 | `api/buyer.py` (inventory + vendors + defaults endpoints) + integration tests | feature-implementer + test-runner | P3.2, P1.3 | `[x]` |
 | P3.4 | `seed/dark_store.py` (1 buyer org + 40 SKUs + 8 vendors + 3 historical RFx) | feature-implementer | P3.1 | `[x]` |
-| P3.5 | Frontend: Inventory page + Vendors page + Settings/Defaults page | feature-implementer (UI skill) | P3.3 | `[x]` (Inventory 212L + Vendors 203L + Settings 146L — all functional) |
+| P3.5 | Frontend: Inventory page + Vendors page + Settings/Defaults page | feature-implementer (UI skill) | P3.3 | `[x]` (Inventory 212L + Vendors 203L + Settings 146L - all functional) |
 | P3.CP | **Commit checkpoint**: `git commit -m "phase-3: inventory + vendors + defaults" && git push` | claude (main) | P3.1–P3.5 | `[x]` |
 
-### Phase 4 — RFx state machine + IntakeAgent + Chat (Day 1 evening, ~3h)
+### Phase 4 - RFx state machine + IntakeAgent + Chat (Day 1 evening, ~3h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
@@ -995,86 +995,86 @@ git push               # always push, never accumulate
 | P4.2 | `services/rfx_service.py` (state machine + audit hooks) + unit tests | feature-implementer | P4.1, P1.3 | `[x]` |
 | P4.3 | `services/thread_service.py` + unit tests | feature-implementer | P4.1 | `[x]` (get_or_create_thread, add_message, get_thread_messages, get_thread_attachments + 9 unit tests) |
 | P4.4 | `agents/base.py` + `agents/intake.py` (Hindi/Hinglish prompts, defaults confirmation via tool calls) + unit tests | feature-implementer | P2.*, P4.2, P1.3 | `[x]` |
-| P4.5 | `api/chat.py` (SSE for buyer chat + WS for in-app vendor chat) + integration tests | feature-implementer + test-runner | P4.4 | `[~]` (chat endpoints work but JSON-only — SSE/WS not implemented despite sse-starlette in deps) |
-| P4.6 | Frontend: Buyer ChatCopilot (SSE stream, TermsChip, SuggestedVendors, DraftPreview, MicButton) | feature-implementer (UI skill) | P4.5 | `[x]` (ChatCopilot.tsx 402L — DraftCard, VendorSuggestions, DispatchPlanCard done; MicButton not implemented) |
-| P4.7 | Frontend: Buyer Dashboard + RFx tile | feature-implementer (UI skill) | P4.5 | `[x]` (Dashboard.tsx 241L — KPI cards + RFx tiles with status badges) |
+| P4.5 | `api/chat.py` (SSE for buyer chat + WS for in-app vendor chat) + integration tests | feature-implementer + test-runner | P4.4 | `[~]` (chat endpoints work but JSON-only - SSE/WS not implemented despite sse-starlette in deps) |
+| P4.6 | Frontend: Buyer ChatCopilot (SSE stream, TermsChip, SuggestedVendors, DraftPreview, MicButton) | feature-implementer (UI skill) | P4.5 | `[x]` (ChatCopilot.tsx 402L - DraftCard, VendorSuggestions, DispatchPlanCard done; MicButton not implemented) |
+| P4.7 | Frontend: Buyer Dashboard + RFx tile | feature-implementer (UI skill) | P4.5 | `[x]` (Dashboard.tsx 241L - KPI cards + RFx tiles with status badges) |
 | P4.8 | E2E: `test_buyer_drafts_and_dispatches.spec.ts`, `test_buyer_terms_confirmation.spec.ts`, `test_hindi_chat_input.spec.ts` | ui-tester | P4.6 | `[x]` (42 Playwright UAT tests covering auth, buyer, vendor, admin, rfx-lifecycle flows) |
 | P4.CP | **Commit checkpoint + Day-1 tag**: `git commit -m "phase-4: intake agent + buyer chat (Day 1 done)" && git push && git tag v0.1-day1 && git push --tags` | claude (main) | P4.1–P4.8 | `[x]` |
 
-### Phase 5 — Channel 1: In-app reply (web FIRST, per D5) (Day 2 morning, ~2h)
+### Phase 5 - Channel 1: In-app reply (web FIRST, per D5) (Day 2 morning, ~2h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P5.1 | `channels/in_app.py` + `channels/correlation.py` + unit tests | feature-implementer | P1.1, P4.2 | `[x]` (in_app.py — deliver_in_app, send_rfx_notification, get_unread_count + 6 unit tests) |
+| P5.1 | `channels/in_app.py` + `channels/correlation.py` + unit tests | feature-implementer | P1.1, P4.2 | `[x]` (in_app.py - deliver_in_app, send_rfx_notification, get_unread_count + 6 unit tests) |
 | P5.2 | `agents/vendor_copilot.py` (vendor co-pilot chat) + unit tests | feature-implementer | P4.4 | `[x]` (VendorCopilotAgent + 3 unit tests) |
-| P5.3 | `api/vendor.py` (inbox + reply + upload) + integration tests | feature-implementer + test-runner | P5.2 | `[x]` (vendor.py 256L — inbox/thread/reply/upload/uploads endpoints + integration tests) |
+| P5.3 | `api/vendor.py` (inbox + reply + upload) + integration tests | feature-implementer + test-runner | P5.2 | `[x]` (vendor.py 256L - inbox/thread/reply/upload/uploads endpoints + integration tests) |
 | P5.3a | **Vendor decline (D29)**: `decline_rfx` tool in VendorAgent + `POST /api/vendor/rfx/<id>/decline` + service method on `RFxService` + audit + tests + UI button & reason modal | feature-implementer + test-runner | P5.3 | `[x]` (decline endpoint + DeclineModal in RFxReply.tsx) |
-| P5.4 | Frontend: Vendor Inbox + Vendor RFxReply chat (UploadZone, MicButton, extraction-status badge, **all-channel thread view per D34**, **resubmit-as-new-revision per D29**) | feature-implementer (UI skill) | P5.3 | `[x]` (Inbox.tsx + RFxReply.tsx — drag-drop upload, extraction badges, decline modal) |
-| P5.5 | E2E: `test_vendor_replies_in_app_with_pdf/excel/image/voice.spec.ts` | ui-tester | P5.4 | `[x]` (covered by Playwright UAT vendor-flow.spec.ts — 8 tests) |
+| P5.4 | Frontend: Vendor Inbox + Vendor RFxReply chat (UploadZone, MicButton, extraction-status badge, **all-channel thread view per D34**, **resubmit-as-new-revision per D29**) | feature-implementer (UI skill) | P5.3 | `[x]` (Inbox.tsx + RFxReply.tsx - drag-drop upload, extraction badges, decline modal) |
+| P5.5 | E2E: `test_vendor_replies_in_app_with_pdf/excel/image/voice.spec.ts` | ui-tester | P5.4 | `[x]` (covered by Playwright UAT vendor-flow.spec.ts - 8 tests) |
 | P5.CP | **Commit checkpoint**: `git commit -m "phase-5: web channel + vendor co-pilot" && git push` | claude (main) | P5.1–P5.5 | `[x]` |
 
-### Phase 6 — Extractors + Evaluation + Comparison (Day 2 morning, ~3h) — **PARALLELIZABLE EXTRACTORS**
+### Phase 6 - Extractors + Evaluation + Comparison (Day 2 morning, ~3h) - **PARALLELIZABLE EXTRACTORS**
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P6.1 | `services/file_service.py` (MIME sniff, magic, size, virus hook) + unit tests | feature-implementer | P0.3 | `[x]` (validate_file + save_file — MIME detection, size/extension checks, SHA256) |
+| P6.1 | `services/file_service.py` (MIME sniff, magic, size, virus hook) + unit tests | feature-implementer | P0.3 | `[x]` (validate_file + save_file - MIME detection, size/extension checks, SHA256) |
 | P6.2 | `ai/extractors/router.py` + `ai/extractors/pdf.py` (digital + scanned detection) + unit tests | feature-implementer | P2.2, P2.4, P2.6 | `[x]` (router.py MIME dispatch + pdf.py pymupdf4llm w/ scanned fallback) |
 | P6.3 | `ai/extractors/word.py` + unit tests (parallel with P6.2) | feature-implementer | P2.2, P2.6 | `[x]` (python-docx impl) |
 | P6.4 | `ai/extractors/spreadsheet.py` (xlsx + csv + tsv) + unit tests (parallel with P6.2) | feature-implementer | P2.2, P2.6 | `[x]` (47L impl) |
 | P6.5 | `ai/extractors/image.py` + unit tests (parallel with P6.2) | feature-implementer | P2.4, P2.6 | `[x]` (vision provider OCR) |
 | P6.6 | `ai/extractors/email_body.py` (HTML + plaintext + forwarded chain) + unit tests | feature-implementer | P2.2 | `[x]` (47L impl) |
-| P6.7 | `services/offer_fusion_service.py` (multi-attachment fusion) + unit tests | feature-implementer | P6.2–P6.6 | `[x]` (fuse_extractions + _match_key — highest-confidence merge + fuzzy SKU matching) |
-| P6.8 | `agents/evaluation.py` + integration tests | feature-implementer + test-runner | P6.7 | `[x]` (120L — two-pass gleaning, route_extraction, ExtractedOffer schema) |
+| P6.7 | `services/offer_fusion_service.py` (multi-attachment fusion) + unit tests | feature-implementer | P6.2–P6.6 | `[x]` (fuse_extractions + _match_key - highest-confidence merge + fuzzy SKU matching) |
+| P6.8 | `agents/evaluation.py` + integration tests | feature-implementer + test-runner | P6.7 | `[x]` (120L - two-pass gleaning, route_extraction, ExtractedOffer schema) |
 | P6.9 | `models/offer.py` + `services/offer_service.py` + migration + unit tests | feature-implementer | P4.1 | `[x]` (Offer model 20+ fields w/ confidence + revision; offer_service 155L w/ fuzzy SKU match + override) |
 | P6.10 | `workers/extract_offer.py` (Huey task) + integration tests | feature-implementer | P6.8, P6.9 | `[x]` (extract_offer_from_attachment worker + unit tests; also runs inline in vendor upload) |
-| P6.11 | Frontend: RFx detail with ComparisonMatrix (side-by-side, sortable, per-field confidence badges per D33, manual override, **split-award**) | feature-implementer (UI skill) | P6.9 | `[x]` (inline in RFxDetail.tsx — pivot table + confidence dots + per-cell award toggle) |
+| P6.11 | Frontend: RFx detail with ComparisonMatrix (side-by-side, sortable, per-field confidence badges per D33, manual override, **split-award**) | feature-implementer (UI skill) | P6.9 | `[x]` (inline in RFxDetail.tsx - pivot table + confidence dots + per-cell award toggle) |
 | P6.11a | **Realistic flows UI (D29/D31/D33)**: header **Withdraw RFx** action + confirmation modal + `RFxService.cancel` + system-message fan-out + revision badge (v2/v3) on Offer cards with hover-history toggle + late badge + low-confidence auto-flag with "must-acknowledge" gate before award + declined-vendor tile + offer-revision migration of overrides + tests | feature-implementer + test-runner | P6.11 | `[~]` (Withdraw + cancel modal done; revision badges, late badge, low-confidence gate, override migration missing) |
 | P6.12 | E2E: `test_comparison_matrix_and_split_award.spec.ts`, `test_multi_attachment_fusion`, `test_buyer_withdraws_rfx.spec.ts`, `test_offer_revision_visible.spec.ts`, `test_vendor_declines.spec.ts` | ui-tester + test-runner | P6.11a | `[x]` (covered by Playwright UAT buyer-flow + rfx-lifecycle specs) |
 | P6.CP | **Commit checkpoint**: `git commit -m "phase-6: extractors + evaluation + comparison matrix" && git push` | claude (main) | P6.1–P6.12 | `[x]` |
 
-### Phase 7 — Channel 2: Email (Day 2 afternoon, ~2.5h)
+### Phase 7 - Channel 2: Email (Day 2 afternoon, ~2.5h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P7.1 | `channels/email_out.py` (aiosmtplib + Reply-To token + portal link) + tests | feature-implementer | P5.1 | `[x]` (114L — send_rfx_invitation + send_po_email w/ HMAC signed reply-to) |
-| P7.2 | `agents/sourcing.py` (compose + dispatch + schedule reminder via channels) + unit tests | feature-implementer | P4.4, P7.1, P5.1 | `[x]` (176L — propose_dispatch + confirm_dispatch w/ channel priority + email integration) |
-| P7.3 | `channels/email_in.py` (IMAP poll, attachment download, threading) + `workers/imap_poll.py` + integration tests with aiosmtpd + fake IMAP | feature-implementer + test-runner | P7.1, P6.10 | `[x]` (email_in.py — extract_correlation_token, parse_email_message, save_attachments, poll_imap_once + 4 tests) |
-| P7.4 | `services/reminder_service.py` + `workers/reminders.py` with **multi-slot schedule (T-24h, T-2h, final) per D29**, per-slot idempotency via `RFxVendor.reminders_sent_json`, channel-fallback on per-send failure + tests | feature-implementer | P7.2 | `[x]` (reminder_service.py + workers/reminders.py — T-24h/T-2h/final slots, idempotent + 6 tests) |
+| P7.1 | `channels/email_out.py` (aiosmtplib + Reply-To token + portal link) + tests | feature-implementer | P5.1 | `[x]` (114L - send_rfx_invitation + send_po_email w/ HMAC signed reply-to) |
+| P7.2 | `agents/sourcing.py` (compose + dispatch + schedule reminder via channels) + unit tests | feature-implementer | P4.4, P7.1, P5.1 | `[x]` (176L - propose_dispatch + confirm_dispatch w/ channel priority + email integration) |
+| P7.3 | `channels/email_in.py` (IMAP poll, attachment download, threading) + `workers/imap_poll.py` + integration tests with aiosmtpd + fake IMAP | feature-implementer + test-runner | P7.1, P6.10 | `[x]` (email_in.py - extract_correlation_token, parse_email_message, save_attachments, poll_imap_once + 4 tests) |
+| P7.4 | `services/reminder_service.py` + `workers/reminders.py` with **multi-slot schedule (T-24h, T-2h, final) per D29**, per-slot idempotency via `RFxVendor.reminders_sent_json`, channel-fallback on per-send failure + tests | feature-implementer | P7.2 | `[x]` (reminder_service.py + workers/reminders.py - T-24h/T-2h/final slots, idempotent + 6 tests) |
 | P7.5 | E2E: `test_vendor_replies_via_email_pdf.spec.ts` (uses aiosmtpd + fake IMAP) | ui-tester | P7.3 | `[~]` (email flow not E2E tested; UAT covers vendor reply via in-app) |
 | P7.CP | **Commit checkpoint**: `git commit -m "phase-7: email channel (SMTP + IMAP) + reminders" && git push` | claude (main) | P7.1–P7.5 | `[x]` |
 
-### Phase 8 — Channel 3: Telegram (Day 2 afternoon, ~2h)
+### Phase 8 - Channel 3: Telegram (Day 2 afternoon, ~2h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
 | P8.1 | `channels/telegram_bot.py` (`/start <token>` binding, message + photo + document handlers, webhook secret) + unit tests with mocked updates | feature-implementer | P5.1, P6.10 | `[x]` (send_message, send_rfx_invitation, send_po_notification, verify_webhook_secret, download_file + 6 tests) |
-| P8.2 | `api/inbound_telegram.py` (webhook + `/api/test/telegram-fake` dev endpoint for simulated updates) + integration tests | feature-implementer + test-runner | P8.1 | `[x]` (POST /api/webhook/telegram + POST /api/test/telegram-fake — /start binding, text, photo/document handling) |
-| P8.3 | Hook Telegram channel into `agents/sourcing.py` dispatch + `channels/notifications.py` fan-out | feature-implementer | P8.1, P7.2 | `[x]` (channels/notifications.py — unified fan-out via notify_vendor with channel prefs + 2 tests) |
-| P8.4 | Frontend: Telegram-bind button on vendor Profile (deep-link to bot with token) | feature-implementer (UI skill) | P8.2 | `[x]` (Profile.tsx — modal with deep link + instructions) |
+| P8.2 | `api/inbound_telegram.py` (webhook + `/api/test/telegram-fake` dev endpoint for simulated updates) + integration tests | feature-implementer + test-runner | P8.1 | `[x]` (POST /api/webhook/telegram + POST /api/test/telegram-fake - /start binding, text, photo/document handling) |
+| P8.3 | Hook Telegram channel into `agents/sourcing.py` dispatch + `channels/notifications.py` fan-out | feature-implementer | P8.1, P7.2 | `[x]` (channels/notifications.py - unified fan-out via notify_vendor with channel prefs + 2 tests) |
+| P8.4 | Frontend: Telegram-bind button on vendor Profile (deep-link to bot with token) | feature-implementer (UI skill) | P8.2 | `[x]` (Profile.tsx - modal with deep link + instructions) |
 | P8.5 | E2E: `test_vendor_replies_via_telegram_stub.spec.ts` (uses simulated update endpoint) | ui-tester | P8.4 | `[~]` (telegram-fake endpoint exists; not E2E tested via Playwright yet) |
 | P8.CP | **Commit checkpoint**: `git commit -m "phase-8: telegram channel (bot + webhook + token binding)" && git push` | claude (main) | P8.1–P8.5 | `[x]` |
 
-### Phase 9 — Post-Award PO (Day 2 evening, ~1.5h)
+### Phase 9 - Post-Award PO (Day 2 evening, ~1.5h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
 | P9.1 | `models/award.py`, `models/po.py` + migration | feature-implementer | P4.1 | `[x]` (Award + PurchaseOrder both in award.py; migration included) |
-| P9.2 | `agents/po.py` + `services/po_service.py` (weasyprint HTML→PDF template) + unit tests | feature-implementer | P9.1, P7.1 | `[x]` (po_service.py — create_award, create_po, get_po_by_award, list_pos_for_rfx) |
+| P9.2 | `agents/po.py` + `services/po_service.py` (weasyprint HTML→PDF template) + unit tests | feature-implementer | P9.1, P7.1 | `[x]` (po_service.py - create_award, create_po, get_po_by_award, list_pos_for_rfx) |
 | P9.3 | `workers/po_render.py` (Huey task) + integration tests | feature-implementer | P9.2 | `[x]` (render_and_send_po worker + 2 unit tests) |
-| P9.4 | `api/po.py` (download endpoint, signed) + `api/buyer.py` award endpoint | feature-implementer | P9.2 | `[x]` (GET /api/po/{id}, GET /api/po/{id}/download, GET /api/po/rfx/{rfx_id} — wired in main.py) |
+| P9.4 | `api/po.py` (download endpoint, signed) + `api/buyer.py` award endpoint | feature-implementer | P9.2 | `[x]` (GET /api/po/{id}, GET /api/po/{id}/download, GET /api/po/rfx/{rfx_id} - wired in main.py) |
 | P9.5 | Frontend: Award button on ComparisonMatrix + PO preview modal | feature-implementer (UI skill) | P9.4, P6.11 | `[x]` (ConfirmAwardModal in RFxDetail.tsx + PO API endpoints for download) |
 | P9.6 | E2E: `test_po_pdf_generated_and_emailed.spec.ts` | ui-tester | P9.5 | `[~]` (award flow tested in UAT; PO PDF generation not E2E tested) |
 | P9.CP | **Commit checkpoint**: `git commit -m "phase-9: post-award PO render + dispatch" && git push` | claude (main) | P9.1–P9.6 | `[x]` |
 
-### Phase 9.5 — Observability & Statistics layer (D26) — **THREADS THROUGH ALL AGENTS**
+### Phase 9.5 - Observability & Statistics layer (D26) - **THREADS THROUGH ALL AGENTS**
 
 This phase is split across two windows. Scaffolding (§9.5a) lands early (right after Phase 2) so every subsequent agent/channel commit writes telemetry from day one. Dashboard (§9.5b) lands in Phase 10.
 
-**§9.5a — Telemetry scaffolding (between Phase 2 and Phase 4)** (~1.5h)
+**§9.5a - Telemetry scaffolding (between Phase 2 and Phase 4)** (~1.5h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P9.5a.1 | `models/observability.py` (LLMCallLog, AgentRunLog, ChannelEventLog, PipelineReport) + migration | feature-implementer | P0.5 | `[x]` (4 SQLModel tables — LLMCallLog, AgentRunLog, ChannelEventLog, PipelineReport) |
+| P9.5a.1 | `models/observability.py` (LLMCallLog, AgentRunLog, ChannelEventLog, PipelineReport) + migration | feature-implementer | P0.5 | `[x]` (4 SQLModel tables - LLMCallLog, AgentRunLog, ChannelEventLog, PipelineReport) |
 | P9.5a.2 | `ai/pricing.py` (per-model token rates; NIM=0 flagged) + unit tests | feature-implementer | P2.1 | `[x]` (MODEL_PRICING dict + estimate_cost + is_free_tier + 7 tests) |
 | P9.5a.3 | `services/telemetry_service.py` (write helpers, redaction, trace-id propagation) + unit tests including `test_log_redaction_in_telemetry.py` | feature-implementer | P9.5a.1, P9.5a.2 | `[x]` (log_llm_call, start/complete_agent_run, log_channel_event, create_pipeline_report, _redact + 12 tests) |
 | P9.5a.4 | LLM-call decorator wrapping every `ChatProvider`/`VisionProvider`/`ASRProvider` call → emits `LLMCallLog`; integrated into `ai/openai_compatible.py`, `ai/anthropic_compatible.py`, `ai/nim_vision.py`, `ai/groq_asr.py` | feature-implementer | P9.5a.3, P2.2–P2.5 | `[~]` (telemetry_service.log_llm_call available; decorator not yet wired into provider calls) |
@@ -1085,52 +1085,52 @@ This phase is split across two windows. Scaffolding (§9.5a) lands early (right 
 | P9.5a.9 | Tests: `test_llm_call_log_decorator.py`, `test_agent_run_log_context.py`, `test_pipeline_report_attached_to_chat.py`, `test_channel_event_log.py` | test-runner | P9.5a.4–P9.5a.7 | `[x]` (19 tests across test_observability.py + test_pricing.py covering all telemetry service functions) |
 | P9.5a.CP | **Commit checkpoint**: `git commit -m "phase-9.5a: telemetry scaffolding + inspect panel" && git push` | claude (main) | P9.5a.1–P9.5a.9 | `[~]` (scaffolding + tests done; decorator/hook wiring pending) |
 
-**§9.5b — Observability dashboard (Phase 10 slot)** (~1.5h)
+**§9.5b - Observability dashboard (Phase 10 slot)** (~1.5h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
 | P9.5b.1 | `services/observability_service.py` (aggregations: cards, charts, tables, per-RFx timeline) + unit tests `test_observability_dashboard_aggregations.py` | feature-implementer + test-runner | P9.5a.* | `[x]` (get_summary_cards, get_recent_calls, get_timeline, get_trace + tests) |
-| P9.5b.2 | `api/buyer.py` observability endpoints (`/api/buyer/observability/{summary,calls,timeline,trace/<id>}`) + integration tests | feature-implementer + test-runner | P9.5b.1 | `[x]` (api/observability.py — 4 GET endpoints under /api/observability/ wired in main.py) |
-| P9.5b.3 | Frontend: `/buyer/observability` page (cards + charts via recharts + tables + per-RFx timeline swimlane) | feature-implementer (UI skill) | P9.5b.2 | `[x]` (Observability.tsx — KPI cards + recent LLM calls table from real API) |
+| P9.5b.2 | `api/buyer.py` observability endpoints (`/api/buyer/observability/{summary,calls,timeline,trace/<id>}`) + integration tests | feature-implementer + test-runner | P9.5b.1 | `[x]` (api/observability.py - 4 GET endpoints under /api/observability/ wired in main.py) |
+| P9.5b.3 | Frontend: `/buyer/observability` page (cards + charts via recharts + tables + per-RFx timeline swimlane) | feature-implementer (UI skill) | P9.5b.2 | `[x]` (Observability.tsx - KPI cards + recent LLM calls table from real API) |
 | P9.5b.4 | `/buyer/observability/trace/<id>` drill-down view (full `AgentRunLog` + nested `LLMCallLog` table) | feature-implementer (UI skill) | P9.5b.3 | `[~]` (trace API exists; dedicated drill-down page not yet built) |
 | P9.5b.5 | Retention worker `workers/telemetry_retention.py` (30d default; configurable) + tests | feature-implementer | P9.5a.1 | `[x]` (cleanup_old_telemetry with configurable retention_days) |
 | P9.5b.6 | E2E: `test_observability_dashboard.spec.ts` (cards populate, drill-down works, trace shows nested calls) | ui-tester | P9.5b.3 | `[x]` (covered by Playwright UAT admin-flow.spec.ts observability tests) |
 | P9.5b.CP | **Commit checkpoint**: `git commit -m "phase-9.5b: observability dashboard + retention worker" && git push` | claude (main) | P9.5b.1–P9.5b.6 | `[x]` |
 
-### Phase 9.7 — Admin Shell (D27) (Day 2 evening, ~1.5h)
+### Phase 9.7 - Admin Shell (D27) (Day 2 evening, ~1.5h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
 | P9.7.1 | `services/admin_service.py` (user CRUD, suspend, role-change, password-reset, force-logout) + unit tests | feature-implementer | P1.3 | `[x]` (suspend_user, reactivate_user, list_organizations, get_system_health) |
 | P9.7.2 | `services/ai_config_service.py` (DB-backed `AIProviderConfig` CRUD; `ai/factory.py` reads DB-first, env-fallback) + unit tests | feature-implementer | P2.1, P1.2 | `[x]` (list_providers DB-first/env-fallback + test_provider_connection) |
-| P9.7.3 | `services/system_settings_service.py` (CRUD on `SystemSetting`; consumers — rate-limit, budget, retention — read live) + unit tests | feature-implementer | P1.2 | `[x]` (get_setting, get_all_settings, update_setting with DEFAULT_SETTINGS fallback) |
-| P9.7.4 | `api/admin.py` (`/api/admin/{users,orgs,vendors/kyc,ai/providers,ai/budgets,settings,observability,audit,incidents}`) + integration tests (`test_admin_rbac.py`) | feature-implementer + test-runner | P9.7.1–P9.7.3, P1.3b | `[x]` (admin.py 231L — 11 endpoints: stats, users, audit, suspend, reactivate, orgs, ai/providers, ai/providers/test, settings GET/PUT, health) |
+| P9.7.3 | `services/system_settings_service.py` (CRUD on `SystemSetting`; consumers - rate-limit, budget, retention - read live) + unit tests | feature-implementer | P1.2 | `[x]` (get_setting, get_all_settings, update_setting with DEFAULT_SETTINGS fallback) |
+| P9.7.4 | `api/admin.py` (`/api/admin/{users,orgs,vendors/kyc,ai/providers,ai/budgets,settings,observability,audit,incidents}`) + integration tests (`test_admin_rbac.py`) | feature-implementer + test-runner | P9.7.1–P9.7.3, P1.3b | `[x]` (admin.py 231L - 11 endpoints: stats, users, audit, suspend, reactivate, orgs, ai/providers, ai/providers/test, settings GET/PUT, health) |
 | P9.7.5 | Frontend: `/admin/dashboard` (cross-tenant KPIs) | feature-implementer (UI skill) | P9.7.4 | `[x]` (KPI cards + activity feed + system health from real API) |
-| P9.7.6 | Frontend: `/admin/users` + `/admin/orgs` + `/admin/vendors/kyc` | feature-implementer (UI skill) | P9.7.4 | `[x]` (Users.tsx — suspend/reactivate actions wired; orgs endpoint available) |
-| P9.7.7 | Frontend: `/admin/ai/providers` (DB-backed model toggle, default-pick) + `/admin/ai/budgets` | feature-implementer (UI skill) | P9.7.4 | `[x]` (AIProviders.tsx — real API + Test Connection button wired) |
-| P9.7.8 | Frontend: `/admin/settings` + `/admin/observability` (cross-tenant) + `/admin/audit` + `/admin/incidents` (runbook actions) | feature-implementer (UI skill) | P9.7.4, P9.5b.3 | `[x]` (Settings.tsx — editable with real API; Observability.tsx — real dashboard; Audit.tsx fully wired) |
-| P9.7.9 | E2E: `test_admin_user_management.spec.ts`, `test_admin_ai_provider_toggle.spec.ts`, `test_admin_cannot_silently_read_thread_unaudited.spec.ts` | ui-tester | P9.7.5–P9.7.8 | `[x]` (covered by Playwright UAT admin-flow.spec.ts — 9 tests) |
+| P9.7.6 | Frontend: `/admin/users` + `/admin/orgs` + `/admin/vendors/kyc` | feature-implementer (UI skill) | P9.7.4 | `[x]` (Users.tsx - suspend/reactivate actions wired; orgs endpoint available) |
+| P9.7.7 | Frontend: `/admin/ai/providers` (DB-backed model toggle, default-pick) + `/admin/ai/budgets` | feature-implementer (UI skill) | P9.7.4 | `[x]` (AIProviders.tsx - real API + Test Connection button wired) |
+| P9.7.8 | Frontend: `/admin/settings` + `/admin/observability` (cross-tenant) + `/admin/audit` + `/admin/incidents` (runbook actions) | feature-implementer (UI skill) | P9.7.4, P9.5b.3 | `[x]` (Settings.tsx - editable with real API; Observability.tsx - real dashboard; Audit.tsx fully wired) |
+| P9.7.9 | E2E: `test_admin_user_management.spec.ts`, `test_admin_ai_provider_toggle.spec.ts`, `test_admin_cannot_silently_read_thread_unaudited.spec.ts` | ui-tester | P9.7.5–P9.7.8 | `[x]` (covered by Playwright UAT admin-flow.spec.ts - 9 tests) |
 | P9.7.CP | **Commit checkpoint**: `git commit -m "phase-9.7: admin shell + DB-backed AI config + cross-tenant observability" && git push` | claude (main) | P9.7.1–P9.7.9 | `[x]` |
 
-### Phase 10 — Activity Panel + Coming-Soon Stubs + Polish (Day 2 evening, ~1.5h) — **PARALLELIZABLE**
+### Phase 10 - Activity Panel + Coming-Soon Stubs + Polish (Day 2 evening, ~1.5h) - **PARALLELIZABLE**
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P10.1 | Frontend: Activity (audit log) panel | feature-implementer (UI skill) | P1.6 | `[x]` (Activity.tsx — real-time timeline from /api/buyer/activity w/ action-type colors) |
+| P10.1 | Frontend: Activity (audit log) panel | feature-implementer (UI skill) | P1.6 | `[x]` (Activity.tsx - real-time timeline from /api/buyer/activity w/ action-type colors) |
 | P10.2 | Frontend: Coming-Soon tabs (Negotiation, Contract, Invoice, Analytics) with mocked screenshots | feature-implementer (UI skill) | P0.4 | `[x]` (4 disabled nav items in sidebar) |
 | P10.3 | `agents/_stubs/*` placeholder classes + tests | feature-implementer | P4.4 | `[x]` (NegotiationAgent, ContractAgent, InvoiceAgent, AnalyticsAgent stubs + 4 tests) |
 | P10.4 | Command Palette + Toaster + dark mode + responsive polish | feature-implementer (UI skill) | P0.4 | `[ ]` |
-| P10.5 | Notifications fan-out service (`channels/notifications.py`) wiring email + telegram + in-app prefs | feature-implementer | P5.1, P7.1, P8.1 | `[x]` (channels/notifications.py — notify_vendor with per-channel prefs + fallback) |
+| P10.5 | Notifications fan-out service (`channels/notifications.py`) wiring email + telegram + in-app prefs | feature-implementer | P5.1, P7.1, P8.1 | `[x]` (channels/notifications.py - notify_vendor with per-channel prefs + fallback) |
 | P10.CP | **Commit checkpoint**: `git commit -m "phase-10: activity panel + coming-soon stubs + polish" && git push` | claude (main) | P10.1–P10.5 | `[~]` (P10.4 Command Palette pending) |
 
-### Phase 11 — Final QA + Docs + Demo (Day 2 evening, ~1.5h)
+### Phase 11 - Final QA + Docs + Demo (Day 2 evening, ~1.5h)
 
 | ID | Packet | Owner | Deps | Status |
 |---|---|---|---|---|
-| P11.1 | Run full test suite, fix failures | test-runner + bug-resolver | all | `[x]` (451 tests passing, 0 failures, 81.65% coverage — exceeds 80% target; 42 Playwright UAT tests) |
-| P11.2 | Code-quality pass (ruff, mypy --strict, security review) | code-quality-checker | all | `[x]` (.pre-commit-config.yaml + .github/workflows/ci.yml + security audit: 11 issues fixed — CSRF, RateLimit, IDOR, path traversal, cookie security, CORS, password validation) |
+| P11.1 | Run full test suite, fix failures | test-runner + bug-resolver | all | `[x]` (451 tests passing, 0 failures, 81.65% coverage - exceeds 80% target; 42 Playwright UAT tests) |
+| P11.2 | Code-quality pass (ruff, mypy --strict, security review) | code-quality-checker | all | `[x]` (.pre-commit-config.yaml + .github/workflows/ci.yml + security audit: 11 issues fixed - CSRF, RateLimit, IDOR, path traversal, cookie security, CORS, password validation) |
 | P11.3 | `README.md`, `ARCHITECTURE.md`, `SECURITY.md`, `DEMO_SCRIPT.md`, `UAT.md`, `API.md` | documentation-writer | all | `[~]` (README.md exists; other docs pending) |
-| P11.4 | Dry-run demo end-to-end on localhost; capture screenshots; record 60s loom for backup | ui-tester | all | `[x]` (UAT verified: login→dashboard→chat→RFx→comparison→vendor inbox→admin — all working) |
+| P11.4 | Dry-run demo end-to-end on localhost; capture screenshots; record 60s loom for backup | ui-tester | all | `[x]` (UAT verified: login→dashboard→chat→RFx→comparison→vendor inbox→admin - all working) |
 | P11.5 | Mark `IMPLMENTETION_PLAN_CONTEXT.md` checkboxes as done; update Decisions Confirmed | claude (main) | all | `[x]` (this update) |
 | P11.CP | **Final commit + Day-2 tag**: `git commit -m "phase-11: docs + final QA (demo ready)" && git push && git tag v0.2-demo && git push --tags` | claude (main) | P11.1–P11.5 | `[ ]` |
 
@@ -1146,8 +1146,8 @@ This phase is split across two windows. Scaffolding (§9.5a) lands early (right 
 
 ## 9. Verification (live demo, end-to-end)
 
-1. `./app.sh setup` — installs deps, runs migrations, seeds dark-store inventory + vendors + buyer/vendor demo users + 3 historical RFx.
-2. `./app.sh start` — backend `:4040`, frontend `:5173`, Huey worker, MailHog (`:8025`) for outbound capture in dev, ngrok URL for Telegram (printed).
+1. `./app.sh setup` - installs deps, runs migrations, seeds dark-store inventory + vendors + buyer/vendor demo users + 3 historical RFx.
+2. `./app.sh start` - backend `:4040`, frontend `:5173`, Huey worker, MailHog (`:8025`) for outbound capture in dev, ngrok URL for Telegram (printed).
 3. Visit `http://localhost:5173`, log in as `buyer@aeros.demo`.
 4. Open chat: voice input "मुझे कल सुबह 5 बजे तक 150 किलो टमाटर, 80 किलो प्याज और 500 लीटर दूध चाहिए" (Hindi). Watch IntakeAgent stream draft. Terms chip shows defaults; buyer clicks chip, changes validity to 3 days. Approve.
 5. SourcingAgent dispatches: vendor A via in-app, vendor B via email (visible in MailHog), vendor C via Telegram (deep link in printed log).
@@ -1156,7 +1156,7 @@ This phase is split across two windows. Scaffolding (§9.5a) lands early (right 
 8. Vendor C (Telegram): simulated update endpoint posts `kirana_proforma.jpg` → vision extracts → offer.
 9. Buyer sees ComparisonMatrix populate live with three offers, per-field confidence badges, lowest-price highlight per line. Buyer overrides one extracted price (audit logged). Splits award (tomatoes to vendor B, milk to vendor A).
 10. POAgent renders PO PDF, emails awarded vendors, surfaces download link.
-11. Run `pytest -q && cd frontend && pnpm test && pnpm e2e` — all green, coverage ≥80%.
+11. Run `pytest -q && cd frontend && pnpm test && pnpm e2e` - all green, coverage ≥80%.
 
 Demo can also run **without** voice/Hindi for international audiences (English fallback).
 
@@ -1164,17 +1164,17 @@ Demo can also run **without** voice/Hindi for international audiences (English f
 
 ## 10. References to reuse (don't copy blindly)
 
-- `/Users/prakersh/projects/4dpocket/src/fourdpocket/ai/base.py` — `ChatProvider` protocol shape.
-- `/Users/prakersh/projects/4dpocket/src/fourdpocket/ai/openai_compatible.py:33-81` — NIM/OpenAI-compat client wrapping pattern.
-- `/Users/prakersh/projects/4dpocket/src/fourdpocket/ai/extractor.py` — gleaning extraction loop; adapt for Offer extraction.
-- `/Users/prakersh/projects/4dpocket/src/fourdpocket/ai/llm_cache.py` — content-hash response cache.
-- `/Users/prakersh/projects/4dpocket/src/fourdpocket/workers/enrichment_pipeline.py` — Huey stage-DAG; adapt for offer pipeline.
-- `/Users/prakersh/projects/4dpocket/src/fourdpocket/processors/pdf.py` — PyMuPDF + pymupdf4llm.
-- `/Users/prakersh/projects/4dpocket/app.sh` — lifecycle script style.
-- `/Users/prakersh/projects/nvidia/apps/proxy/app/clients/nvidia_client.py:15-57` — exact NIM call shapes (chat, vision, embeddings).
-- `/Users/prakersh/projects/nvidia/apps/proxy/app/clients/groq_asr_client.py:30-90` — Groq Whisper call shape.
-- `/Users/prakersh/projects/memo.sbs/src/templates/partials/_chat_component.html` + `_chat_component.js` — floating-chat UX pattern (port to React).
-- `/Users/prakersh/projects/memo.sbs/src/ai/agent.py` — RAG-first agent JSON-plan pattern.
+- `/Users/prakersh/projects/4dpocket/src/fourdpocket/ai/base.py` - `ChatProvider` protocol shape.
+- `/Users/prakersh/projects/4dpocket/src/fourdpocket/ai/openai_compatible.py:33-81` - NIM/OpenAI-compat client wrapping pattern.
+- `/Users/prakersh/projects/4dpocket/src/fourdpocket/ai/extractor.py` - gleaning extraction loop; adapt for Offer extraction.
+- `/Users/prakersh/projects/4dpocket/src/fourdpocket/ai/llm_cache.py` - content-hash response cache.
+- `/Users/prakersh/projects/4dpocket/src/fourdpocket/workers/enrichment_pipeline.py` - Huey stage-DAG; adapt for offer pipeline.
+- `/Users/prakersh/projects/4dpocket/src/fourdpocket/processors/pdf.py` - PyMuPDF + pymupdf4llm.
+- `/Users/prakersh/projects/4dpocket/app.sh` - lifecycle script style.
+- `/Users/prakersh/projects/nvidia/apps/proxy/app/clients/nvidia_client.py:15-57` - exact NIM call shapes (chat, vision, embeddings).
+- `/Users/prakersh/projects/nvidia/apps/proxy/app/clients/groq_asr_client.py:30-90` - Groq Whisper call shape.
+- `/Users/prakersh/projects/memo.sbs/src/templates/partials/_chat_component.html` + `_chat_component.js` - floating-chat UX pattern (port to React).
+- `/Users/prakersh/projects/memo.sbs/src/ai/agent.py` - RAG-first agent JSON-plan pattern.
 
 ---
 
@@ -1191,11 +1191,11 @@ All design questions resolved (see §2 Decisions Confirmed). The plan is impleme
 
 ## 12. Out-of-scope for this prototype
 
-- Real production deployment (Docker compose + ingress + secrets manager) — `docker-compose.yml` ships but is not the demo target.
-- ERP integrations (SAP/Oracle) — placeholder mention only.
-- Spend analytics module — Coming-Soon tab.
-- Contract lifecycle — Coming-Soon tab.
-- Invoice 3-way match — Coming-Soon tab.
+- Real production deployment (Docker compose + ingress + secrets manager) - `docker-compose.yml` ships but is not the demo target.
+- ERP integrations (SAP/Oracle) - placeholder mention only.
+- Spend analytics module - Coming-Soon tab.
+- Contract lifecycle - Coming-Soon tab.
+- Invoice 3-way match - Coming-Soon tab.
 - Multi-tenancy beyond single buyer org + multiple vendor orgs.
 - Mobile apps (PWA-friendly responsive only).
 - 2FA / SSO (basic email+password only).

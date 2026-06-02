@@ -9,7 +9,7 @@ the full product overview and one-command setup (`./app.sh start`).
 - **Vite** dev server / build
 - **Tailwind CSS v4** (`@tailwindcss/vite`), dark theme
 - **TanStack Query** for server state, **Zustand** for auth state
-- **React Router 7** — role-based portals (buyer / vendor / admin)
+- **React Router 7** - role-based portals (buyer / vendor / admin)
 - **Playwright** for E2E
 
 ## Run
@@ -31,13 +31,13 @@ pnpm exec playwright test                              # E2E suite (e2e/*.spec.t
 pnpm exec playwright test --config=playwright.demo.config.ts   # demo video capture
 ```
 
-- `e2e/` — auth, buyer, vendor, admin, and RFx-lifecycle flows; shared
+- `e2e/` - auth, buyer, vendor, admin, and RFx-lifecycle flows; shared
   `helpers.ts` logs in as the seeded demo accounts.
-- `e2e/demo/` — slow-motion, video-recording specs used to produce demo clips.
+- `e2e/demo/` - slow-motion, video-recording specs used to produce demo clips.
 
 ## Notable UI
 
 - **AgentBlocks** (`src/components/ui/AgentBlocks.tsx`) renders the chat
   co-pilot's structured responses (text, table, card, key-value, list, actions)
-  from the backend's typed block payload — XSS-safe, no raw HTML.
+  from the backend's typed block payload - XSS-safe, no raw HTML.
 - Three role shells (Buyer / Vendor / Admin) gated by a `ProtectedRoute`.

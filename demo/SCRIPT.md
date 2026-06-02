@@ -1,4 +1,4 @@
-# AerOS — Live Demo Kit
+# AerOS - Live Demo Kit
 
 Everything you need to run the live demo: a step-by-step script, the exact
 co-pilot prompts to type, and a folder of sample vendor attachments in every
@@ -7,7 +7,7 @@ format the platform accepts.
 - **Prompts & flow** → this file
 - **Vendor attachments** → [`attachments/`](attachments/) (regenerate with
   `.venv/bin/python demo/generate_demo_files.py`)
-- **Recorded walkthrough** → [`demo.mp4`](demo.mp4) — one
+- **Recorded walkthrough** → [`demo.mp4`](demo.mp4) - one
   continuous, captioned flow on a single RFx: Step 1 buyer signs in · Step 2
   buyer drafts the request in plain language (with an items table) · Step 3 the
   agent dispatches it and auto-invites matching vendors · Steps 4–5 two vendors
@@ -67,11 +67,11 @@ Optional extra prompts that also produce visual blocks:
 - `Show my RFx` → lists all requests with status
 
 > Talking point: *every* reply is a typed UI block (table / card / actions),
-> not just text — and it's XSS-safe.
+> not just text - and it's XSS-safe.
 
 ---
 
-## 2. Vendor reply — format-agnostic intake (≈4 min)
+## 2. Vendor reply - format-agnostic intake (≈4 min)
 
 This is the headline feature: a vendor can reply in **any** file format and
 AerOS normalizes it into one structured offer.
@@ -81,8 +81,8 @@ Produce Replenishment - W23** (RFx #1, "Viewed", ~1 day left).
 
 1. **Upload & Analyze** tab → drag in (or browse to) one of the sample files
    from [`attachments/`](attachments/). Good choices on stage:
-   - `sabzimandi_quote.xlsx` (Excel) — matches this vendor
-   - `greenvalley_pricelist.png` or `scanned_proforma.jpg` — show a
+   - `sabzimandi_quote.xlsx` (Excel) - matches this vendor
+   - `greenvalley_pricelist.png` or `scanned_proforma.jpg` - show a
      **photo/scan** being read by the vision model (most impressive)
    - `metro_quote.pdf` (digital PDF) or `annapurna_quote.html` (email body)
 2. Click **Ask AI about this document** → the vendor co-pilot replies with a
@@ -90,7 +90,7 @@ Produce Replenishment - W23** (RFx #1, "Viewed", ~1 day left).
 3. Switch to **Quote Form**, confirm/adjust the prices, set payment/delivery,
    and click **Submit Quote**.
 
-Then switch back to the **buyer** window and re-run prompt #2 — the new quote
+Then switch back to the **buyer** window and re-run prompt #2 - the new quote
 now appears in the comparison.
 
 > Talking point: PDF, Word, Excel, CSV, plain-text email, HTML email, and
@@ -124,10 +124,10 @@ All nine pass upload validation and extract through the real pipeline
 
 ## 4. If something misbehaves
 
-- **Co-pilot reply looks empty / "please share the offers"** — shouldn't happen
+- **Co-pilot reply looks empty / "please share the offers"** - shouldn't happen
   after the latest fix; if it does, re-send prompt #2 (it now falls back to a
   deterministic tool call).
-- **Comparison shows blank cells for a vendor** — the demo DB has stale data;
+- **Comparison shows blank cells for a vendor** - the demo DB has stale data;
   re-run the reseed in section 0.
-- **Upload rejected** — only the formats in section 3 are accepted; executables
+- **Upload rejected** - only the formats in section 3 are accepted; executables
   and unknown types are blocked by design (good security talking point).
