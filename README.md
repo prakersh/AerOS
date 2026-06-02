@@ -37,7 +37,9 @@ bodies. AerOS turns every reply, on every channel, into one normalized
 - **Conversational RFx drafting** - describe the need in plain text and the
   co-pilot drafts the line items, applying the buyer's saved defaults (payment,
   delivery, validity, currency, tax) when drafting and sending the request.
-  (Voice input is in progress - see Status.)
+  Both the buyer procurement chat and the admin chat have access to inventory
+  tools (add, find, and search items) so SKUs can be managed inline without
+  leaving the conversation. (Voice input is in progress - see Status.)
 - **Omnichannel reply routing** - every RFx thread can be replied to via
   in-app chat, email (SMTP/IMAP), or Telegram bot; HMAC-signed correlation
   tokens fuse them into one thread regardless of channel.
