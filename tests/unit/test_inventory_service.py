@@ -97,3 +97,53 @@ class TestSearchSkus:
         # SQL contains is typically case-insensitive in SQLite
         result = inventory_service.search_skus(session, org.id, "pot")
         assert len(result) >= 1
+
+    def test_search_by_code(self, session, org, skus):
+        result = inventory_service.search_skus(session, org.id, "V001")
+        assert result and result[0].code == "V001"
+
+    def test_search_fuzzy_misspelling(self, session, org, skus):
+        # "Tomatoe" is a misspelling of "Tomato".
+        result = inventory_service.search_skus(session, org.id, "Tomatoe")
+        assert result and result[0].name == "Tomato"
+
+
+class TestResolveSkuRef:
+    def test_by_integer_id(self, session, org, skus):
+        match, candidates = inventory_service.resolve_sku_ref(session, org.id, skus[0].id)
+        assert match and match.name == "Tomato"
+        assert candidates == []
+
+    def test_by_numeric_string_id(self, session, org, skus):
+        match, _ = inventory_service.resolve_sku_ref(session, org.id, str(skus[0].id))
+        assert match and match.name == "Tomato"
+
+    def test_by_code_case_insensitive(self, session, org, skus):
+        match, candidates = inventory_service.resolve_sku_ref(session, org.id, "v001")
+        assert match and match.code == "V001"
+        assert candidates == []
+
+    def test_by_name(self, session, org, skus):
+        match, _ = inventory_service.resolve_sku_ref(session, org.id, "Apple")
+        assert match and match.code == "F001"
+
+    def test_ambiguous_returns_candidates(self, session, org, categories):
+        # Two equally-plausible "milk" matches -> no confident winner.
+        cat = categories[0].id
+        a = SKU(org_id=org.id, code="D1", name="Toned Milk", category_id=cat, unit="ltr")
+        b = SKU(org_id=org.id, code="D2", name="Full Cream Milk", category_id=cat, unit="ltr")
+        session.add(a)
+        session.add(b)
+        session.commit()
+        match, candidates = inventory_service.resolve_sku_ref(session, org.id, "milk")
+        assert match is None
+        assert {c.name for c in candidates} == {"Toned Milk", "Full Cream Milk"}
+
+    def test_no_match(self, session, org, skus):
+        match, candidates = inventory_service.resolve_sku_ref(session, org.id, "xyzzy")
+        assert match is None
+        assert candidates == []
+
+    def test_other_org_id_rejected(self, session, org, skus):
+        match, _ = inventory_service.resolve_sku_ref(session, 99999, skus[0].id)
+        assert match is None

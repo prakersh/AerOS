@@ -92,7 +92,7 @@ _QTY = (
 )
 _UNIT = (
     r"(?:kg|kgs|g|gm|gram|grams|ltr|ltrs|litre|litres|liter|liters|ml|"
-    r"pcs|pieces|dozen|units?|ton|tons|tonne|quintal|quintals|"
+    r"pcs|pieces|dozen|doz|units?|ton|tons|tonne|quintal|quintals|"
     r"packet|packets|box|boxes|carton|cartons|bag|bags|sack|sacks|"
     r"bottle|bottles|can|cans|pair|pairs|set|sets|roll|rolls)"
 )
@@ -310,6 +310,106 @@ def _resolve_line_items(message: str, session: Session, org_id: int) -> list[dic
     return items
 
 
+# Explicit "add to this request" cues — when the buyer is already viewing an
+# RFx, these mean "append a line item here", not "start a new request".
+_ADD_CUE_RE = re.compile(
+    r"\b(?:add|include|append|attach|jodo|jod do|daal do|daaldo|daldo|add\s*kar)\b",
+    re.IGNORECASE,
+)
+# "<name> <qty><unit>" — name BEFORE quantity ("bisleri 1L 100 pcs",
+# "ashirwad aata 10 pcs"). Complements _ITEM_CLAUSE_RE which expects the
+# quantity first.
+_NAME_QTY_RE = re.compile(
+    rf"([a-z][a-z0-9 ]*?)\s+(\d+(?:\.\d+)?)\s*({_UNIT})\b",
+    re.IGNORECASE,
+)
+# A bare SKU code, optionally followed by a quantity ("PF001 qty 10",
+# "add PF001 x 10").
+_CODE_QTY_RE = re.compile(
+    r"\b([a-z]{1,5}\d{2,6})\b(?:[^0-9]{0,18}?(\d+(?:\.\d+)?))?",
+    re.IGNORECASE,
+)
+
+
+def _parse_item_refs(message: str) -> list[dict[str, Any]]:
+    """Extract ``{sku_id: <ref>, qty, unit_override}`` from free text.
+
+    ``sku_id`` is left as the raw name/code the user typed; the executor's
+    ``resolve_sku_ref`` turns it into a real SKU (or surfaces candidates).
+    """
+    items: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add(ref: str, qty: float, unit: str | None) -> None:
+        key = ref.lower()
+        if not ref or key in seen:
+            return
+        seen.add(key)
+        items.append({"sku_id": ref, "qty": qty, "unit_override": unit})
+
+    # qty-first: "10 pcs ashirwad aata"
+    for m in _ITEM_CLAUSE_RE.finditer(message):
+        name = _ITEM_TAIL_RE.sub("", m.group(3)).strip()
+        if name:
+            add(name, float(m.group(1)), m.group(2).lower())
+
+    # name-first: "bisleri 1L 100 pcs"
+    for m in _NAME_QTY_RE.finditer(message):
+        name = _ITEM_TAIL_RE.sub("", m.group(1)).strip()
+        # Drop a leading add-cue verb caught by the greedy name group.
+        name = _ADD_CUE_RE.sub("", name).strip()
+        if name and not name.isdigit():
+            add(name, float(m.group(2)), m.group(3).lower())
+
+    # explicit SKU codes: "PF001 qty 10"
+    for m in _CODE_QTY_RE.finditer(message):
+        code, qty = m.group(1), m.group(2)
+        add(code, float(qty) if qty else 1.0, None)
+
+    # Loose single-item fallback for phrasings the structured patterns miss:
+    # unit-less quantities ("60 bananas") and "quantity/qty N" ("milk qty 5").
+    if not items:
+        loose = _loose_single_item(message)
+        if loose:
+            add(*loose)
+
+    return items
+
+
+# Filler stripped from a loose single-item phrase to isolate the item name.
+_FILLER_RE = re.compile(
+    r"\b(?:add|include|append|attach|line\s*items?|item|to|this|the|that|"
+    r"rfx|rfq|request|requisition|order|po|with|of|a|an|please|qty|quantity|"
+    r"jodo|daal\s*do|daaldo)\b",
+    re.IGNORECASE,
+)
+_QTY_HINT_RE = re.compile(r"(?:qty|quantity|x|×|\*)\s*[:=]?\s*(\d+(?:\.\d+)?)", re.IGNORECASE)  # noqa: RUF001
+_NUM_RE = re.compile(r"\b(\d+(?:\.\d+)?)\b")
+
+
+def _loose_single_item(message: str) -> tuple[str, float, None] | None:
+    """Best-effort '<item> ... <qty>' parse for a single add request.
+
+    Handles "add 60 bananas", "add line item milk with quantity 5",
+    "add zzznope qty 3" — anything with one clear quantity and a leftover
+    item phrase. Returns ``(ref, qty, None)`` or None when too ambiguous.
+    """
+    qty_match = _QTY_HINT_RE.search(message) or _NUM_RE.search(message)
+    if not qty_match:
+        return None
+    qty = float(qty_match.group(1))
+    # Drop the quantity token and any unit immediately after it, then filler.
+    without_qty = re.sub(
+        rf"\b{re.escape(qty_match.group(1))}\s*(?:{_UNIT})?\b", " ", message, count=1, flags=re.I
+    )
+    name = _FILLER_RE.sub(" ", without_qty)
+    name = re.sub(r"[^a-z0-9 ]", " ", name, flags=re.IGNORECASE)
+    name = re.sub(r"\s+", " ", name).strip()
+    if len(name) < 2:
+        return None
+    return name, qty, None
+
+
 def _derive_rfx_title(items: list[dict[str, Any]]) -> str:
     names = [it["sku_name"] for it in items][:3]
     if not names:
@@ -317,6 +417,26 @@ def _derive_rfx_title(items: list[dict[str, Any]]) -> str:
     head = ", ".join(names)
     suffix = "" if len(items) <= 3 else f" +{len(items) - 3} more"
     return f"Procurement: {head}{suffix}"
+
+
+def _active_rfx_add_calls(
+    message: str, ctx: AgentContext
+) -> list[tuple[str, dict[str, Any]]]:
+    """Deterministic add_line_items when the buyer is working inside an RFx.
+
+    The chat model is an unreliable tool-caller — it frequently narrates
+    "added!" without emitting add_line_items, or spawns a brand-new RFx
+    instead of appending. When we already have an active rfx_id and the
+    message clearly asks to add items, we build the call ourselves so the
+    behaviour is predictable. Ambiguous/unknown refs are still resolved
+    (and surfaced) by the executor, not guessed here.
+    """
+    if not ctx.rfx_id or not _ADD_CUE_RE.search(message):
+        return []
+    items = _parse_item_refs(message)
+    if not items:
+        return []
+    return [("add_line_items", {"rfx_id": ctx.rfx_id, "items": items})]
 
 
 def _deterministic_tool_calls(
@@ -626,6 +746,20 @@ class ProcurementAgent(BaseAgent):
         keyword_filtered = filter_tools_by_keywords(safe_input, available_tools)
         tools_toon = tools_to_toon(keyword_filtered)
 
+        # When the buyer is inside an RFx and asks to add items, resolve the
+        # call deterministically rather than trusting the model to emit it.
+        deterministic_add = _active_rfx_add_calls(safe_input, ctx)
+
+        logger.info(
+            "agent.intent.detected",
+            role=role,
+            detected=detected,
+            active_rfx_id=ctx.rfx_id,
+            deterministic_add=bool(deterministic_add),
+            add_item_count=(len(deterministic_add[0][1]["items"]) if deterministic_add else 0),
+            candidate_tools=[t.name for t in keyword_filtered],
+        )
+
         # Agentic loop
         iteration = 0
         final_response = ""
@@ -636,64 +770,92 @@ class ProcurementAgent(BaseAgent):
         ):
             iteration += 1
 
-            # Step 4: LLM selects tools
+            # Step 4: select tools
             await emit("select_tools")
             step = PipelineStep(name=f"select_tools_{iteration}", start_time=time.monotonic())
-            selection_prompt = TOOL_SELECTION_PROMPT.format(
-                now=datetime.now(UTC).strftime("%A, %Y-%m-%d %H:%M UTC"),
-                context=context_str,
-                history=history_str,
-                message=safe_input,
-                intent_hints=intent_hints,
-                tools_toon=tools_toon,
-            )
 
-            try:
-                selection_resp = await ctx.chat_provider.chat(
-                    [ChatMessage(role="user", content=selection_prompt)],
-                    temperature=0.2,
-                    max_tokens=int(STAGE_TOKEN_LIMITS["tool_selection"]["max_output"]),
-                    response_format={"type": "json_object"},
-                )
-                llm_calls += 1
-                total_input_tokens += selection_resp.input_tokens
-                total_output_tokens += selection_resp.output_tokens
-            except Exception as e:
-                logger.error("agent.select.error", error=str(e))
+            # Deterministic add-to-active-RFx bypasses the LLM entirely on the
+            # first iteration — the model is too unreliable at emitting
+            # add_line_items with the right rfx_id and items.
+            if iteration == 1 and deterministic_add:
+                selected = deterministic_add
                 step.end_time = time.monotonic()
-                step.status = "error"
+                step.status = "success"
+                step.details = {"source": "deterministic_add"}
                 steps.append(step)
-                final_response = "I had trouble understanding that. Could you rephrase?"
-                break
-
-            step.end_time = time.monotonic()
-            step.status = "success"
-            step.details = {
-                "input_tokens": selection_resp.input_tokens,
-                "output_tokens": selection_resp.output_tokens,
-            }
-            steps.append(step)
-
-            # Parse tool selections
-            selected = _parse_tool_selections(selection_resp.content)
-            selected = _backfill_rfx_id(selected, safe_input, ctx)
-
-            # The chat model can be an unreliable tool-caller: for the same
-            # "create an RFx for ..." prompt it emits the call only ~half the time
-            # and sometimes truncates mid-JSON. Whenever it gives us nothing usable
-            # but the deterministic detector saw a clear intent, build the tool
-            # calls ourselves. This is what makes create/dispatch/compare reliable.
-            if not selected and detected:
-                selected = _deterministic_tool_calls(detected, safe_input, ctx)
-
-            # Truncated AND no intent we can act on — ask the user to simplify.
-            if not selected and selection_resp.finish_reason == "length":
-                logger.warning("agent.select.truncated", iteration=iteration)
-                final_response = (
-                    "There's a lot in that one. Could you break it into smaller steps so "
-                    "I can get each part right?"
+                logger.info(
+                    "agent.tools.selected",
+                    source="deterministic_add",
+                    iteration=iteration,
+                    tools=[t for t, _ in selected],
                 )
-                break
+            else:
+                selection_prompt = TOOL_SELECTION_PROMPT.format(
+                    now=datetime.now(UTC).strftime("%A, %Y-%m-%d %H:%M UTC"),
+                    context=context_str,
+                    history=history_str,
+                    message=safe_input,
+                    intent_hints=intent_hints,
+                    tools_toon=tools_toon,
+                )
+
+                try:
+                    selection_resp = await ctx.chat_provider.chat(
+                        [ChatMessage(role="user", content=selection_prompt)],
+                        temperature=0.2,
+                        max_tokens=int(STAGE_TOKEN_LIMITS["tool_selection"]["max_output"]),
+                        response_format={"type": "json_object"},
+                    )
+                    llm_calls += 1
+                    total_input_tokens += selection_resp.input_tokens
+                    total_output_tokens += selection_resp.output_tokens
+                except Exception as e:
+                    logger.error("agent.select.error", error=str(e))
+                    step.end_time = time.monotonic()
+                    step.status = "error"
+                    steps.append(step)
+                    final_response = "I had trouble understanding that. Could you rephrase?"
+                    break
+
+                step.end_time = time.monotonic()
+                step.status = "success"
+                step.details = {
+                    "input_tokens": selection_resp.input_tokens,
+                    "output_tokens": selection_resp.output_tokens,
+                }
+                steps.append(step)
+
+                # Parse tool selections
+                selected = _parse_tool_selections(selection_resp.content)
+                selected = _backfill_rfx_id(selected, safe_input, ctx)
+
+                # The chat model can be an unreliable tool-caller: for the same
+                # "create an RFx for ..." prompt it emits the call only ~half the
+                # time and sometimes truncates mid-JSON. Whenever it gives us
+                # nothing usable but the deterministic detector saw a clear
+                # intent, build the tool calls ourselves. This is what makes
+                # create/dispatch/compare reliable.
+                selection_source = "llm"
+                if not selected and detected:
+                    selected = _deterministic_tool_calls(detected, safe_input, ctx)
+                    selection_source = "deterministic_fallback"
+
+                # Truncated AND no intent we can act on — ask the user to simplify.
+                if not selected and selection_resp.finish_reason == "length":
+                    logger.warning("agent.select.truncated", iteration=iteration)
+                    final_response = (
+                        "There's a lot in that one. Could you break it into smaller steps so "
+                        "I can get each part right?"
+                    )
+                    break
+
+                logger.info(
+                    "agent.tools.selected",
+                    source=selection_source,
+                    iteration=iteration,
+                    tools=[t for t, _ in selected],
+                    finish_reason=selection_resp.finish_reason,
+                )
 
             # Drop one-shot mutating tools (e.g. create_rfx) that already ran this
             # turn so a continued loop can't duplicate them.
@@ -750,6 +912,21 @@ class ProcurementAgent(BaseAgent):
                 all_tools_called.append(tool_name)
                 if tool_name in _ONESHOT_TOOLS and result.success:
                     executed_oneshot.add(tool_name)
+                log_fields: dict[str, Any] = {
+                    "tool": tool_name,
+                    "success": result.success,
+                    "latency_ms": round(result.latency_ms, 1),
+                    "iteration": iteration,
+                }
+                if not result.success:
+                    log_fields["error"] = result.message
+                if tool_name == "add_line_items" and isinstance(result.data, dict):
+                    log_fields["added"] = result.data.get("count")
+                    log_fields["needs_clarification"] = [
+                        c.get("ref") for c in (result.data.get("needs_clarification") or [])
+                    ]
+                    log_fields["not_found"] = result.data.get("not_found")
+                logger.info("agent.tool.executed", **log_fields)
             step.end_time = time.monotonic()
             step.status = "success"
             step.details = {

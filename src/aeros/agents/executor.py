@@ -158,18 +158,48 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
         return {"rfx_id": rfx.id, "title": rfx.title, "status": "drafting"}
 
     if name == "add_line_items":
-        from aeros.models.sku import SKU
-
         _assert_rfx_owner(session, params["rfx_id"], user_id)
+        ready: list[dict[str, Any]] = []
+        needs_clarification: list[dict[str, Any]] = []
+        not_found: list[Any] = []
         for item in params["items"]:
-            sku_id = item.get("sku_id")
-            if sku_id is None:
+            ref = item.get("sku_id")
+            if ref is None:
                 raise ValueError("Each line item requires a sku_id")
-            sku = session.get(SKU, sku_id)
-            if not sku or sku.org_id != org_id:
-                raise ValueError(f"SKU #{sku_id} is not in your inventory")
-        items = rfx_service.add_line_items(session, params["rfx_id"], params["items"])
-        return {"count": len(items), "rfx_id": params["rfx_id"]}
+            match, candidates = inventory_service.resolve_sku_ref(session, org_id, ref)
+            if match:
+                # Normalise to the real primary key so persistence is exact.
+                ready.append({**item, "sku_id": match.id})
+            elif candidates:
+                needs_clarification.append(
+                    {
+                        "ref": ref,
+                        "qty": item.get("qty"),
+                        "unit_override": item.get("unit_override"),
+                        "candidates": [
+                            {
+                                "id": s.id,
+                                "code": s.code,
+                                "name": s.name,
+                                "unit": s.unit,
+                                "last_price": s.last_price,
+                            }
+                            for s in candidates
+                        ],
+                    }
+                )
+            else:
+                not_found.append(ref)
+
+        added = (
+            rfx_service.add_line_items(session, params["rfx_id"], ready) if ready else []
+        )
+        return {
+            "rfx_id": params["rfx_id"],
+            "count": len(added),
+            "needs_clarification": needs_clarification,
+            "not_found": not_found,
+        }
 
     if name == "list_rfx":
         return rfx_service.list_rfx_for_buyer(session, user_id)

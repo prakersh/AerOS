@@ -122,8 +122,33 @@ def _blocks_for_create_rfx(data: dict[str, Any]) -> list[Block]:
 
 
 def _blocks_for_add_line_items(data: dict[str, Any]) -> list[Block]:
+    blocks: list[Block] = []
     count = data.get("count", 0)
-    return [_text(f"Added **{count}** item{'s' if count != 1 else ''} to your request.")]
+    if count:
+        blocks.append(
+            _text(f"Added **{count}** item{'s' if count != 1 else ''} to your request.")
+        )
+
+    for clar in data.get("needs_clarification") or []:
+        ref = clar.get("ref")
+        options = clar.get("candidates") or []
+        lines = "\n".join(
+            f"- **{c.get('name')}** ({c.get('code')})"
+            + (f" — ₹{c.get('last_price')}/{c.get('unit')}" if c.get("last_price") else "")
+            for c in options
+        )
+        blocks.append(
+            _text(f'Multiple matches for "{ref}" — which one did you mean?\n{lines}')
+        )
+
+    missing = data.get("not_found") or []
+    if missing:
+        joined = ", ".join(f'"{m}"' for m in missing)
+        blocks.append(_text(f"Couldn't find {joined} in your inventory."))
+
+    if not blocks:
+        blocks.append(_text("No items were added."))
+    return blocks
 
 
 def _vendor_rows(vendors: list[dict[str, Any]]) -> list[dict[str, Any]]:

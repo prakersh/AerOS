@@ -1,6 +1,12 @@
 """Tests for tool selection parsing in ProcurementAgent."""
 
-from aeros.agents.procurement import _parse_tool_selections
+from types import SimpleNamespace
+
+from aeros.agents.procurement import (
+    _active_rfx_add_calls,
+    _parse_item_refs,
+    _parse_tool_selections,
+)
 
 
 class TestParseValidFormats:
@@ -95,3 +101,61 @@ class TestParseEdgeCases:
         result = _parse_tool_selections(content)
         assert len(result) == 1
         assert result[0][0] == "list_rfx"
+
+
+class TestParseItemRefs:
+    """Free-text -> line item refs for the deterministic add path."""
+
+    def test_qty_unit_name(self):
+        items = _parse_item_refs("add 10 pcs ashirwad aata")
+        assert items == [{"sku_id": "ashirwad aata", "qty": 10.0, "unit_override": "pcs"}]
+
+    def test_name_qty_unit(self):
+        items = _parse_item_refs("Add bisleri 1L 100 pcs")
+        assert items and items[0]["qty"] == 100.0
+        assert "bisleri" in items[0]["sku_id"].lower()
+
+    def test_sku_code_with_quantity(self):
+        items = _parse_item_refs("Add line item PF001 with quantity 10")
+        assert items == [{"sku_id": "PF001", "qty": 10.0, "unit_override": None}]
+
+    def test_unitless_quantity(self):
+        items = _parse_item_refs("Add line item: 60 bananas")
+        assert items == [{"sku_id": "bananas", "qty": 60.0, "unit_override": None}]
+
+    def test_quantity_keyword(self):
+        items = _parse_item_refs("Add line item milk with quantity 5")
+        assert items == [{"sku_id": "milk", "qty": 5.0, "unit_override": None}]
+
+    def test_no_items(self):
+        assert _parse_item_refs("hello there") == []
+
+    def test_dozen_abbreviation(self):
+        items = _parse_item_refs("add 10 doz banana")
+        assert items == [{"sku_id": "banana", "qty": 10.0, "unit_override": "doz"}]
+
+
+class TestActiveRfxAddCalls:
+    """Deterministic add_line_items only fires inside an RFx with an add cue."""
+
+    def test_fires_with_rfx_and_add_cue(self):
+        ctx = SimpleNamespace(rfx_id=5)
+        calls = _active_rfx_add_calls("add 10 pcs ashirwad aata", ctx)
+        assert len(calls) == 1
+        tool, params = calls[0]
+        assert tool == "add_line_items"
+        assert params["rfx_id"] == 5
+        assert params["items"][0]["sku_id"] == "ashirwad aata"
+
+    def test_no_rfx_context(self):
+        ctx = SimpleNamespace(rfx_id=None)
+        assert _active_rfx_add_calls("add 10 pcs rice", ctx) == []
+
+    def test_no_add_cue(self):
+        ctx = SimpleNamespace(rfx_id=5)
+        # No add/include/etc. cue -> don't hijack the message.
+        assert _active_rfx_add_calls("what is the status of 10 pcs rice", ctx) == []
+
+    def test_add_cue_but_no_items(self):
+        ctx = SimpleNamespace(rfx_id=5)
+        assert _active_rfx_add_calls("add something please", ctx) == []

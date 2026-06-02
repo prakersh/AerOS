@@ -123,7 +123,9 @@ def _build_catalog() -> dict[str, ToolDef]:
             ToolParam(
                 "items",
                 "array",
-                "Array of {sku_id, qty, unit_override?, target_price?}",
+                "Array of {sku_id, qty, unit_override?, target_price?}. "
+                "sku_id accepts the numeric id, the SKU code (e.g. 'PF001'), "
+                "or the item name (e.g. 'Aashirvaad Atta') — it is resolved automatically.",
                 required=True,
             ),
         ],
