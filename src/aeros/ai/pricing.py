@@ -1,9 +1,8 @@
 """Per-model token pricing for LLM cost estimation."""
 
 MODEL_PRICING: dict[str, dict[str, float]] = {
-    # Mimo v2.5 models
-    "mimo-v2.5": {"input": 0.0, "output": 0.0},
-    "mimo-v2.5-pro": {"input": 0.0, "output": 0.0},
+    # MiniMax M3
+    "MiniMax-M3": {"input": 0.0, "output": 0.0},
     # NVIDIA NIM (embeddings only)
     "nvidia/nv-embed-v1": {"input": 0.0, "output": 0.0},
     # Groq (pay-per-use)

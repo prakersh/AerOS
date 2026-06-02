@@ -14,8 +14,8 @@ class ProviderStatus(enum.StrEnum):
 
 class AIProviderConfig(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
-    provider_name: str = Field(index=True)  # "mimo", "nvidia_nim", "groq", "anthropic"
-    model_id: str  # "mimo-v2.5"
+    provider_name: str = Field(index=True)  # "minimax", "nvidia_nim", "groq", "anthropic"
+    model_id: str  # "MiniMax-M3"
     display_name: str = ""
     capability: str = "chat"  # chat, vision, asr, embedding
     is_default: bool = False

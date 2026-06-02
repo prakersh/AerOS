@@ -21,9 +21,9 @@ class Settings(BaseSettings):
     hmac_secret: str = "change-me"  # noqa: S105
 
     mimo_api_key: str = ""
-    mimo_base_url: str = "https://token-plan-sgp.xiaomimimo.com/v1"
-    default_chat_model: str = "mimo-v2.5"
-    default_vision_model: str = "mimo-v2.5"
+    mimo_base_url: str = "https://api.minimax.io/v1"
+    default_chat_model: str = "MiniMax-M3"
+    default_vision_model: str = "MiniMax-M3"
     nvidia_api_key: str = ""
     default_embed_model: str = "nvidia/nv-embed-v1"
 

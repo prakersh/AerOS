@@ -28,6 +28,8 @@ interface ObservabilitySummary {
 interface LLMCall {
   id: number;
   model: string;
+  prompt_tokens: number;
+  completion_tokens: number;
   total_tokens: number;
   latency_ms: number;
   cost_usd: number;
@@ -223,7 +225,12 @@ export default function ObservabilityDashboard({ scope }: ObservabilityDashboard
                       {call.model}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-400">
-                      {call.total_tokens.toLocaleString()}
+                      <span title={`In: ${call.prompt_tokens.toLocaleString()} / Out: ${call.completion_tokens.toLocaleString()}`}>
+                        {call.total_tokens.toLocaleString()}
+                        <span className="ml-1 text-xs text-zinc-600">
+                          ({call.prompt_tokens.toLocaleString()}↓ {call.completion_tokens.toLocaleString()}↑)
+                        </span>
+                      </span>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 tabular-nums text-zinc-400">
                       {call.latency_ms}ms

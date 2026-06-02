@@ -146,7 +146,7 @@ Currency: {rfx.currency_for_this_rfx}
         resp = await ctx.chat_provider.chat(
             messages,
             temperature=0.3,
-            max_tokens=1024,
+            max_tokens=16384,
             response_format={"type": "json_object"},
         )
         composed = parse_llm_json(resp.content, {"subject": rfx.title, "summary": resp.content})

@@ -70,10 +70,10 @@ bodies. AerOS turns every reply, on every channel, into one normalized
 |---|---|
 | Backend | FastAPI · SQLModel · SQLite · Alembic · Huey · structlog |
 | Frontend | React 19 · Vite · TypeScript · Tailwind v4 · TanStack Query · Zustand · React Router 7 |
-| AI chat + vision | **Any OpenAI-compatible endpoint** — MiMo (`mimo-v2.5`) is the default, but you can point the base URL / model / key at OpenAI, Azure OpenAI, NVIDIA NIM, or a local server (Ollama, vLLM, llama.cpp). No MiMo/Xiaomi plan required. |
+| AI chat + vision | **Any OpenAI-compatible endpoint** — MiniMax M3 is the default, but you can point the base URL / model / key at OpenAI, Azure OpenAI, NVIDIA NIM, or a local server (Ollama, vLLM, llama.cpp). |
 | AI embeddings *(optional)* | NVIDIA NIM (`nvidia/nv-embed-v1`) for vendor-by-SKU semantic matching |
 | ASR *(in progress)* | Whisper for voice input — Groq-hosted (`whisper-large-v3-turbo`); not fully completed yet |
-| Provider abstraction | thin `ChatProvider` protocol — any OpenAI-compatible endpoint (MiMo, NVIDIA NIM, OpenAI, Anthropic, Azure) |
+| Provider abstraction | thin `ChatProvider` protocol — any OpenAI-compatible endpoint (MiniMax, NVIDIA NIM, OpenAI, Anthropic, Azure) |
 | Auth | PyJWT + bcrypt direct (no passlib) |
 | Channels | aiosmtplib + IMAPClient · python-telegram-bot · FastAPI WebSocket |
 | PO render | WeasyPrint (HTML → PDF) |
@@ -104,23 +104,23 @@ OpenAI-compatible chat/vision endpoint.
 
 ```bash
 AEROS_MIMO_API_KEY=...                                  # key for your endpoint
-AEROS_MIMO_BASE_URL=https://token-plan-sgp.xiaomimimo.com/v1   # default (MiMo)
-AEROS_DEFAULT_CHAT_MODEL=mimo-v2.5
-AEROS_DEFAULT_VISION_MODEL=mimo-v2.5
+AEROS_MIMO_BASE_URL=https://api.minimax.io/v1           # default (MiniMax)
+AEROS_DEFAULT_CHAT_MODEL=MiniMax-M3
+AEROS_DEFAULT_VISION_MODEL=MiniMax-M3
 ```
 
 These `AEROS_MIMO_*` / `AEROS_DEFAULT_*` values are just a generic
-OpenAI-compatible config — **MiMo is only the default**. AerOS talks to the
+OpenAI-compatible config — **MiniMax M3 is the default**. AerOS talks to the
 endpoint through the standard OpenAI `chat/completions` API (and the standard
 `image_url` message content for vision), so any OpenAI-compatible endpoint works
 unchanged: OpenAI, Azure OpenAI, NVIDIA NIM, Together, or a local server
-(Ollama / vLLM / llama.cpp). **No MiMo/Xiaomi subscription or token plan is
-mandatory** — just supply that endpoint's base URL, key, and model name.
+(Ollama / vLLM / llama.cpp) — just supply that endpoint's base URL, key, and
+model name.
 
 > ⚠️ **Use a large multimodal (vision) model.** Format-agnostic intake sends
 > PDFs, scanned proformas, photographed price lists, and images to the model as
 > image input, so `AEROS_DEFAULT_VISION_MODEL` **must be a model that accepts
-> images** (e.g. `mimo-v2.5`, `gpt-4o`, `qwen2.5-vl`, `llama-3.2-vision`). A
+> images** (e.g. `MiniMax-M3`, `gpt-4o`, `qwen2.5-vl`, `llama-3.2-vision`). A
 > text-only model still runs the chat co-pilot but will fail to read uploaded
 > documents. The chat and vision models can differ, but both must be reachable
 > at the same base URL.
@@ -187,7 +187,7 @@ Testing was treated as a first-class deliverable, not an afterthought.
 
 **Prototype complete and demo-ready.** The six functional agents are fully
 implemented with real LLM calls through the OpenAI-compatible provider
-(MiMo by default). Format-agnostic extraction covers PDF, Word, Excel, CSV,
+(MiniMax M3 by default). Format-agnostic extraction covers PDF, Word, Excel, CSV,
 images, and email bodies. The side-by-side comparison matrix with
 per-line-item award and automatic PO generation is functional.
 

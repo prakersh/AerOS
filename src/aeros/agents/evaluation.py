@@ -66,7 +66,7 @@ class EvaluationAgent(BaseAgent):
         response = await ctx.chat_provider.chat(
             messages,
             temperature=0.1,
-            max_tokens=4096,
+            max_tokens=16384,
             response_format={"type": "json_object"},
         )
 
@@ -84,7 +84,7 @@ class EvaluationAgent(BaseAgent):
         gleaned = await ctx.chat_provider.chat(
             gleaning_messages,
             temperature=0.1,
-            max_tokens=4096,
+            max_tokens=16384,
             response_format={"type": "json_object"},
         )
 

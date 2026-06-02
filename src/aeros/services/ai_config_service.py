@@ -40,18 +40,18 @@ def list_providers(session: Session) -> list[dict[str, Any]]:
     return [
         {
             "id": 1,
-            "provider_name": "mimo",
+            "provider_name": "minimax",
             "model_id": settings.default_chat_model,
-            "display_name": "Mimo v2.5 Chat",
+            "display_name": "MiniMax M3 Chat",
             "capability": "chat",
             "is_default": True,
             "status": "active" if settings.mimo_api_key else "disabled",
         },
         {
             "id": 2,
-            "provider_name": "mimo",
+            "provider_name": "minimax",
             "model_id": settings.default_vision_model,
-            "display_name": "Mimo v2.5 Vision",
+            "display_name": "MiniMax M3 Vision",
             "capability": "vision",
             "is_default": True,
             "status": "active" if settings.mimo_api_key else "disabled",
@@ -81,15 +81,15 @@ def test_provider_connection(provider_name: str) -> dict[str, Any]:
     """Quick connectivity check for a provider.
 
     Args:
-        provider_name: Provider identifier (e.g. "mimo", "nvidia_nim", "groq").
+        provider_name: Provider identifier (e.g. "minimax", "nvidia_nim", "groq").
 
     Returns:
         Dict with ok (bool) and optionally error or latency_ms.
     """
     try:
-        if provider_name == "mimo":
+        if provider_name in ("minimax", "mimo"):
             if not settings.mimo_api_key:
-                return {"ok": False, "error": "Mimo API key not set"}
+                return {"ok": False, "error": "MiniMax API key not set"}
             return {"ok": True, "latency_ms": 0}
         elif provider_name == "nvidia_nim":
             if not settings.nvidia_api_key:

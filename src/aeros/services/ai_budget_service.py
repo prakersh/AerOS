@@ -73,7 +73,7 @@ def record_error(provider: str) -> None:
     Old errors outside the window are pruned on each call.
 
     Args:
-        provider: The provider name (e.g. "mimo", "nvidia_nim", "groq").
+        provider: The provider name (e.g. "minimax", "nvidia_nim", "groq").
     """
     now = datetime.now(UTC)
     if provider not in _error_counts:

@@ -1,12 +1,25 @@
-"""OpenAI-compatible provider — works with Mimo, NVIDIA NIM, OpenAI, Azure, etc."""
+"""OpenAI-compatible provider — works with MiniMax, NVIDIA NIM, OpenAI, Azure, etc."""
 
 import base64
+import re
 import time
 import uuid
 from typing import Any
 
 import structlog
 from openai import AsyncOpenAI
+
+_THINK_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
+_CODE_FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?```", re.DOTALL)
+
+
+def _clean_llm_content(raw: str) -> str:
+    """Strip reasoning tags and markdown code fences from model output."""
+    text = _THINK_RE.sub("", raw).strip()
+    m = _CODE_FENCE_RE.search(text)
+    if m:
+        text = m.group(1).strip()
+    return text
 
 from aeros.ai.base import (
     ChatMessage,
@@ -36,9 +49,10 @@ def _log_llm_call(
         from aeros.db import engine
         from aeros.models.observability import LLMCallLog
 
+        from aeros.ai.pricing import estimate_cost
+
         total_tokens = prompt_tokens + completion_tokens
-        cost_per_m = 0.001  # rough estimate
-        estimated_cost = total_tokens * cost_per_m / 1_000_000
+        estimated_cost = estimate_cost(model, prompt_tokens, completion_tokens)
 
         with Session(engine) as session:
             log = LLMCallLog(
@@ -75,7 +89,7 @@ class OpenAICompatibleProvider:
         *,
         model: str | None = None,
         temperature: float = 0.7,
-        max_tokens: int = 2048,
+        max_tokens: int = 16384,
         response_format: dict[str, Any] | None = None,
         user_id: int | None = None,
         rfx_id: int | None = None,
@@ -133,8 +147,10 @@ class OpenAICompatibleProvider:
             user_id=_uid,
         )
 
+        content = _clean_llm_content(choice.message.content or "")
+
         return ChatResponse(
-            content=choice.message.content or "",
+            content=content,
             input_tokens=prompt_tokens,
             output_tokens=completion_tokens,
             model=resp.model or kwargs["model"],
@@ -195,8 +211,10 @@ class OpenAICompatibleProvider:
             latency_ms,
         )
 
+        content = _clean_llm_content(choice.message.content or "")
+
         return VisionResponse(
-            content=choice.message.content or "",
+            content=content,
             input_tokens=prompt_tokens,
             output_tokens=completion_tokens,
             model=resp.model or "",

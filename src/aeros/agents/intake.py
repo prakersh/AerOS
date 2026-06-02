@@ -86,7 +86,7 @@ class IntakeAgent(BaseAgent):
         response = await ctx.chat_provider.chat(
             messages,
             temperature=0.3,
-            max_tokens=2048,
+            max_tokens=16384,
             response_format={"type": "json_object"},
         )
 

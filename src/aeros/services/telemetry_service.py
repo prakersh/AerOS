@@ -76,7 +76,7 @@ def log_llm_call(
         session: Database session.
         trace_id: Correlation ID (auto-generated if empty).
         agent_run_id: FK to the parent AgentRunLog, if applicable.
-        provider: LLM provider name (e.g. "mimo", "openai", "nvidia").
+        provider: LLM provider name (e.g. "minimax", "openai", "nvidia").
         model: Model identifier string.
         prompt_tokens: Number of input tokens.
         completion_tokens: Number of output tokens.

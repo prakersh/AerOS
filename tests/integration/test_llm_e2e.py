@@ -1,8 +1,8 @@
 """End-to-end integration tests that hit real LLM providers.
 
 These tests verify:
-1. Mimo v2.5 chat connectivity + structured JSON output
-2. Mimo v2.5 vision connectivity
+1. MiniMax M3 chat connectivity + structured JSON output
+2. MiniMax M3 vision connectivity
 3. NVIDIA NIM embedding connectivity
 4. IntakeAgent — buyer chat with fuzzy SKU names → structured RFx draft
 5. VendorCopilotAgent — vendor gets help composing a quote
@@ -63,17 +63,17 @@ class TestLLMConnectivity:
 
     @pytest.mark.asyncio
     async def test_mimo_chat_responds(self):
-        """Mimo v2.5 should return a non-empty chat response."""
+        """MiniMax M3 should return a non-empty chat response."""
         provider = get_chat_provider()
         msg = ChatMessage(role="user", content="Reply with just the word OK.")
-        resp = await provider.chat([msg], max_tokens=100)
-        assert resp.content, "Mimo chat returned empty content"
-        assert resp.model, "Mimo chat returned no model name"
+        resp = await provider.chat([msg], max_tokens=200)
+        assert resp.content, "Chat provider returned empty content"
+        assert resp.model, "Chat provider returned no model name"
         assert resp.input_tokens > 0
 
     @pytest.mark.asyncio
     async def test_mimo_chat_json_mode(self):
-        """Mimo v2.5 should return valid JSON when response_format is json_object."""
+        """MiniMax M3 should return valid JSON when response_format is json_object."""
         provider = get_chat_provider()
         msg = ChatMessage(
             role="user",
@@ -81,7 +81,7 @@ class TestLLMConnectivity:
         )
         resp = await provider.chat(
             [msg],
-            max_tokens=30,
+            max_tokens=200,
             response_format={"type": "json_object"},
         )
         assert resp.content, "JSON mode returned empty"
@@ -90,7 +90,7 @@ class TestLLMConnectivity:
 
     @pytest.mark.asyncio
     async def test_mimo_vision_accepts_image(self):
-        """Mimo v2.5 vision should accept an image input without error."""
+        """MiniMax M3 vision should accept an image input without error."""
         provider = get_vision_provider()
         # 1x1 red pixel PNG
         tiny_png = (

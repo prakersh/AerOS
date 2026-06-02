@@ -41,9 +41,9 @@ AGENT_CONFIG = {
 }
 
 STAGE_TOKEN_LIMITS = {
-    "tool_selection": {"max_output": 1024, "input_pct": 0.40},
-    "greeting": {"max_output": 256, "input_pct": 0.25},
-    "response": {"max_output": 1024, "input_pct": 0.50},
+    "tool_selection": {"max_output": 8192, "input_pct": 0.40},
+    "greeting": {"max_output": 4096, "input_pct": 0.25},
+    "response": {"max_output": 16384, "input_pct": 0.50},
 }
 
 CONTEXT_LIMITS = {
@@ -169,9 +169,9 @@ def detect_intent(message: str) -> list[str]:
 
 
 # Read-only tools we can run straight from deterministic intent detection when
-# the LLM selection step returns nothing. The chat model (mimo) is unreliable at
-# emitting tool calls for phrasings like "evaluate the offers for RFx #1" — it
-# sometimes replies "please share the offers" instead of calling the tool. These
+# the LLM selection step returns nothing. Some chat models are unreliable at
+# emitting tool calls for phrasings like "evaluate the offers for RFx #1" — they
+# sometimes reply "please share the offers" instead of calling the tool. These
 # are all non-destructive and need at most an rfx_id we can resolve from text.
 _FALLBACK_TOOLS = {"evaluate_offers", "list_vendors", "list_rfx", "daily_summary"}
 _RFX_ID_RE = re.compile(r"(?:rfx|rfq)\s*#?\s*(\d+)|#\s*(\d+)", re.IGNORECASE)
@@ -198,7 +198,7 @@ def _resolve_rfx_id(message: str, ctx: AgentContext) -> int | None:
 
 
 # Read-only RFx tools that need an rfx_id. If the model selects one but forgets
-# the id (a common mimo slip), we resolve it from the message rather than letting
+# the id (a common LLM slip), we resolve it from the message rather than letting
 # the tool hard-fail with "missing RFx ID".
 _RFX_ID_TOOLS = {"evaluate_offers", "get_rfx_details", "get_vendor_suggestions"}
 
@@ -678,7 +678,7 @@ class ProcurementAgent(BaseAgent):
             selected = _parse_tool_selections(selection_resp.content)
             selected = _backfill_rfx_id(selected, safe_input, ctx)
 
-            # The chat model (mimo) is an unreliable tool-caller: for the same
+            # The chat model can be an unreliable tool-caller: for the same
             # "create an RFx for ..." prompt it emits the call only ~half the time
             # and sometimes truncates mid-JSON. Whenever it gives us nothing usable
             # but the deterministic detector saw a clear intent, build the tool

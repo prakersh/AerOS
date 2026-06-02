@@ -96,6 +96,8 @@ def get_recent_calls(
             "trace_id": c.trace_id,
             "provider": c.provider,
             "model": c.model,
+            "prompt_tokens": c.prompt_tokens,
+            "completion_tokens": c.completion_tokens,
             "total_tokens": c.total_tokens,
             "latency_ms": c.latency_ms,
             "cost_usd": c.estimated_cost_usd,
