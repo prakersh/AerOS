@@ -11,6 +11,7 @@ import contextlib
 import json
 import re
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -436,7 +437,7 @@ def _active_draft_id(ctx: AgentContext) -> int | None:
     treating it as the active draft. Best-effort: if there's no usable
     session (unit tests), trust ``ctx.rfx_id`` as-is.
     """
-    rid = getattr(ctx, "rfx_id", None)
+    rid: int | None = getattr(ctx, "rfx_id", None)
     if not rid:
         return None
     try:
@@ -451,7 +452,7 @@ def _active_draft_id(ctx: AgentContext) -> int | None:
 
 
 def _active_rfx_add_calls(
-    message: str, ctx: AgentContext, detected: list[str] = ()
+    message: str, ctx: AgentContext, detected: Sequence[str] = ()
 ) -> list[tuple[str, dict[str, Any]]]:
     """Deterministic add_line_items when the buyer is working inside a draft.
 

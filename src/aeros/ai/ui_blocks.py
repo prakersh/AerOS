@@ -125,9 +125,7 @@ def _blocks_for_add_line_items(data: dict[str, Any]) -> list[Block]:
     blocks: list[Block] = []
     count = data.get("count", 0)
     if count:
-        blocks.append(
-            _text(f"Added **{count}** item{'s' if count != 1 else ''} to your request.")
-        )
+        blocks.append(_text(f"Added **{count}** item{'s' if count != 1 else ''} to your request."))
 
     for clar in data.get("needs_clarification") or []:
         ref = clar.get("ref")
@@ -137,9 +135,7 @@ def _blocks_for_add_line_items(data: dict[str, Any]) -> list[Block]:
             + (f" — ₹{c.get('last_price')}/{c.get('unit')}" if c.get("last_price") else "")
             for c in options
         )
-        blocks.append(
-            _text(f'Multiple matches for "{ref}" — which one did you mean?\n{lines}')
-        )
+        blocks.append(_text(f'Multiple matches for "{ref}" — which one did you mean?\n{lines}'))
 
     missing = data.get("not_found") or []
     if missing:

@@ -175,9 +175,7 @@ class TestActiveRfxAddCalls:
         # Explicit "new request" overrides the sticky draft -> no append call,
         # letting the create_rfx path run instead.
         ctx = SimpleNamespace(rfx_id=12)
-        calls = _active_rfx_add_calls(
-            "start a new request for 10 liters milk", ctx, ["create_rfx"]
-        )
+        calls = _active_rfx_add_calls("start a new request for 10 liters milk", ctx, ["create_rfx"])
         assert calls == []
 
     def test_no_intent_no_append(self):

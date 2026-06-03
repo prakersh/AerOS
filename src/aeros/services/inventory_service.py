@@ -108,9 +108,7 @@ def resolve_sku(session: Session, org_id: int, ref: object) -> SKU | None:
     return candidates[0] if candidates else None
 
 
-def resolve_sku_ref(
-    session: Session, org_id: int, ref: object
-) -> tuple[SKU | None, list[SKU]]:
+def resolve_sku_ref(session: Session, org_id: int, ref: object) -> tuple[SKU | None, list[SKU]]:
     """Resolve a reference, distinguishing a confident match from ambiguity.
 
     Returns ``(match, candidates)``:

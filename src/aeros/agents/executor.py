@@ -191,9 +191,7 @@ def _dispatch(name: str, params: dict[str, Any], session: Session, caller: AuthC
             else:
                 not_found.append(ref)
 
-        added = (
-            rfx_service.add_line_items(session, params["rfx_id"], ready) if ready else []
-        )
+        added = rfx_service.add_line_items(session, params["rfx_id"], ready) if ready else []
         return {
             "rfx_id": params["rfx_id"],
             "count": len(added),

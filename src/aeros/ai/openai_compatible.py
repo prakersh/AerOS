@@ -9,6 +9,13 @@ from typing import Any
 import structlog
 from openai import AsyncOpenAI
 
+from aeros.ai.base import (
+    ChatMessage,
+    ChatResponse,
+    EmbeddingResponse,
+    VisionResponse,
+)
+
 _THINK_RE = re.compile(r"<think>.*?</think>\s*", re.DOTALL)
 _CODE_FENCE_RE = re.compile(r"```(?:json)?\s*\n?(.*?)\n?```", re.DOTALL)
 
@@ -21,12 +28,6 @@ def _clean_llm_content(raw: str) -> str:
         text = m.group(1).strip()
     return text
 
-from aeros.ai.base import (
-    ChatMessage,
-    ChatResponse,
-    EmbeddingResponse,
-    VisionResponse,
-)
 
 logger = structlog.get_logger()
 
@@ -46,10 +47,9 @@ def _log_llm_call(
     try:
         from sqlmodel import Session
 
+        from aeros.ai.pricing import estimate_cost
         from aeros.db import engine
         from aeros.models.observability import LLMCallLog
-
-        from aeros.ai.pricing import estimate_cost
 
         total_tokens = prompt_tokens + completion_tokens
         estimated_cost = estimate_cost(model, prompt_tokens, completion_tokens)
