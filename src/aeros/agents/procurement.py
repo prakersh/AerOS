@@ -316,6 +316,14 @@ _ADD_CUE_RE = re.compile(
     r"\b(?:add|include|append|attach|jodo|jod do|daal do|daaldo|daldo|add\s*kar)\b",
     re.IGNORECASE,
 )
+# Explicit "start a fresh request" cues — these override the sticky-draft
+# behaviour and force a brand-new RFx even when one is already active.
+_NEW_RFX_CUE_RE = re.compile(
+    r"\b(?:new|another|separate|different|fresh)\s+"
+    r"(?:rfx|rfq|request|requisition|order|po|procurement)\b"
+    r"|\bstart\s+over\b|\bstart\s+(?:a\s+)?new\b|\bnaya\s+(?:order|request)\b",
+    re.IGNORECASE,
+)
 # "<name> <qty><unit>" — name BEFORE quantity ("bisleri 1L 100 pcs",
 # "ashirwad aata 10 pcs"). Complements _ITEM_CLAUSE_RE which expects the
 # quantity first.
@@ -419,24 +427,59 @@ def _derive_rfx_title(items: list[dict[str, Any]]) -> str:
     return f"Procurement: {head}{suffix}"
 
 
+def _active_draft_id(ctx: AgentContext) -> int | None:
+    """Return ``ctx.rfx_id`` only when it's an editable draft.
+
+    The chat carries the most recent draft's id across turns so follow-up
+    items fold into it. But once that RFx is dispatched (or otherwise past
+    drafting), the next item must start a *fresh* request — so we stop
+    treating it as the active draft. Best-effort: if there's no usable
+    session (unit tests), trust ``ctx.rfx_id`` as-is.
+    """
+    rid = getattr(ctx, "rfx_id", None)
+    if not rid:
+        return None
+    try:
+        from aeros.models.rfx import RFxRun, RFxStatus
+
+        rfx = ctx.session.get(RFxRun, rid)
+    except Exception:
+        return rid
+    if rfx is None:
+        return None
+    return rid if rfx.status == RFxStatus.DRAFTING else None
+
+
 def _active_rfx_add_calls(
-    message: str, ctx: AgentContext
+    message: str, ctx: AgentContext, detected: list[str] = ()
 ) -> list[tuple[str, dict[str, Any]]]:
-    """Deterministic add_line_items when the buyer is working inside an RFx.
+    """Deterministic add_line_items when the buyer is working inside a draft.
+
+    Buyers expect a single draft to keep growing until they clear the chat or
+    explicitly start a new request, so any procurement-intent message folds
+    into the active draft rather than spawning a new RFx. We append when the
+    message either carries an explicit add cue OR reads as a procurement need
+    (``create_rfx`` in ``detected``). We bail when:
+
+    * there's no active draft (``_active_draft_id`` — covers post-dispatch),
+    * the buyer explicitly asks for a new/separate request, or
+    * no line items can be parsed out.
 
     The chat model is an unreliable tool-caller — it frequently narrates
     "added!" without emitting add_line_items, or spawns a brand-new RFx
-    instead of appending. When we already have an active rfx_id and the
-    message clearly asks to add items, we build the call ourselves so the
-    behaviour is predictable. Ambiguous/unknown refs are still resolved
-    (and surfaced) by the executor, not guessed here.
+    instead of appending — so we build the call ourselves for predictability.
+    Ambiguous/unknown refs are still resolved (and surfaced) by the executor.
     """
-    if not ctx.rfx_id or not _ADD_CUE_RE.search(message):
+    draft_id = _active_draft_id(ctx)
+    if not draft_id or _NEW_RFX_CUE_RE.search(message):
+        return []
+    append_intent = bool(_ADD_CUE_RE.search(message)) or ("create_rfx" in detected)
+    if not append_intent:
         return []
     items = _parse_item_refs(message)
     if not items:
         return []
-    return [("add_line_items", {"rfx_id": ctx.rfx_id, "items": items})]
+    return [("add_line_items", {"rfx_id": draft_id, "items": items})]
 
 
 def _deterministic_tool_calls(
@@ -748,7 +791,7 @@ class ProcurementAgent(BaseAgent):
 
         # When the buyer is inside an RFx and asks to add items, resolve the
         # call deterministically rather than trusting the model to emit it.
-        deterministic_add = _active_rfx_add_calls(safe_input, ctx)
+        deterministic_add = _active_rfx_add_calls(safe_input, ctx, detected)
 
         logger.info(
             "agent.intent.detected",

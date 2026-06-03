@@ -40,6 +40,17 @@ function loadPersistedMessages(): ChatMsg[] {
   }
 }
 
+// The most recent RFx id seen in persisted history, so a page reload keeps
+// folding items into the same draft instead of silently starting a new one.
+function loadPersistedRfxId(): number | null {
+  const msgs = loadPersistedMessages();
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const rid = msgs[i]?.data?.rfx_id;
+    if (typeof rid === "number") return rid;
+  }
+  return null;
+}
+
 /* ------------------------------------------------------------------ */
 /* Markdown renderer (lightweight, regex-based)                         */
 /* ------------------------------------------------------------------ */
@@ -145,7 +156,7 @@ export default function ChatCopilot() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
-  const [createdRfxId, setCreatedRfxId] = useState<number | null>(null);
+  const [createdRfxId, setCreatedRfxId] = useState<number | null>(loadPersistedRfxId);
   /* Live progress label streamed from the agent while it works */
   const [stepLabel, setStepLabel] = useState<string | null>(null);
 
@@ -262,6 +273,9 @@ export default function ChatCopilot() {
         }));
 
       const body: Record<string, unknown> = { message: actualMsg, history };
+      // Carry the active draft so follow-up items fold into it instead of
+      // spawning a new RFx. The server only appends while it's still a draft.
+      if (createdRfxId) body.rfx_id = createdRfxId;
       if (attachment?.url) {
         body.attachment_url = attachment.url;
         body.attachment_name = attachment.name;
@@ -310,7 +324,7 @@ export default function ChatCopilot() {
       processingRef.current = false;
       await drainQueue(afterError);
     }
-  }, [pendingFile, uploadFile]);
+  }, [pendingFile, uploadFile, createdRfxId]);
 
   const sendMessage = useCallback((text?: string) => {
     const msgText = text ?? input.trim();

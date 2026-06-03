@@ -7,6 +7,8 @@ import pytest
 from aeros.agents.base import AgentContext
 from aeros.agents.procurement import (
     ProcurementAgent,
+    _active_draft_id,
+    _active_rfx_add_calls,
     _build_user_context,
     _check_continuation,
     _sanitize_for_prompt,
@@ -155,6 +157,36 @@ class TestToolExecutionFlow:
         assert result.success is True
         assert "list_rfx" in result.data["tools_called"]
         assert "list_vendors" in result.data["tools_called"]
+
+
+class TestActiveDraftStickiness:
+    """The chat keeps folding items into the active draft until it's dispatched."""
+
+    def _draft(self, session, buyer):
+        from aeros.services import rfx_service
+
+        return rfx_service.create_rfx(session, buyer_id=buyer.id, title="Sticky Draft")
+
+    def test_draft_is_active(self, session, agent_buyer, agent_buyer_ctx):
+        rfx = self._draft(session, agent_buyer)
+        ctx = AgentContext(
+            session=session, caller=agent_buyer_ctx, chat_provider=AsyncMock(), rfx_id=rfx.id
+        )
+        assert _active_draft_id(ctx) == rfx.id
+
+    def test_dispatched_rfx_is_not_active(self, session, agent_buyer, agent_buyer_ctx):
+        from aeros.models.rfx import RFxStatus
+
+        rfx = self._draft(session, agent_buyer)
+        rfx.status = RFxStatus.DISPATCHED
+        session.add(rfx)
+        session.commit()
+        ctx = AgentContext(
+            session=session, caller=agent_buyer_ctx, chat_provider=AsyncMock(), rfx_id=rfx.id
+        )
+        # Post-dispatch: the next item should start a fresh RFx, so no append.
+        assert _active_draft_id(ctx) is None
+        assert _active_rfx_add_calls("10 liters milk", ctx, ["create_rfx"]) == []
 
 
 class TestContinuationLogic:

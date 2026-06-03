@@ -159,3 +159,28 @@ class TestActiveRfxAddCalls:
     def test_add_cue_but_no_items(self):
         ctx = SimpleNamespace(rfx_id=5)
         assert _active_rfx_add_calls("add something please", ctx) == []
+
+    def test_sticky_append_on_procurement_intent_without_add_cue(self):
+        # Inside an active draft, a bare procurement need ("Toned milk 10L")
+        # folds into the draft rather than spawning a new RFx.
+        ctx = SimpleNamespace(rfx_id=12)
+        calls = _active_rfx_add_calls("Toned milk 10 liters", ctx, ["create_rfx"])
+        assert len(calls) == 1
+        tool, params = calls[0]
+        assert tool == "add_line_items"
+        assert params["rfx_id"] == 12
+        assert "milk" in params["items"][0]["sku_id"].lower()
+
+    def test_new_request_cue_forces_fresh_rfx(self):
+        # Explicit "new request" overrides the sticky draft -> no append call,
+        # letting the create_rfx path run instead.
+        ctx = SimpleNamespace(rfx_id=12)
+        calls = _active_rfx_add_calls(
+            "start a new request for 10 liters milk", ctx, ["create_rfx"]
+        )
+        assert calls == []
+
+    def test_no_intent_no_append(self):
+        # No add cue and no procurement intent -> leave the message alone.
+        ctx = SimpleNamespace(rfx_id=12)
+        assert _active_rfx_add_calls("how many vendors quoted?", ctx, ["list_vendors"]) == []
